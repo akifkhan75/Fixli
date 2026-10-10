@@ -20,7 +20,7 @@ describe('ChatGateway (socket security)', () => {
   });
 
   beforeEach(() => {
-    gateway = new ChatGateway(chat as any, jwt as any, prisma as any, events as any);
+    gateway = new ChatGateway(chat as any, jwt as any, prisma as any, events as any, { attach: jest.fn() } as any);
     gateway.server = { to: jest.fn().mockReturnValue({ emit }), in: jest.fn().mockReturnValue({ disconnectSockets }) } as any;
   });
   afterEach(() => { jest.resetAllMocks(); events.on.mockImplementation((_: string, fn: any) => { revoked = fn; return () => undefined; }); });

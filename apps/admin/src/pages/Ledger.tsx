@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LedgerRow, listPayments } from '../api';
+import { type LedgerRow, listPayments } from '../api';
 import './Pages.css';
 
 export default function Ledger() {

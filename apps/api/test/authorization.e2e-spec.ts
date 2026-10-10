@@ -29,6 +29,7 @@ describe('Authorization (e2e)', () => {
         email: `${tag}-${key}@test.com`,
         password: await bcrypt.hash('password123', 4),
         type,
+        ...(type === 'admin' ? { adminRoles: ['Super Admin'] } : {}),
       },
     });
     if (type === 'worker') {

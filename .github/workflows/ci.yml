@@ -4,45 +4,68 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Lint, Test, and Build
+  verify:
+    name: Typecheck, test (unit + e2e on real Postgres/Redis), build
     runs-on: ubuntu-latest
-    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fixli
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_DB: fixli_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fixli" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://fixli:ci-password@localhost:5432/fixli_ci?schema=public
+      JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      ENABLED_COUNTRIES: PK
+      NODE_ENV: test
+      # Only the two-instance realtime suite uses Redis (test/realtime.e2e-spec.ts).
+      E2E_REDIS_URL: redis://localhost:6379
+      EXPO_PUBLIC_API_URL: http://localhost:3002/api
+      VITE_API_URL: http://localhost:3002/api
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
+      - name: Dependency audit (production, high+; documented ignores in package.json)
+        run: pnpm audit --prod --audit-level high
 
-      - name: Get pnpm store directory
-        shell: bash
+      # API and app import the compiled shared package (phone/password/country rules).
+      - name: Build shared package
+        run: pnpm --filter @fixli/shared build
+
+      - name: Shared tests
+        run: pnpm --filter @fixli/shared test
+
+      # A deploy builds the database only from migrations; prove that gives exactly the schema.
+      - name: Migrations apply to an empty database
+        working-directory: apps/api
         run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+          pnpm exec prisma generate
+          pnpm exec prisma migrate deploy
 
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Prisma Generate
-        run: pnpm --filter @fixli/api db:generate
+      - name: Schema matches migrations (no drift)
+        working-directory: apps/api
+        run: pnpm exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
 
       - name: Typecheck
         run: pnpm typecheck
@@ -50,16 +73,22 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit Tests
-        run: pnpm test
+      - name: API unit tests
+        run: pnpm --filter @fixli/api test
 
-      # Mobile smoke build to ensure UI doesn't break
-      - name: Setup Expo
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      # Boots the real AppModule: catches dependency-injection errors that mocked unit tests can't.
+      - name: API e2e tests
+        run: pnpm --filter @fixli/api test:e2e
 
-      - name: Mobile Smoke Build (Web/Export)
-        run: pnpm --filter @fixli/mobile run build
+      - name: Build API, admin and web
+        run: |
+          pnpm --filter @fixli/api build
+          pnpm --filter admin build
+          pnpm --filter web build
+
+      - name: Mobile tests
+        run: pnpm --filter @fixli/mobile test
+
+      - name: Mobile bundle (Android)
+        working-directory: apps/mobile
+        run: pnpm exec expo export --platform android --output-dir /tmp/mobile-bundle

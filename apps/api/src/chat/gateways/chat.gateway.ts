@@ -3,6 +3,7 @@ import {
   WebSocketServer,
   SubscribeMessage,
   OnGatewayConnection,
+  OnGatewayInit,
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
@@ -15,6 +16,7 @@ import { plainToInstance } from 'class-transformer';
 import { ChatService } from '../chat.service';
 import { PrismaService } from '../../database/prisma.service';
 import { DomainEvents } from '../../common/events/domain-events';
+import { RealtimeService } from '../../realtime/realtime.service';
 
 class SendMessagePayload {
   @IsString() @IsNotEmpty() @MaxLength(64) threadId: string;
@@ -51,7 +53,7 @@ interface AuthedSocket extends Socket {
     credentials: true,
   },
 })
-export class ChatGateway implements OnGatewayConnection {
+export class ChatGateway implements OnGatewayConnection, OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
@@ -62,10 +64,16 @@ export class ChatGateway implements OnGatewayConnection {
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
     private readonly events: DomainEvents,
+    private readonly realtime: RealtimeService,
   ) {
     this.events.on('sessions.revoked', ({ sessionIds }) => {
       for (const sid of sessionIds) this.server?.in(`session:${sid}`).disconnectSockets(true);
     });
+  }
+
+  afterInit(server: Server) {
+    // Hand the live server to the publisher used by jobs, offers, notifications and chat.
+    this.realtime.attach(server as any);
   }
 
   async handleConnection(client: Socket) {

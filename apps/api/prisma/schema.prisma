@@ -882,3 +882,11 @@ model Notification {
   @@index([userId, createdAt])
   @@index([userId, readAt])
 }
+
+/// Who runs a background job right now. A row-based lease works through a connection pool,
+/// unlike Postgres session advisory locks (lock and unlock may land on different connections).
+model SchedulerLease {
+  name      String   @id
+  holder    String
+  expiresAt DateTime
+}

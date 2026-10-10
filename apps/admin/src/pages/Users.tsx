@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SearchUserRow, searchUsers, suspendUser } from '../api';
+import { type SearchUserRow, searchUsers, suspendUser } from '../api';
 import './Pages.css';
 
 export default function Users() {

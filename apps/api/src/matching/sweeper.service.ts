@@ -1,10 +1,12 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { MatchingService } from './matching.service';
 import { RealtimeService } from '../realtime/realtime.service';
 
-const LOCK_KEY = 4_242_001; // one sweeper at a time across all API instances
+const LEASE = 'sweeper'; // one sweeper at a time across all API instances
+const LEASE_MS = 5 * 60_000; // a crashed runner's lease lapses after this
 const EVERY_MS = 60_000;
 
 /**
@@ -12,12 +14,16 @@ const EVERY_MS = 60_000;
  *  - expire offers past their time limit
  *  - match new requests that were not matched at creation (e.g. a transient failure)
  *  - widen the search once for requests nobody has answered
- * A Postgres advisory lock keeps it to a single runner even with several API instances.
+ * A lease row (SchedulerLease) keeps it to a single runner even with several API instances.
+ * (A Postgres session advisory lock doesn't work here: Prisma's pool may lock on one connection
+ * and unlock on another, leaving the lock held forever.)
  */
 @Injectable()
 export class SweeperService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SweeperService.name);
   private timer?: NodeJS.Timeout;
+  private readonly holder = randomUUID();
+  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -37,8 +43,10 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
   }
 
   async sweep(now = new Date()): Promise<{ expired: number; matched: number; widened: number; readOnly?: number } | null> {
-    const [{ locked }] = await this.prisma.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_lock(${LOCK_KEY}) AS locked`;
-    if (!locked) return null;
+    // A slow sweep must not overlap the next tick in this process either.
+    if (this.running) return null;
+    this.running = true;
+    if (!(await this.acquire().catch((e) => { this.running = false; throw e; }))) { this.running = false; return null; }
     try {
       const due = await this.prisma.offer.findMany({
         where: { status: 'PENDING', expiresAt: { lte: now } },
@@ -82,7 +90,20 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
 
       return { expired: expired.count, matched: unmatched.length, widened: stale.length, readOnly: readOnlyCount.count };
     } finally {
-      await this.prisma.$queryRaw`SELECT pg_advisory_unlock(${LOCK_KEY})`;
+      this.running = false;
+      await this.prisma.$executeRaw`DELETE FROM "SchedulerLease" WHERE "name" = ${LEASE} AND "holder" = ${this.holder}`;
     }
+  }
+
+  /** Take the lease if it's free or lapsed. Atomic: two instances can't both win. */
+  private async acquire(): Promise<boolean> {
+    const at = new Date();
+    const rows = await this.prisma.$queryRaw<{ holder: string }[]>`
+      INSERT INTO "SchedulerLease" ("name", "holder", "expiresAt")
+      VALUES (${LEASE}, ${this.holder}, ${new Date(at.getTime() + LEASE_MS)})
+      ON CONFLICT ("name") DO UPDATE SET "holder" = EXCLUDED."holder", "expiresAt" = EXCLUDED."expiresAt"
+      WHERE "SchedulerLease"."expiresAt" < ${at} OR "SchedulerLease"."holder" = EXCLUDED."holder"
+      RETURNING "holder"`;
+    return rows.length > 0;
   }
 }

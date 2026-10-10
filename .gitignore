@@ -46,3 +46,9 @@ apps/api/storage/
 # Native directories (Expo CNG)
 apps/mobile/ios/
 apps/mobile/android/
+
+# Local leftovers, never commit (docs/25 O11)
+/Prolivo_Product_Documentation.zip
+/scratch_login.tsx
+/screenshot.png
+*.prisma.bak

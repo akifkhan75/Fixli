@@ -2,7 +2,7 @@
 
 > Living list. Each item says what is blocked, what we do until you decide, and a recommendation.
 > When you decide, write the answer in the **Decision** column (with the date) and engineering will act on it.
-> Last updated: 2026-10-08 (after Phase 6).
+> Last updated: 2026-10-11 (Phase 7–13 audit, docs 26–27).
 
 ## A. Open decisions
 
@@ -23,6 +23,13 @@
 | O13 | **Urdu / Arabic wording** | All Urdu and Arabic text (app strings, catalogue names, **notification texts**) is machine-drafted. | Shipped as drafts. | Native-speaker review before any user testing. | |
 | O14 | **Push notification accounts** | An Expo (EAS) project for the app (`eas init` writes its `projectId` into `app.json`), plus Firebase (Android) and an Apple Push key (iOS) uploaded with `eas credentials`. Phone push only works in a development/production build, not in Expo Go on Android. | Everything except the phone's own push works: notifications are stored, shown live in the app with a banner, listed in the Notifications screen, counted on the bell. The app skips push registration with a warning while `projectId` is missing. | Create the EAS project under the company's Expo account (not a personal one); turn on Expo "enhanced push security" and set `EXPO_ACCESS_TOKEN` on the server. | |
 | O15 | **Notification settings** | Should users be able to turn off kinds of notifications (e.g. "price received", "job started") inside the app? | Users can turn push off in the phone's settings; the in-app list always records everything. Job and safety messages always send. | Add per-kind on/off for marketing and non-essential updates only, when marketing messages exist (none today). | |
+| D-F1 | **Committed files in git history** | `Prolivo_Product_Documentation.zip`, `screenshot.png`, `scratch_login.tsx` were committed by the Phase 7–13 work. They are now untracked, but remain in history. | History left as is. | Rewrite history (force-push) only if the zip contains confidential material. | |
+| D-F2 | **Auto-confirm timeouts** | How long a finished job, and a cash payment, wait for the customer before confirming themselves. | Not built yet (F2/F3). | Job 24 h; cash 48 h. | |
+| D-F3 | **Live-location history** | How long worker location points from a job are kept. | Not stored yet (F2). | 30 days, then deleted. | |
+| D-F4 | **What deleting an account keeps** | Which records survive account deletion. | Deletion only marks the account (F3 fixes it). | Anonymise the profile; keep payments, ledger and audit for the legal period (counsel). | |
+| D-F5 | **SMS / WhatsApp provider** | For trusted-contact SOS alerts (and OTP, O5). | No alerts are sent (F5). | One provider for both. | |
+| D-F6 | **Gas emergency numbers and SOS wording** | Numbers per city; the exact safety text. | Hard-coded national numbers (F5 fixes). | Ops confirms numbers; counsel reviews wording (L10). | |
+| D-F7 | **Analytics provider** | Who receives anonymous usage events, and where it is hosted. | No analytics (F7). | PostHog (EU hosting), no personal data; decide with O9. | |
 
 ## B. Decided (for reference)
 
