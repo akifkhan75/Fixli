@@ -10,7 +10,6 @@ import { selectCurrentUser, selectSessionRestored, restoreSession } from '../src
 import { realtime } from '../src/services/socket';
 import { NotificationsProvider } from '../src/hooks/useNotifications';
 import { useWorkerLocationTracker } from '../src/hooks/useWorkerLocationTracker';
-import { useCustomerLocationTracker } from '../src/hooks/useCustomerLocationTracker';
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
@@ -38,8 +37,9 @@ function SignedIn({ children }: { children: React.ReactNode }) {
 }
 
 function LocationTrackerHandler() {
+  // Workers send their position only while on the way to a job (started from the job screen).
+  // Customers' location is never tracked; they see the worker's position on the job screen.
   useWorkerLocationTracker();
-  useCustomerLocationTracker();
 
   return null;
 }

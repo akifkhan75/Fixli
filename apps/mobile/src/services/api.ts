@@ -227,6 +227,8 @@ export const transcribeVoice = (uploadId: string, locale?: string) =>
   request<{ text: string }>('/ai/transcribe', { method: 'POST', body: JSON.stringify({ uploadId, locale }) });
 export const getJobView = (id: string) => request<JobView>(`/job-requests/${id}`);
 export const listJobs = (status?: string) => request<Page<JobView>>(`/job-requests${status ? `?status=${status}` : ''}`);
+/** Booked and not finished (on the way, on site, waiting for confirmation…), or finished. */
+export const listJobGroup = (group: 'active' | 'past', limit = 50) => request<Page<JobView>>(`/job-requests?group=${group}&limit=${limit}`);
 
 export async function updateJobRequest(
   id: string,
@@ -239,20 +241,25 @@ export async function updateJobRequest(
 export async function requestWorkerForJob(id: string, workerId: string): Promise<IJobRequest> {
   return request<IJobRequest>(`/job-requests/${id}/request-worker`, { method: 'POST', body: JSON.stringify({ workerId }) });
 }
-const jobAction = (action: 'accept' | 'decline' | 'en-route' | 'arrive' | 'complete' | 'confirm' | 'cancel') =>
+const jobAction = (action: 'accept' | 'decline' | 'en-route' | 'arrive' | 'confirm' | 'cancel') =>
   (id: string) => request<JobView>(`/job-requests/${id}/${action}`, { method: 'POST' });
 export const acceptJob = jobAction('accept');
 export const declineJob = jobAction('decline');
 export const enRouteJob = jobAction('en-route');
 export const arriveJob = jobAction('arrive');
-export const startJob = (id: string, photoUploadIds?: string[]) => request<JobView>(`/job-requests/${id}/start`, { method: 'POST', body: JSON.stringify({ photoUploadIds }) });
-export const finishJob = (id: string, photoUploadIds?: string[]) => request<JobView>(`/job-requests/${id}/finish`, { method: 'POST', body: JSON.stringify({ photoUploadIds }) });
-export const completeJob = jobAction('complete');
+/** Start/Finish need a photo (your JOB_PHOTO upload ids) or a reason why there isn't one. */
+export interface JobStepEvidence { photoUploadIds?: string[]; photoSkipReason?: 'CAMERA_UNAVAILABLE' | 'CUSTOMER_DECLINED' | 'NOT_APPLICABLE' }
+export const startJob = (id: string, evidence: JobStepEvidence) => request<JobView>(`/job-requests/${id}/start`, { method: 'POST', body: JSON.stringify(evidence) });
+export const finishJob = (id: string, evidence: JobStepEvidence) => request<JobView>(`/job-requests/${id}/finish`, { method: 'POST', body: JSON.stringify(evidence) });
+/** The other party's number while booked (each call is recorded). */
+export const getJobContact = (id: string) => request<{ name: string | null; phone: string | null }>(`/job-requests/${id}/contact`);
+export interface LiveLocation { jobId: string; latitude: number; longitude: number; heading?: number; etaMinutes: number | null; at: string }
+export const getJobLocation = (id: string) => request<{ location: LiveLocation | null }>(`/job-requests/${id}/location`);
 export const confirmJob = jobAction('confirm');
 export const cancelJob = jobAction('cancel');
 
-export interface ChangeOrder { id: string; jobRequestId: string; reason: string; addedScope: string; revisedPrice: number; currency: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; createdAt: string }
-export const createChangeOrder = (data: { jobRequestId: string; reason: string; addedScope: string; revisedPrice: number; currency?: string; photoUploadIds?: string[] }) => request<ChangeOrder>('/change-orders', { method: 'POST', body: JSON.stringify(data) });
+export interface ChangeOrder { id: string; jobRequestId: string; reason: string; addedScope: string; revisedPrice: number; previousPrice: number | null; currency: string; photos: string[]; status: 'PENDING' | 'APPROVED' | 'REJECTED'; createdAt: string }
+export const createChangeOrder = (data: { jobRequestId: string; reason: string; addedScope: string; revisedPrice: number; photoUploadIds?: string[] }) => request<ChangeOrder>('/change-orders', { method: 'POST', body: JSON.stringify(data) });
 export const getChangeOrders = (jobId: string) => request<ChangeOrder[]>(`/change-orders/job/${jobId}`);
 export const decideChangeOrder = (id: string, status: 'APPROVED' | 'REJECTED') => request<ChangeOrder>(`/change-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 

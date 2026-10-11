@@ -22,9 +22,12 @@ export default function TodayScreen() {
   const user = useAppSelector(selectCurrentUser);
   const me = useApi(api.getWorkerMe);
   const jobs = useApi(async () => {
-    const [accepted, inProgress, feed] = await Promise.all([api.listJobs('ACCEPTED'), api.listJobs('IN_PROGRESS'), api.getWorkerFeed()]);
+    const [active, feed] = await Promise.all([api.listJobGroup('active'), api.getWorkerFeed()]);
     const mine = (p: api.Page<api.JobView>) => p.items.filter((j) => j.assignedWorkerId === user?.id);
-    return { active: [...mine(inProgress), ...mine(accepted)], offered: feed.filter((f) => !f.myOffer || f.myOffer.status !== 'PENDING') };
+    // What needs you first: working, on site, on the way, booked (soonest), then awaiting the customer.
+    const order = ['IN_PROGRESS', 'ARRIVED', 'EN_ROUTE', 'ACCEPTED', 'AWAITING_CONFIRMATION'];
+    const sorted = mine(active).sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || String(a.scheduledFrom ?? '').localeCompare(String(b.scheduledFrom ?? '')));
+    return { active: sorted, offered: feed.filter((f) => !f.myOffer || f.myOffer.status !== 'PENDING') };
   }, [user?.id]);
   const [toggling, setToggling] = useState(false);
   const [toggleError, setToggleError] = useState<string | undefined>();

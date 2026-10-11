@@ -41,13 +41,14 @@ export const JOB_TRANSITIONS: Record<JobStatus, Rule[]> = {
   ],
   ACCEPTED: [
     { to: 'EN_ROUTE', actors: ['worker'] },
-    { to: 'ARRIVED', actors: ['worker'] }, // allowed to skip en-route if they forgot
-    { to: 'IN_PROGRESS', actors: ['worker'] }, // allowed to skip en-route/arrived if they forgot
+    { to: 'ARRIVED', actors: ['worker'] }, // forgot to tap "on my way"
+    { to: 'IN_PROGRESS', actors: ['worker'] }, // forgot both
     { to: 'CANCELLED', actors: ['customer', 'worker', 'admin'] },
   ],
   EN_ROUTE: [
     { to: 'ARRIVED', actors: ['worker'] },
     { to: 'IN_PROGRESS', actors: ['worker'] },
+    // A customer may still cancel; it is recorded as a late cancellation.
     { to: 'CANCELLED', actors: ['customer', 'worker', 'admin'] },
   ],
   ARRIVED: [
@@ -59,11 +60,29 @@ export const JOB_TRANSITIONS: Record<JobStatus, Rule[]> = {
     { to: 'CANCELLED', actors: ['admin'] },
   ],
   AWAITING_CONFIRMATION: [
-    { to: 'COMPLETED', actors: ['customer', 'admin', 'worker'] }, // worker might auto-confirm if customer doesn't
+    // Only the customer confirms. If they don't, the system does after AUTO_CONFIRM_HOURS;
+    // the worker can never complete their own job (doc 26 8.2).
+    { to: 'COMPLETED', actors: ['customer', 'admin', 'system'] },
+    { to: 'CANCELLED', actors: ['admin'] },
   ],
   COMPLETED: [],
   CANCELLED: [],
 };
+
+/** Booked and not finished: the worker is committed to this job (used against double-booking). */
+export const BUSY_STATUSES: JobStatus[] = ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'];
+/** Physically on a job right now: busy regardless of the booked time window. */
+export const IN_FLIGHT_STATUSES: JobStatus[] = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'];
+/** A customer cancelling from these is a late cancellation (the worker was already on the way). */
+export const LATE_CANCEL_STATUSES: JobStatus[] = ['EN_ROUTE', 'ARRIVED'];
+/** Extra work may be proposed or approved only while the job is under way. */
+export const CHANGE_ORDER_STATUSES: JobStatus[] = ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'];
+/** The parties may see each other's phone number while booked (O7 default). */
+export const CONTACT_STATUSES: JobStatus[] = ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'];
+
+export function canTransition(from: JobStatus, to: JobStatus, actor: JobActor): boolean {
+  return !!JOB_TRANSITIONS[from]?.some((r) => r.to === to && r.actors.includes(actor));
+}
 
 export function assertTransition(from: JobStatus, to: JobStatus, actor: JobActor): void {
   const rule = JOB_TRANSITIONS[from]?.find((r) => r.to === to);

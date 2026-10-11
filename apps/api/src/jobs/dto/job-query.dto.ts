@@ -5,7 +5,10 @@ export const JOB_STATUSES = [
   'MATCHES_FOUND',
   'AWAITING_WORKER',
   'ACCEPTED',
+  'EN_ROUTE',
+  'ARRIVED',
   'IN_PROGRESS',
+  'AWAITING_CONFIRMATION',
   'COMPLETED',
   'CANCELLED',
 ] as const;
@@ -14,6 +17,11 @@ export class JobQueryDto {
   @IsOptional()
   @IsIn(JOB_STATUSES)
   status?: (typeof JOB_STATUSES)[number];
+
+  /** active = booked and not finished (every on-site step); past = completed or cancelled. */
+  @IsOptional()
+  @IsIn(['active', 'past'])
+  group?: 'active' | 'past';
 
   @IsOptional()
   @IsString()

@@ -184,10 +184,12 @@ describe('Authorization (e2e)', () => {
       await http().get(`/api/job-requests/${jobId}`).set(as('workW2')).expect(404);
     });
 
-    it('cannot skip steps: complete before start is rejected', async () => {
+    it('cannot skip steps: finish before start is rejected, and a worker has no way to complete a job', async () => {
       await http().post(`/api/job-requests/${jobId}/accept`).set(as('workW1')).expect(201);
-      const res = await http().post(`/api/job-requests/${jobId}/complete`).set(as('workW1')).expect(400);
+      const res = await http().post(`/api/job-requests/${jobId}/finish`).set(as('workW1')).send({ photoSkipReason: 'NOT_APPLICABLE' }).expect(400);
       expect(res.body.error.code).toBe('ILLEGAL_JOB_TRANSITION');
+      await http().post(`/api/job-requests/${jobId}/complete`).set(as('workW1')).expect(404);
+      await http().post(`/api/job-requests/${jobId}/confirm`).set(as('workW1')).expect(403);
     });
 
     it('only one of two simultaneous accepts can win', async () => {

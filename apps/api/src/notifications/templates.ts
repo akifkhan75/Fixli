@@ -19,7 +19,15 @@ export type NotificationType =
   | 'verification.approved'
   | 'verification.needs_fix'
   | 'worker.activated'
-  | 'chat.message';
+  | 'chat.message'
+  | 'job.en_route'
+  | 'job.arrived'
+  | 'job.awaiting_confirmation'
+  | 'job.confirmed'
+  | 'job.auto_confirmed'
+  | 'change_order.created'
+  | 'change_order.approved'
+  | 'change_order.declined';
 
 type Locale = 'en' | 'ur' | 'ar';
 export type Money = { minor: number; currency: string };
@@ -27,6 +35,14 @@ type P = Record<string, string | number | Money | undefined>;
 type T = (p: P) => { title: string; body: string };
 
 const en: Record<NotificationType, T> = {
+  'job.en_route': (p) => ({ title: `${p.worker} is on the way`, body: `For "${p.title}". You can follow them on the job screen.` }),
+  'job.arrived': (p) => ({ title: `${p.worker} has arrived`, body: `For "${p.title}".` }),
+  'job.awaiting_confirmation': (p) => ({ title: 'Please check the work', body: `${p.worker} finished "${p.title}". Confirm it's done, or report a problem.` }),
+  'job.confirmed': (p) => ({ title: 'Job confirmed', body: `The customer confirmed "${p.title}" is done.` }),
+  'job.auto_confirmed': (p) => ({ title: 'Job completed', body: `"${p.title}" was completed automatically because it wasn't confirmed in time.` }),
+  'change_order.created': (p) => ({ title: 'Extra work needs your OK', body: `New total for "${p.title}": ${p.price}. Approve or decline in the app.` }),
+  'change_order.approved': (p) => ({ title: 'Extra work approved', body: `New total for "${p.title}": ${p.price}.` }),
+  'change_order.declined': (p) => ({ title: 'Extra work declined', body: `The customer kept the original price for "${p.title}".` }),
   'job.direct_request': (p) => ({ title: 'A customer asked for you', body: `"${p.title}". Accept or decline in the app.` }),
   'job.request': (p) => ({ title: 'New request near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. Send your price.` }),
   'offer.received': (p) => ({ title: 'You got a price', body: `${p.worker} can do it for ${p.price}.` }),
@@ -45,6 +61,14 @@ const en: Record<NotificationType, T> = {
 };
 
 const ur: Record<NotificationType, T> = {
+  'job.en_route': (p) => ({ title: `${p.worker} راستے میں ہیں`, body: `"${p.title}" کے لیے۔ آپ کام کی اسکرین پر انہیں دیکھ سکتے ہیں۔` }),
+  'job.arrived': (p) => ({ title: `${p.worker} پہنچ گئے`, body: `"${p.title}" کے لیے۔` }),
+  'job.awaiting_confirmation': (p) => ({ title: 'کام چیک کریں', body: `${p.worker} نے "${p.title}" مکمل کیا۔ تصدیق کریں یا مسئلہ بتائیں۔` }),
+  'job.confirmed': (p) => ({ title: 'کام کی تصدیق ہو گئی', body: `گاہک نے "${p.title}" کی تصدیق کر دی۔` }),
+  'job.auto_confirmed': (p) => ({ title: 'کام مکمل', body: `"${p.title}" وقت پر تصدیق نہ ہونے پر خود بخود مکمل ہو گیا۔` }),
+  'change_order.created': (p) => ({ title: 'اضافی کام کی منظوری درکار', body: `"${p.title}" کی نئی قیمت: ${p.price}۔ ایپ میں منظور یا انکار کریں۔` }),
+  'change_order.approved': (p) => ({ title: 'اضافی کام منظور', body: `"${p.title}" کی نئی قیمت: ${p.price}۔` }),
+  'change_order.declined': (p) => ({ title: 'اضافی کام نامنظور', body: `گاہک نے "${p.title}" کی پرانی قیمت رکھی۔` }),
   'job.direct_request': (p) => ({ title: 'ایک گاہک نے آپ کو بلایا ہے', body: `"${p.title}"۔ ایپ میں قبول یا انکار کریں۔` }),
   'job.request': (p) => ({ title: 'آپ کے قریب نئی درخواست', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ اپنی قیمت بھیجیں۔` }),
   'offer.received': (p) => ({ title: 'آپ کو قیمت ملی', body: `${p.worker} یہ کام ${p.price} میں کر سکتے ہیں۔` }),
@@ -63,6 +87,14 @@ const ur: Record<NotificationType, T> = {
 };
 
 const ar: Record<NotificationType, T> = {
+  'job.en_route': (p) => ({ title: `${p.worker} في الطريق`, body: `من أجل "${p.title}". يمكنك متابعته من شاشة الطلب.` }),
+  'job.arrived': (p) => ({ title: `وصل ${p.worker}`, body: `من أجل "${p.title}".` }),
+  'job.awaiting_confirmation': (p) => ({ title: 'يرجى مراجعة العمل', body: `أنهى ${p.worker} "${p.title}". أكّد الإنجاز أو أبلغ عن مشكلة.` }),
+  'job.confirmed': (p) => ({ title: 'تم تأكيد العمل', body: `أكّد العميل إنجاز "${p.title}".` }),
+  'job.auto_confirmed': (p) => ({ title: 'اكتمل العمل', body: `اكتمل "${p.title}" تلقائياً لعدم تأكيده في الوقت المحدد.` }),
+  'change_order.created': (p) => ({ title: 'عمل إضافي يحتاج موافقتك', body: `السعر الجديد لـ "${p.title}": ${p.price}. وافق أو ارفض من التطبيق.` }),
+  'change_order.approved': (p) => ({ title: 'تمت الموافقة على العمل الإضافي', body: `السعر الجديد لـ "${p.title}": ${p.price}.` }),
+  'change_order.declined': (p) => ({ title: 'تم رفض العمل الإضافي', body: `أبقى العميل السعر الأصلي لـ "${p.title}".` }),
   'job.direct_request': (p) => ({ title: 'طلبك أحد العملاء', body: `"${p.title}". اقبل أو ارفض من التطبيق.` }),
   'job.request': (p) => ({ title: 'طلب جديد بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. أرسل سعرك.` }),
   'offer.received': (p) => ({ title: 'وصلك سعر', body: `يمكن لـ ${p.worker} القيام بالعمل مقابل ${p.price}.` }),

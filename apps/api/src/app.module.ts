@@ -26,6 +26,7 @@ import { MatchingModule } from './matching/matching.module';
 import { OffersModule } from './offers/offers.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { TrackingModule } from './tracking/tracking.module';
 import { StorageModule } from './storage/storage.module';
 import { CommonModule } from './common/common.module';
 import { RedisThrottlerStorage } from './common/throttle/redis-throttler.storage';
@@ -55,6 +56,7 @@ import { SafetyModule } from './safety/safety.module';
     DatabaseModule,
     CommonModule,
     RealtimeModule,
+    TrackingModule,
     StorageModule,
     AdminModule,
     MatchingModule,

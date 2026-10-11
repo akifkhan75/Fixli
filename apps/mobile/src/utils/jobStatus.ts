@@ -1,6 +1,6 @@
 import type { JobPhase } from '../components/ds/StatusTimeline';
 
-export type JobStatusName = 'CREATED' | 'MATCHES_FOUND' | 'AWAITING_WORKER' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type JobStatusName = 'CREATED' | 'MATCHES_FOUND' | 'AWAITING_WORKER' | 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'AWAITING_CONFIRMATION' | 'COMPLETED' | 'CANCELLED';
 export type Viewer = 'customer' | 'worker';
 
 /** One plain sentence per state and viewer (doc 22 §7.3). Raw enum names never reach the screen. */
@@ -11,7 +11,10 @@ export function statusSentence(status: string, viewer: Viewer, other?: string | 
     case 'MATCHES_FOUND': return viewer === 'customer' ? 'Waiting for prices from professionals near you' : 'New request near you';
     case 'AWAITING_WORKER': return viewer === 'customer' ? `Waiting for ${name} to confirm` : 'A customer chose you. Please accept or decline.';
     case 'ACCEPTED': return viewer === 'customer' ? `${name} is booked` : 'Booked. Get ready to go.';
+    case 'EN_ROUTE': return viewer === 'customer' ? `${name} is on the way` : 'On the way to the customer';
+    case 'ARRIVED': return viewer === 'customer' ? `${name} has arrived` : "You've arrived. Take a photo, then start.";
     case 'IN_PROGRESS': return viewer === 'customer' ? `${name} is working on it` : 'Work in progress';
+    case 'AWAITING_CONFIRMATION': return viewer === 'customer' ? `${name} has finished. Please check the work and confirm.` : 'Finished. Waiting for the customer to confirm.';
     case 'COMPLETED': return 'Done';
     case 'CANCELLED': return 'Cancelled';
     default: return 'Updating…';
@@ -22,7 +25,10 @@ export function statusIcon(status: string): 'time-outline' | 'checkmark-circle' 
   switch (status as JobStatusName) {
     case 'COMPLETED': return 'checkmark-circle';
     case 'CANCELLED': return 'close-circle';
-    case 'IN_PROGRESS': return 'construct';
+    case 'IN_PROGRESS':
+    case 'ARRIVED':
+    case 'EN_ROUTE': return 'construct';
+    case 'AWAITING_CONFIRMATION': return 'hourglass-outline';
     case 'ACCEPTED': return 'calendar-outline';
     case 'AWAITING_WORKER': return 'hourglass-outline';
     default: return 'time-outline';
@@ -34,13 +40,16 @@ export function toPhase(status: string): JobPhase {
   switch (status as JobStatusName) {
     case 'ACCEPTED': return 'BOOKED';
     case 'AWAITING_WORKER': return 'OFFERS_READY';
+    case 'EN_ROUTE': return 'ON_THE_WAY';
+    case 'ARRIVED': return 'ARRIVED';
     case 'IN_PROGRESS': return 'WORKING';
+    case 'AWAITING_CONFIRMATION':
     case 'COMPLETED': return 'DONE';
     default: return 'REQUESTED';
   }
 }
 
-export const isActive = (s: string) => s === 'ACCEPTED' || s === 'IN_PROGRESS';
+export const isActive = (s: string) => ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(s);
 export const isFinished = (s: string) => s === 'COMPLETED' || s === 'CANCELLED';
 
 /** One line per timeline event, written for the person reading it. */
@@ -51,8 +60,15 @@ export function eventSentence(type: string, viewer: Viewer, payload?: Record<str
     case 'WORKER_REQUESTED': return viewer === 'customer' ? 'You chose a professional' : 'The customer chose you';
     case 'WORKER_ACCEPTED': return viewer === 'customer' ? 'The professional accepted' : 'You accepted';
     case 'WORKER_DECLINED': return viewer === 'customer' ? 'The professional could not take it' : 'You declined';
+    case 'EN_ROUTE': return viewer === 'customer' ? 'The professional set off' : 'You set off';
+    case 'ARRIVED': return viewer === 'customer' ? 'The professional arrived' : 'You arrived';
     case 'WORK_STARTED': return 'Work started';
-    case 'WORK_COMPLETED': return 'Work finished';
+    case 'WORK_FINISHED': return viewer === 'customer' ? 'The professional finished' : 'You finished';
+    case 'WORK_COMPLETED': return viewer === 'customer' ? 'You confirmed the work is done' : 'The customer confirmed the work';
+    case 'AUTO_CONFIRMED': return 'Completed automatically (not confirmed in time)';
+    case 'CHANGE_ORDER_PROPOSED': return viewer === 'customer' ? 'Extra work was proposed' : 'You proposed extra work';
+    case 'CHANGE_ORDER_APPROVED': return 'Extra work approved; price updated';
+    case 'CHANGE_ORDER_DECLINED': return 'Extra work declined';
     case 'PROFESSIONALS_NOTIFIED': {
       const n = Number(payload?.notified ?? 0);
       return viewer === 'customer' ? `We told ${n} professional${n === 1 ? '' : 's'} near you` : 'Request sent to nearby professionals';
@@ -65,7 +81,8 @@ export function eventSentence(type: string, viewer: Viewer, payload?: Record<str
     case 'OFFER_ACCEPTED': return viewer === 'customer' ? 'You chose a professional' : 'The customer chose your price';
     case 'CANCELLED': {
       const by = payload?.by;
-      return by === 'customer' ? (viewer === 'customer' ? 'You cancelled' : 'The customer cancelled') : by === 'worker' ? 'The professional cancelled' : 'Cancelled';
+      const late = payload?.late ? ' (after the professional set off)' : '';
+      return (by === 'customer' ? (viewer === 'customer' ? 'You cancelled' : 'The customer cancelled') : by === 'worker' ? 'The professional cancelled' : 'Cancelled') + late;
     }
     default: return 'Updated';
   }

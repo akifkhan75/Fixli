@@ -1,3 +1,6 @@
+import { BUSY_STATUSES, IN_FLIGHT_STATUSES } from '../jobs/job-state-machine';
+
+const IN_FLIGHT_BLOCK_MS = 3 * 3600_000;
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
@@ -5,7 +8,6 @@ import { NotificationService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SubmitOfferDto } from './offer.dto';
 
-const BUSY_STATUSES = ['ACCEPTED', 'IN_PROGRESS'];
 
 @Injectable()
 export class OffersService {
@@ -179,8 +181,11 @@ export class OffersService {
         where: {
           assignedWorkerId: offer.workerId, id: { not: job.id },
           OR: [
-            { status: 'IN_PROGRESS' },
-            { status: { in: BUSY_STATUSES as any }, scheduledFrom: { lt: to }, scheduledTo: { gt: from } },
+            // On a job right now (on the way, on site, working): can't also take something that
+            // starts soon, whatever that job's booked window said.
+            ...(from.getTime() < Date.now() + IN_FLIGHT_BLOCK_MS ? [{ status: { in: IN_FLIGHT_STATUSES } }] : []),
+            // Booked but not finished: busy for that time window.
+            { status: { in: BUSY_STATUSES }, scheduledFrom: { lt: to }, scheduledTo: { gt: from } },
           ],
         },
         select: { id: true },

@@ -38,6 +38,14 @@ export interface AppEnv {
   REMATCH_RADIUS_FACTOR: number;
   /** Run the background sweeper (offer expiry, re-matching) in this process. */
   RUN_BACKGROUND_JOBS: boolean;
+  /** Start needs a before photo and Finish an after photo (or a stated reason). */
+  REQUIRE_JOB_PHOTOS: boolean;
+  /** A finished job the customer hasn't confirmed completes by itself after this (D-F2). */
+  AUTO_CONFIRM_HOURS: number;
+  /** Worker location points are deleted after this many days (D-F3). */
+  LOCATION_RETENTION_DAYS: number;
+  /** Straight-line ETA until a routing provider is configured. */
+  AVG_TRAVEL_SPEED_KMH: number;
   /** Staff must use an authenticator app (second factor). Default true; false only for tests. */
   ADMIN_TOTP_REQUIRED: boolean;
   /** 32 bytes, base64: encrypts staff authenticator secrets at rest. Required in production. */
@@ -109,6 +117,9 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   const offerTtl = intIn('OFFER_TTL_MINUTES', 10, 1, 240);
   const rematchAfter = intIn('REMATCH_AFTER_MINUTES', 15, 1, 240);
   const rematchFactor = intIn('REMATCH_RADIUS_FACTOR', 1.5, 1, 5);
+  const autoConfirmHours = intIn('AUTO_CONFIRM_HOURS', 24, 1, 24 * 14);
+  const locationRetentionDays = intIn('LOCATION_RETENTION_DAYS', 30, 1, 365);
+  const travelSpeed = intIn('AVG_TRAVEL_SPEED_KMH', 20, 5, 120);
 
   if (str('REDIS_URL') && !/^rediss?:\/\//.test(str('REDIS_URL'))) errors.push('REDIS_URL must be a redis:// or rediss:// URL');
 
@@ -148,6 +159,10 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     EXPO_PUSH_URL: str('EXPO_PUSH_URL') || undefined,
     EXPO_ACCESS_TOKEN: str('EXPO_ACCESS_TOKEN') || undefined,
     RUN_BACKGROUND_JOBS: (str('RUN_BACKGROUND_JOBS') || (nodeEnv === 'test' ? 'false' : 'true')) === 'true',
+    REQUIRE_JOB_PHOTOS: (str('REQUIRE_JOB_PHOTOS') || 'true') === 'true',
+    AUTO_CONFIRM_HOURS: autoConfirmHours,
+    LOCATION_RETENTION_DAYS: locationRetentionDays,
+    AVG_TRAVEL_SPEED_KMH: travelSpeed,
     ADMIN_TOTP_REQUIRED: totpRequired,
     TOTP_ENCRYPTION_KEY: totpKey || undefined,
     FRONTEND_URL: str('FRONTEND_URL') || undefined,

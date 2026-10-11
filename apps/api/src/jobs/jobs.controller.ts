@@ -87,11 +87,18 @@ export class JobsController {
     return this.jobsService.confirm(id, user);
   }
 
-  @Post(':id/complete')
-  @ApiOperation({ summary: 'Assigned worker marks the work complete' })
-  complete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.jobsService.complete(id, user);
+  @Get(':id/contact')
+  @ApiOperation({ summary: "The other party's phone number, only while booked (audited)" })
+  contact(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.jobsService.contact(id, user);
   }
+
+  @Get(':id/location')
+  @ApiOperation({ summary: 'Customer: last known position of the professional on the way' })
+  location(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.jobsService.liveLocation(id, user);
+  }
+
 
   @Post(':id/cancel')
   @ApiOperation({ summary: 'Cancel a job before it is completed' })

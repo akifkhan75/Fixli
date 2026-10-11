@@ -12,7 +12,9 @@ import { formatWindow, statusSentence, toPhase } from '../../../src/utils/jobSta
 import { JobHistory, JobMedia } from '../../../src/components/ds/JobParts';
 import { ChangeOrdersList } from '../../../src/components/ds/ChangeOrdersList';
 import { ReviewForm } from '../../../src/components/ds/ReviewForm';
-import { TextInput } from '../../../src/components/ds/TextInput';
+import { JobStepPhoto } from '../../../src/components/ds/JobStepPhoto';
+import { ChangeOrderForm } from '../../../src/components/ds/ChangeOrderForm';
+import { CallButton } from '../../../src/components/ds/CallButton';
 import { PriceForm } from '../../../src/components/ds/PriceForm';
 import { useAppDispatch, useAppSelector } from '../../../src/hooks/useRedux';
 import { startTracking, stopTracking } from '../../../src/store/trackingSlice';
@@ -32,9 +34,7 @@ export default function WorkerJobScreen() {
   const me = useApi(api.getWorkerMe);
   const [editingPrice, setEditingPrice] = useState(false);
   const [creatingChangeOrder, setCreatingChangeOrder] = useState(false);
-  const [coReason, setCoReason] = useState('');
-  const [coScope, setCoScope] = useState('');
-  const [coPriceStr, setCoPriceStr] = useState('');
+  const [photoStep, setPhotoStep] = useState<'before' | 'after' | null>(null);
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector(state => state.auth.currentUser);
   
@@ -43,7 +43,7 @@ export default function WorkerJobScreen() {
 
   useEffect(() => {
     if (job?.status === 'EN_ROUTE' && me.data) {
-      dispatch(startTracking({ workerId: me.data.id, jobId: job.id, customerLocation: { latitude: job.latitude || 0, longitude: job.longitude || 0 } }));
+      dispatch(startTracking({ workerId: me.data.id, jobId: job.id, customerLocation: job.latitude != null && job.longitude != null ? { latitude: job.latitude, longitude: job.longitude } : null }));
     } else {
       dispatch(stopTracking());
     }
@@ -73,20 +73,12 @@ export default function WorkerJobScreen() {
     try { await api.notInterested(job.id); router.back(); } catch (e) { setActionError(friendlyError(e)); setBusy(false); }
   };
   
-  const submitChangeOrder = async () => {
+  const submitChangeOrder = async (v: { reason: string; addedScope: string; revisedPrice: number }) => {
     setBusy(true);
     setActionError(undefined);
     try {
-      await api.createChangeOrder({
-        jobRequestId: job.id,
-        reason: coReason,
-        addedScope: coScope,
-        revisedPrice: parseInt(coPriceStr, 10),
-      });
+      await api.createChangeOrder({ jobRequestId: job.id, ...v });
       setCreatingChangeOrder(false);
-      setCoReason('');
-      setCoScope('');
-      setCoPriceStr('');
       await reload();
     } catch (e) {
       setActionError(friendlyError(e));
@@ -95,10 +87,19 @@ export default function WorkerJobScreen() {
     }
   };
 
+  const submitStep = async (evidence: api.JobStepEvidence) => {
+    setBusy(true);
+    setActionError(undefined);
+    try {
+      setData(await (photoStep === 'before' ? api.startJob : api.finishJob)(job.id, evidence));
+      setPhotoStep(null);
+    } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
+  };
+
   const offer = job.myOffer && job.myOffer.status === 'PENDING' ? job.myOffer : null;
 
   // One primary action per state; the server enforces the order.
-  const action =
+  const action = photoStep || creatingChangeOrder ? undefined :
     job.status === 'AWAITING_WORKER' ? (
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <View style={{ flex: 1 }}><Button title="Decline" variant="secondary" size="lg" disabled={busy} onPress={run(api.declineJob)} /></View>
@@ -109,12 +110,14 @@ export default function WorkerJobScreen() {
     ) : job.status === 'EN_ROUTE' ? (
       <Button title="I've arrived" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.arriveJob)} />
     ) : job.status === 'ARRIVED' ? (
-      <Button title="Start work" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.startJob)} />
+      <Button title="Start work" variant="primary" size="lg" disabled={busy} onPress={() => setPhotoStep('before')} />
     ) : job.status === 'IN_PROGRESS' ? (
       <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ flex: 1 }}><Button title="Change Order" variant="secondary" size="lg" disabled={busy} onPress={() => setCreatingChangeOrder(true)} /></View>
-        <View style={{ flex: 1 }}><Button title="Finish work" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.finishJob)} /></View>
+        <View style={{ flex: 1 }}><Button title="Extra work" variant="secondary" size="lg" disabled={busy} onPress={() => setCreatingChangeOrder(true)} /></View>
+        <View style={{ flex: 1 }}><Button title="Finish work" variant="primary" size="lg" disabled={busy} onPress={() => setPhotoStep('after')} /></View>
       </View>
+    ) : job.status === 'AWAITING_CONFIRMATION' ? (
+      <Text variant="body" color={theme.colors.textSecondary}>Waiting for the customer to confirm. It completes by itself if they don't respond.</Text>
     ) : undefined;
 
   const payment = job.payments?.[0];
@@ -143,23 +146,15 @@ export default function WorkerJobScreen() {
       </View>
       <JobMedia media={job.media ?? []} />
       
-      {creatingChangeOrder && (
-        <View style={{ marginTop: 20, backgroundColor: theme.colors.surfaceElevated, padding: 16, borderRadius: theme.borderRadius.lg }}>
-          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>New Change Order</Text>
-          <View style={{ gap: 12 }}>
-            <TextInput label="Reason for change" value={coReason} onChangeText={setCoReason} placeholder="e.g. Found water damage" />
-            <TextInput label="Added scope" value={coScope} onChangeText={setCoScope} placeholder="e.g. Replace drywall" />
-            <TextInput label="New Total Price (Minor units)" value={coPriceStr} onChangeText={setCoPriceStr} keyboardType="numeric" />
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
-              <View style={{ flex: 1 }}><Button title="Cancel" variant="secondary" disabled={busy} onPress={() => setCreatingChangeOrder(false)} /></View>
-              <View style={{ flex: 1 }}><Button title="Submit" variant="primary" loading={busy} disabled={busy || !coReason || !coScope || !coPriceStr} onPress={submitChangeOrder} /></View>
-            </View>
-          </View>
-        </View>
-      )}
+      {photoStep ? <JobStepPhoto kind={photoStep} busy={busy} onSubmit={submitStep} onCancel={() => setPhotoStep(null)} /> : null}
+      {creatingChangeOrder ? (
+        <ChangeOrderForm currentMinor={job.agreedAmount ?? null} currency={job.agreedCurrency ?? me.data?.currency ?? 'PKR'} locale={locale} busy={busy}
+          onSubmit={submitChangeOrder} onCancel={() => setCreatingChangeOrder(false)} />
+      ) : null}
+      {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? <CallButton jobId={job.id} label="Call the customer" /> : null}
 
       {job.status !== 'CANCELLED' && (
-        <ChangeOrdersList jobId={job.id} viewer="worker" />
+        <ChangeOrdersList jobId={job.id} viewer="worker" currentMinor={job.agreedAmount} />
       )}
 
       <View style={{ marginTop: 20 }}>

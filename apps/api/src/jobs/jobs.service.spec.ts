@@ -22,7 +22,8 @@ describe('JobsService', () => {
   const realtime: any = { emitToUsers: jest.fn() };
   const notifications: any = { notify: jest.fn().mockResolvedValue(1) };
   const matching: any = { matchJob: jest.fn().mockResolvedValue(3) };
-  const svc = new JobsService(prisma, realtime, notifications, { assert: jest.fn() } as any, storage, matching);
+  const config: any = { get: jest.fn((k: string) => ({ REQUIRE_JOB_PHOTOS: true, AUTO_CONFIRM_HOURS: 24 } as any)[k]) };
+  const svc = new JobsService(prisma, realtime, notifications, { assert: jest.fn() } as any, storage, matching, config, { record: jest.fn() } as any, { latest: jest.fn() } as any);
 
   const customer: AuthUser = { id: 'c1', type: 'customer' };
   const worker: AuthUser = { id: 'w1', type: 'worker' };
@@ -203,7 +204,7 @@ describe('JobsService', () => {
 
     it('rejects illegal jumps and wrong actors', async () => {
       prisma.jobRequest.findFirst.mockResolvedValue({ status: 'AWAITING_WORKER' });
-      await expect(svc.complete('j1', worker)).rejects.toThrow(BadRequestException);
+      await expect(svc.finish('j1', worker, { photoSkipReason: 'NOT_APPLICABLE' })).rejects.toThrow(BadRequestException);
       await expect(svc.start('j1', customer)).rejects.toThrow(ForbiddenException);
     });
 
@@ -233,9 +234,46 @@ describe('JobsService', () => {
       expect(notifications.notify.mock.calls[0][0]).toMatchObject({ type: 'job.cancelled', userIds: ['c1'] });
     });
 
-    it('a customer cannot cancel once work has started', async () => {
+    it('a customer cannot cancel once work has started (a clear 409, not a generic error)', async () => {
       prisma.jobRequest.findFirst.mockResolvedValue({ status: 'IN_PROGRESS' });
-      await expect(svc.cancel('j1', customer)).rejects.toThrow(ForbiddenException);
+      await expect(svc.cancel('j1', customer)).rejects.toThrow(ConflictException);
+    });
+
+    it('cancelling after the worker set off is recorded as late', async () => {
+      prisma.jobRequest.findFirst.mockResolvedValueOnce({ status: 'EN_ROUTE', title: 'Tap', customerId: 'c1', assignedWorkerId: 'w1' }).mockResolvedValue({ id: 'j1', status: 'CANCELLED', customer: null, media: [], events: [] });
+      tx.jobRequest.updateMany.mockResolvedValue({ count: 1 });
+      tx.conversation = { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() };
+      await svc.cancel('j1', customer, { reason: 'TOO_SLOW' });
+      expect(tx.jobEvent.create.mock.calls[0][0].data.payload).toMatchObject({ late: true, by: 'customer' });
+    });
+
+    it('start needs a before photo or a stated reason; finish an after photo or a reason', async () => {
+      prisma.jobRequest.findFirst.mockResolvedValue({ status: 'ARRIVED', title: 'Tap', customerId: 'c1', assignedWorkerId: 'w1' });
+      await expect(svc.start('j1', worker, {})).rejects.toMatchObject({ response: { code: 'PHOTO_REQUIRED' } });
+      await expect(svc.finish('j1', worker, {})).rejects.toMatchObject({ response: { code: 'PHOTO_REQUIRED' } });
+      expect(tx.jobRequest.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('finishing starts the auto-confirm clock and asks the customer to check the work', async () => {
+      prisma.jobRequest.findFirst.mockResolvedValueOnce({ status: 'IN_PROGRESS', title: 'Tap', customerId: 'c1', assignedWorkerId: 'w1' }).mockResolvedValue({ id: 'j1', status: 'AWAITING_CONFIRMATION', customer: null, media: [], events: [] });
+      tx.jobRequest.updateMany.mockResolvedValue({ count: 1 });
+      tx.conversation = { findFirst: jest.fn().mockResolvedValue({ id: 'cv1' }), create: jest.fn(), update: jest.fn() };
+      tx.message = { create: jest.fn() };
+      await svc.finish('j1', worker, { photoSkipReason: 'CUSTOMER_DECLINED' });
+      expect(tx.jobRequest.updateMany.mock.calls[0][0].data).toMatchObject({ status: 'AWAITING_CONFIRMATION', finishedAt: expect.any(Date) });
+      expect(tx.jobEvent.create.mock.calls[0][0].data.payload).toEqual({ photoSkipped: 'CUSTOMER_DECLINED' });
+      expect(tx.message.create.mock.calls[0][0].data).toMatchObject({ isSystem: true, systemKey: 'job.finished' });
+      expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'job.awaiting_confirmation', userIds: ['c1'] }));
+    });
+
+    it('when the customer confirms, the worker is the one told', async () => {
+      prisma.jobRequest.findFirst.mockResolvedValueOnce({ status: 'AWAITING_CONFIRMATION', title: 'Tap', customerId: 'c1', assignedWorkerId: 'w1' }).mockResolvedValue({ id: 'j1', status: 'COMPLETED', customer: null, media: [], events: [] });
+      tx.jobRequest.updateMany.mockResolvedValue({ count: 1 });
+      tx.conversation = { findFirst: jest.fn().mockResolvedValue({ id: 'cv1' }), create: jest.fn(), update: jest.fn() };
+      tx.message = { create: jest.fn() };
+      await svc.confirm('j1', customer);
+      expect(tx.jobRequest.updateMany.mock.calls[0][0].data).toMatchObject({ status: 'COMPLETED', completedAt: expect.any(Date) });
+      expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'job.confirmed', userIds: ['w1'] }));
     });
   });
 

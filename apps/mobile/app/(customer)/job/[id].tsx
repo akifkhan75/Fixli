@@ -18,14 +18,15 @@ import { ErrorState, LoadingState } from '../../../src/components/ds/EmptyState'
 import { OfferCard } from '../../../src/components/ds/OfferCard';
 import MapView, { Marker } from 'react-native-maps';
 import { useAppDispatch, useAppSelector } from '../../../src/hooks/useRedux';
-import { selectTrackingState, startTracking, stopTracking } from '../../../src/store/trackingSlice';
+import { useWorkerLiveLocation } from '../../../src/hooks/useWorkerLiveLocation';
+import { CallButton } from '../../../src/components/ds/CallButton';
 import { formatMoney } from '../../../src/utils/money';
 import { CANCEL_REASON_LABEL, formatWindow, statusSentence, toPhase } from '../../../src/utils/jobStatus';
 import { humanize, localizedName } from '../../../src/utils/catalog';
 import * as api from '../../../src/services/api';
 import { useLiveReload } from '../../../src/hooks/useRealtime';
 
-// Live tracking, payment and reviews arrive with their phases. Job status and prices update live.
+// Job status, prices, extra-work requests and the professional's position update live.
 export default function CustomerJobScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
@@ -45,17 +46,8 @@ export default function CustomerJobScreen() {
   useLiveReload(offers.reload, ['offers.updated'], mine, { enabled: open, fallbackMs: 60_000 });
   useEffect(() => { if (confirming && !offers.data?.some((o) => o.id === confirming.id)) setConfirming(null); }, [offers.data, confirming]);
 
-  const dispatch = useAppDispatch();
-  const trackingState = useAppSelector(selectTrackingState);
   const currentUser = useAppSelector(state => state.auth.currentUser);
-
-  useEffect(() => {
-    if (job?.status === 'EN_ROUTE' && job.assignedWorker) {
-      dispatch(startTracking({ workerId: job.assignedWorker.user.id, jobId: job.id, customerLocation: { latitude: job.latitude || 0, longitude: job.longitude || 0 } }));
-    } else {
-      dispatch(stopTracking());
-    }
-  }, [job?.status, job?.assignedWorker?.user.id, job?.id, job?.latitude, job?.longitude, dispatch]);
+  const live = useWorkerLiveLocation(id, job?.status === 'EN_ROUTE');
 
   if (loading && !job) return <Screen title="Your request" back><LoadingState /></Screen>;
   if (error && !job) return <Screen title="Your request" back><ErrorState message={error} onRetry={reload} /></Screen>;
@@ -175,34 +167,31 @@ export default function CustomerJobScreen() {
         </View>
       ) : null}
 
-      {job.status === 'EN_ROUTE' && trackingState.isTracking && (
-        <View style={{ marginTop: 20, height: 200, borderRadius: theme.borderRadius.xl, overflow: 'hidden' }}>
-          <MapView
-            style={{ flex: 1 }}
-            initialRegion={{
-              latitude: trackingState.customerLocation?.latitude || job.latitude || 24.8607,
-              longitude: trackingState.customerLocation?.longitude || job.longitude || 67.0011,
-              latitudeDelta: 0.05,
-              longitudeDelta: 0.05,
-            }}
-          >
-            {(trackingState.customerLocation || (job.latitude && job.longitude)) && (
-              <Marker 
-                coordinate={{ latitude: trackingState.customerLocation?.latitude || job.latitude!, longitude: trackingState.customerLocation?.longitude || job.longitude! }} 
-                title="You" 
-                pinColor="blue" 
-              />
-            )}
-            {trackingState.workerLocation && (
-              <Marker 
-                coordinate={trackingState.workerLocation} 
-                title="Professional" 
-                pinColor="red" 
-              />
-            )}
-          </MapView>
+      {job.status === 'EN_ROUTE' ? (
+        <View style={{ marginTop: 20 }}>
+          <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>
+            {live?.etaMinutes != null ? `About ${live.etaMinutes} min away` : 'On the way'}
+          </Text>
+          {live || (job.latitude != null && job.longitude != null) ? (
+            <View style={{ marginTop: 10, height: 200, borderRadius: theme.borderRadius.xl, overflow: 'hidden' }}>
+              <MapView
+                style={{ flex: 1 }}
+                initialRegion={{
+                  latitude: live?.latitude ?? job.latitude!,
+                  longitude: live?.longitude ?? job.longitude!,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }}
+              >
+                {job.latitude != null && job.longitude != null ? <Marker coordinate={{ latitude: job.latitude, longitude: job.longitude }} title="Your address" pinColor="blue" /> : null}
+                {live ? <Marker coordinate={{ latitude: live.latitude, longitude: live.longitude }} title="Professional" pinColor="red" /> : null}
+              </MapView>
+            </View>
+          ) : null}
+          {!live ? <Text variant="bodySmall" color={theme.colors.textTertiary} style={{ marginTop: 6 }}>Waiting for their location…</Text> : null}
         </View>
-      )}
+      ) : null}
+      {worker && ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? <CallButton jobId={job.id} label="Call the professional" /> : null}
 
       {cancelling ? (
         <View style={{ marginTop: 20 }}>
@@ -221,7 +210,7 @@ export default function CustomerJobScreen() {
       <JobMedia media={job.media ?? []} />
 
       {job.status !== 'CANCELLED' && (
-        <ChangeOrdersList jobId={job.id} viewer="customer" onReloadRequested={reload} />
+        <ChangeOrdersList jobId={job.id} viewer="customer" currentMinor={job.agreedAmount} onReloadRequested={reload} />
       )}
 
       <View style={{ marginTop: 20, gap: 4 }}>

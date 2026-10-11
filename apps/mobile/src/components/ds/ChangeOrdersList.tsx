@@ -1,83 +1,83 @@
-import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Image, View } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
+import { friendlyError } from '../../hooks/useApi';
+import { useLiveReload } from '../../hooks/useRealtime';
 import { Text } from './Text';
 import { Button } from './Button';
 import { formatMoney } from '../../utils/money';
 import * as api from '../../services/api';
 import { useI18n } from '../../hooks/useI18n';
 
-interface ChangeOrdersListProps {
+const STATUS_LABEL: Record<api.ChangeOrder['status'], string> = {
+  PENDING: 'Waiting for the customer',
+  APPROVED: 'Approved',
+  REJECTED: 'Declined',
+};
+
+/** Extra-work requests on a job. The customer approves or declines; the price changes only on approval. */
+export function ChangeOrdersList({ jobId, viewer, currentMinor, onReloadRequested }: {
   jobId: string;
   viewer: 'customer' | 'worker';
+  /** The job's agreed price, to show "from → to" on a pending request. */
+  currentMinor?: number | null;
   onReloadRequested?: () => void;
-}
-
-export function ChangeOrdersList({ jobId, viewer, onReloadRequested }: ChangeOrdersListProps) {
+}) {
   const theme = useTheme();
   const { locale, t } = useI18n();
   const [orders, setOrders] = useState<api.ChangeOrder[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | undefined>();
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      const data = await api.getChangeOrders(jobId);
-      setOrders(data);
-    } catch (e) {
-      // silent fail for now
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOrders();
+  const fetchOrders = useCallback(async () => {
+    try { setOrders(await api.getChangeOrders(jobId)); } catch (e) { setError(friendlyError(e)); }
   }, [jobId]);
+  useEffect(() => { void fetchOrders(); }, [fetchOrders]);
+  useLiveReload(fetchOrders, ['job.updated'], (e) => e.data?.jobId === jobId);
 
-  const handleDecision = async (id: string, decision: 'APPROVED' | 'REJECTED') => {
+  const decide = async (id: string, decision: 'APPROVED' | 'REJECTED') => {
     setBusyId(id);
+    setError(undefined);
     try {
       await api.decideChangeOrder(id, decision);
       await fetchOrders();
-      if (onReloadRequested) onReloadRequested();
-    } catch (e) {
-      // silent fail
-    } finally {
-      setBusyId(null);
-    }
+      onReloadRequested?.();
+    } catch (e) { setError(friendlyError(e)); } finally { setBusyId(null); }
   };
 
-  if (!loading && orders.length === 0) return null;
+  if (!orders.length && !error) return null;
 
   return (
     <View style={{ marginTop: 24 }}>
       <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('job.changeOrders')}</Text>
-      {orders.map(order => (
-        <View key={order.id} style={{ backgroundColor: theme.colors.surfaceElevated, padding: 16, borderRadius: theme.borderRadius.lg, marginTop: 12 }}>
-          <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{t('job.additionalWork')}</Text>
-          <Text variant="body" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>Reason: {order.reason}</Text>
-          <Text variant="body" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>Scope: {order.addedScope}</Text>
-          <Text variant="bodyLarge" weight="bold" color={theme.colors.primary} style={{ marginTop: 8 }}>
-            New Total: {formatMoney(order.revisedPrice, order.currency, locale)}
-          </Text>
-          <Text variant="bodySmall" weight="bold" color={order.status === 'APPROVED' ? theme.colors.success : order.status === 'REJECTED' ? theme.colors.error : theme.colors.warning} style={{ marginTop: 8 }}>
-            STATUS: {order.status}
-          </Text>
-          
-          {viewer === 'customer' && order.status === 'PENDING' && (
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-              <View style={{ flex: 1 }}>
-                <Button title="Reject" variant="danger" disabled={!!busyId} loading={busyId === order.id} onPress={() => handleDecision(order.id, 'REJECTED')} />
+      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 8 }}>{error}</Text> : null}
+      {orders.map((o) => {
+        const from = o.status === 'APPROVED' ? o.previousPrice : currentMinor;
+        return (
+          <View key={o.id} style={{ backgroundColor: theme.colors.surfaceElevated, padding: 16, borderRadius: theme.borderRadius.lg, marginTop: 12 }}>
+            <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{t('job.additionalWork')}</Text>
+            <Text variant="body" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{o.reason}</Text>
+            <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>{o.addedScope}</Text>
+            {o.photos?.length ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                {o.photos.map((u) => <Image key={u} source={{ uri: u }} accessibilityLabel="Photo of the extra work" style={{ width: 64, height: 64, borderRadius: 8 }} />)}
               </View>
-              <View style={{ flex: 1 }}>
-                <Button title="Approve" variant="primary" disabled={!!busyId} loading={busyId === order.id} onPress={() => handleDecision(order.id, 'APPROVED')} />
+            ) : null}
+            <Text variant="bodyLarge" weight="bold" color={theme.colors.primary} style={{ marginTop: 8 }}>
+              {from != null && o.status !== 'REJECTED' ? `${formatMoney(from, o.currency, locale)} → ` : 'New total: '}{formatMoney(o.revisedPrice, o.currency, locale)}
+            </Text>
+            <Text variant="bodySmall" weight="semibold" color={o.status === 'APPROVED' ? theme.colors.success : o.status === 'REJECTED' ? theme.colors.textSecondary : theme.colors.warning} style={{ marginTop: 6 }}>
+              {STATUS_LABEL[o.status]}
+            </Text>
+            {viewer === 'customer' && o.status === 'PENDING' ? (
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
+                <View style={{ flex: 1 }}><Button title="Keep old price" variant="secondary" disabled={!!busyId} onPress={() => decide(o.id, 'REJECTED')} /></View>
+                <View style={{ flex: 1 }}><Button title="Approve" variant="primary" disabled={!!busyId} loading={busyId === o.id} onPress={() => decide(o.id, 'APPROVED')} /></View>
               </View>
-            </View>
-          )}
-        </View>
-      ))}
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }

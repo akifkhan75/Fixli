@@ -9,6 +9,8 @@ export interface Envelope<T = any> { id: string; type: RealtimeType; occurredAt:
 /** Local signals: 'resync' = we were offline and may have missed events, so reload. */
 type LocalType = 'resync' | 'status';
 type Listener = (e: Envelope) => void;
+/** Sent by the server to the job's customer while the professional is on the way. */
+export interface LocationUpdate { jobId: string; workerId: string; latitude: number; longitude: number; heading?: number; etaMinutes: number | null; at: string }
 export type ConnectionStatus = 'offline' | 'connecting' | 'online';
 
 const EVENTS: RealtimeType[] = ['notification.created', 'job.updated', 'offers.updated', 'feed.updated'];
@@ -29,7 +31,7 @@ class RealtimeClient {
   status: ConnectionStatus = 'offline';
 
   private messageListeners: ((msg: IChatMessage) => void)[] = [];
-  private locationListeners: ((data: { workerId: string; latitude: number; longitude: number; heading?: number }) => void)[] = [];
+  private locationListeners: ((data: LocationUpdate) => void)[] = [];
 
   async connect() {
     this.disconnect();
@@ -137,7 +139,7 @@ class RealtimeClient {
     return () => { this.messageListeners = this.messageListeners.filter((l) => l !== callback); };
   }
 
-  onLocationUpdate(callback: (data: { workerId: string; latitude: number; longitude: number; heading?: number }) => void) {
+  onLocationUpdate(callback: (data: LocationUpdate) => void) {
     this.locationListeners.push(callback);
     return () => { this.locationListeners = this.locationListeners.filter((l) => l !== callback); };
   }

@@ -397,26 +397,32 @@ model JobRequest {
   agreedCurrency    String?
   acceptedOfferId   String?
   bookedAt          DateTime?
+  /// Worker pressed "Finish" (AWAITING_CONFIRMATION); starts the auto-confirm clock.
+  finishedAt        DateTime?
+  /// Became COMPLETED (customer confirmed, or auto-confirmed after AUTO_CONFIRM_HOURS).
+  completedAt       DateTime?
+  autoConfirmed     Boolean          @default(false)
   /// 1 = first search; 2 = widened search after nobody responded.
   matchRound        Int              @default(0)
   lastMatchedAt     DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  media         JobMedia[]
-  events        JobEvent[]
-  matches       JobMatch[]
-  offers        Offer[]
-  analyses      JobAiAnalysis[]
-  conversations Conversation[]
-  evidence      JobEvidence[]
-  quotes        Quote[]
-  changeOrders  ChangeOrder[]
-  payments      Payment[]
-  ledgers       LedgerEntry[]
-  disputes      Dispute[]
-  reviews       Review[]
-  incidents     Incident[]
+  media          JobMedia[]
+  events         JobEvent[]
+  matches        JobMatch[]
+  offers         Offer[]
+  analyses       JobAiAnalysis[]
+  conversations  Conversation[]
+  evidence       JobEvidence[]
+  quotes         Quote[]
+  changeOrders   ChangeOrder[]
+  payments       Payment[]
+  ledgers        LedgerEntry[]
+  disputes       Dispute[]
+  reviews        Review[]
+  incidents      Incident[]
+  locationPoints JobLocationPoint[]
 
   @@unique([customerId, idempotencyKey])
   @@index([customerId])
@@ -499,17 +505,21 @@ model Quote {
 }
 
 model ChangeOrder {
-  id           String     @id @default(cuid())
-  jobRequestId String
-  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
-  reason       String
-  addedScope   String
-  revisedPrice Int
-  currency     String     @default("USD")
-  mediaKeys    String[]
-  status       String     @default("PENDING") // PENDING, APPROVED, REJECTED
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id            String     @id @default(cuid())
+  jobRequestId  String
+  jobRequest    JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  reason        String
+  addedScope    String
+  /// The new total for the job (integer minor units of `currency`, which is the job's currency).
+  revisedPrice  Int
+  currency      String     @default("USD")
+  /// Total before this change; set when it is approved.
+  previousPrice Int?
+  mediaKeys     String[]
+  status        String     @default("PENDING") // PENDING, APPROVED, REJECTED
+  decidedAt     DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
 
 model Review {
@@ -896,4 +906,19 @@ model SchedulerLease {
   name      String   @id
   holder    String
   expiresAt DateTime
+}
+
+/// Worker position while on the way (EN_ROUTE only), at most one point per 30 s. Deleted after
+/// LOCATION_RETENTION_DAYS (sweeper). Never shown to anyone but the job's customer.
+model JobLocationPoint {
+  id           String     @id @default(cuid())
+  jobRequestId String
+  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  latitude     Float
+  longitude    Float
+  heading      Float?
+  at           DateTime   @default(now())
+
+  @@index([jobRequestId, at])
+  @@index([at])
 }

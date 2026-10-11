@@ -45,8 +45,7 @@ export default function WorkerJobsScreen() {
         })),
       ];
     }
-    const statuses = tab === 'ACTIVE' ? ['IN_PROGRESS', 'ACCEPTED'] : ['COMPLETED'];
-    const pages = await Promise.all(statuses.map((s) => api.listJobs(s)));
+    const pages = [await api.listJobGroup(tab === 'ACTIVE' ? 'active' : 'past')];
     return pages.flatMap((p) => p.items).filter((j) => j.assignedWorkerId === user?.id).map((j) => ({
       id: j.id, title: j.title ?? j.description, sub: statusSentence(j.status, 'worker'),
       place: j.location ?? [j.area, j.city].filter(Boolean).join(', '), when: formatWindow(j.scheduledFrom, j.scheduledTo, j.whenOption, locale),

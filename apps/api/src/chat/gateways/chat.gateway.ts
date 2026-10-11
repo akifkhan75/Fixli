@@ -17,6 +17,7 @@ import { ChatService } from '../chat.service';
 import { PrismaService } from '../../database/prisma.service';
 import { DomainEvents } from '../../common/events/domain-events';
 import { RealtimeService } from '../../realtime/realtime.service';
+import { LiveLocationService } from '../../tracking/live-location.service';
 import { FEED_PERMISSIONS, hasPermission } from '../../common/auth/permissions';
 
 class SendMessagePayload {
@@ -66,6 +67,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayInit {
     private readonly prisma: PrismaService,
     private readonly events: DomainEvents,
     private readonly realtime: RealtimeService,
+    private readonly location: LiveLocationService,
   ) {
     this.events.on('sessions.revoked', ({ sessionIds }) => {
       for (const sid of sessionIds) this.server?.in(`session:${sid}`).disconnectSockets(true);
@@ -151,19 +153,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayInit {
   async handleLocationUpdate(@ConnectedSocket() client: AuthedSocket, @MessageBody() raw: unknown) {
     const data = parse(LocationPayload, raw);
     if (!data || client.data.userType !== 'worker') return;
-
-    const job = await this.prisma.jobRequest.findFirst({
-      where: { id: data.jobId, assignedWorkerId: client.data.userId, status: 'EN_ROUTE' },
-      select: { customerId: true },
-    });
-    if (!job) return;
-
-    this.server.to(`user:${job.customerId}`).emit('locationUpdate', {
-      workerId: client.data.userId,
-      jobId: data.jobId,
-      latitude: data.latitude,
-      longitude: data.longitude,
-      heading: data.heading,
-    });
+    // Only the assigned worker, only while on the way; throttled, stored sparsely, with an ETA.
+    const out = await this.location.accept(client.data.userId, data);
+    if (out) this.server.to(`user:${out.customerId}`).emit('locationUpdate', out.update);
   }
+
 }
