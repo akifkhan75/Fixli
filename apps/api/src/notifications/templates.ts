@@ -36,7 +36,9 @@ export type NotificationType =
   | 'settlement.rejected'
   | 'balance.paused'
   | 'dispute.opened'
-  | 'dispute.updated';
+  | 'dispute.updated'
+  | 'job.sos_request'
+  | 'sos.searching_wider';
 
 type Locale = 'en' | 'ur' | 'ar';
 export type Money = { minor: number; currency: string };
@@ -44,6 +46,8 @@ type P = Record<string, string | number | Money | undefined>;
 type T = (p: P) => { title: string; body: string };
 
 const en: Record<NotificationType, T> = {
+  'job.sos_request': (p) => ({ title: 'Emergency near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. Can you go now? Answer within ${p.minutes} minutes.` }),
+  'sos.searching_wider': (p) => ({ title: 'Still finding help', body: `Nobody nearby could come straight away. We sent "${p.title}" to more professionals; prices will arrive shortly.` }),
   'payment.cash_marked': (p) => ({ title: 'Did you pay in cash?', body: `The professional says you paid ${p.price} for "${p.title}". Confirm, or tell us if that's wrong.` }),
   'payment.confirmed': (p) => ({ title: 'Cash payment confirmed', body: `${p.price} for "${p.title}". Fixli's fee: ${p.commission}.` }),
   'payment.auto_confirmed': (p) => ({ title: 'Cash payment confirmed', body: `${p.price} for "${p.title}" was confirmed automatically. Fixli's fee: ${p.commission}.` }),
@@ -79,6 +83,8 @@ const en: Record<NotificationType, T> = {
 };
 
 const ur: Record<NotificationType, T> = {
+  'job.sos_request': (p) => ({ title: 'آپ کے قریب ایمرجنسی', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ کیا آپ ابھی جا سکتے ہیں؟ ${p.minutes} منٹ میں جواب دیں۔` }),
+  'sos.searching_wider': (p) => ({ title: 'مدد تلاش کی جا رہی ہے', body: `قریب کوئی فوراً نہیں آ سکا۔ ہم نے "${p.title}" مزید ماہرین کو بھیج دیا ہے؛ جلد قیمتیں آئیں گی۔` }),
   'payment.cash_marked': (p) => ({ title: 'کیا آپ نے نقد ادائیگی کی؟', body: `ماہر کے مطابق آپ نے "${p.title}" کے لیے ${p.price} ادا کیے۔ تصدیق کریں یا غلط ہو تو بتائیں۔` }),
   'payment.confirmed': (p) => ({ title: 'نقد ادائیگی کی تصدیق', body: `"${p.title}" کے لیے ${p.price}۔ Fixli کی فیس: ${p.commission}۔` }),
   'payment.auto_confirmed': (p) => ({ title: 'نقد ادائیگی کی تصدیق', body: `"${p.title}" کے لیے ${p.price} کی تصدیق خود بخود ہو گئی۔ Fixli کی فیس: ${p.commission}۔` }),
@@ -114,6 +120,8 @@ const ur: Record<NotificationType, T> = {
 };
 
 const ar: Record<NotificationType, T> = {
+  'job.sos_request': (p) => ({ title: 'حالة طارئة بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. هل يمكنك الذهاب الآن؟ أجب خلال ${p.minutes} دقائق.` }),
+  'sos.searching_wider': (p) => ({ title: 'ما زلنا نبحث عن مساعدة', body: `لم يتمكن أحد قريب من الحضور فوراً. أرسلنا "${p.title}" إلى محترفين آخرين؛ ستصل الأسعار قريباً.` }),
   'payment.cash_marked': (p) => ({ title: 'هل دفعت نقداً؟', body: `يقول المحترف إنك دفعت ${p.price} مقابل "${p.title}". أكّد أو أخبرنا إن كان ذلك خطأ.` }),
   'payment.confirmed': (p) => ({ title: 'تم تأكيد الدفع النقدي', body: `${p.price} مقابل "${p.title}". رسوم Fixli: ${p.commission}.` }),
   'payment.auto_confirmed': (p) => ({ title: 'تم تأكيد الدفع النقدي', body: `تم تأكيد ${p.price} مقابل "${p.title}" تلقائياً. رسوم Fixli: ${p.commission}.` }),

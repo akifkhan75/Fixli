@@ -237,6 +237,9 @@ export default function CustomerJobScreen() {
         />
       )}
 
+      {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? (
+        <View style={{ marginTop: 16 }}><Button title="Emergency / I feel unsafe" variant="ghost" onPress={() => router.push({ pathname: '/sos', params: { jobId: job.id } } as any)} /></View>
+      ) : null}
       <JobHistory events={job.events ?? []} viewer="customer" locale={locale} />
     </Screen>
   );

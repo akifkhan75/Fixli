@@ -151,4 +151,31 @@ export class MatchingService {
         AND w."serviceAreaLabel" ILIKE ${'%' + job.city.trim() + '%'}
       LIMIT 100`;
   }
+
+  /**
+   * SOS: the single nearest eligible worker who is free right now (same hard filters as matching,
+   * plus not on a job at this moment), excluding anyone already asked. Recorded as a match so the
+   * worker can open the job and isn't asked twice.
+   */
+  async nearestForSos(jobId: string, attempt: number): Promise<{ workerId: string; distanceKm: number | null } | null> {
+    const job = await this.prisma.jobRequest.findUnique({
+      where: { id: jobId },
+      select: { id: true, customerId: true, categoryId: true, latitude: true, longitude: true, city: true },
+    });
+    if (!job?.categoryId) return null;
+    const candidates = await this.findCandidates(job, 1);
+    if (!candidates.length) return null;
+    const now = new Date();
+    const [hours, busy] = await Promise.all([
+      this.prisma.workingHours.findMany({ where: { workerId: { in: candidates.map((c) => c.id) } } }),
+      this.prisma.jobRequest.findMany({ where: { assignedWorkerId: { in: candidates.map((c) => c.id) }, status: { in: ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'] } }, select: { assignedWorkerId: true } }),
+    ]);
+    const busyIds = new Set(busy.map((b) => b.assignedWorkerId));
+    const pick = candidates.find((c) => !busyIds.has(c.id) && availableDuring(hours.filter((h) => h.workerId === c.id), c.timezone, now, new Date(now.getTime() + 2 * 3600_000)));
+    if (!pick) return null;
+    const distanceKm = pick.distance_km == null ? null : Math.round(Number(pick.distance_km) * 10) / 10;
+    await this.prisma.jobMatch.create({ data: { jobRequestId: job.id, workerId: pick.id, round: 0, rank: attempt, score: 1, distanceKm } });
+    return { workerId: pick.id, distanceKm };
+  }
+
 }

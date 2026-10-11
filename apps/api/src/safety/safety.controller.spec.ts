@@ -1,22 +1,12 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { SafetyController } from './safety.controller';
-import { SafetyService } from './safety.service';
 
 describe('SafetyController', () => {
-  let controller: SafetyController;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [SafetyController],
-      providers: [
-        { provide: SafetyService, useValue: {} },
-      ],
-    }).compile();
-
-    controller = module.get<SafetyController>(SafetyController);
-  });
-
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
+  it('passes the caller (never a client-chosen user) to the service', async () => {
+    const safety: any = { raiseSos: jest.fn(), emergencyNumbers: jest.fn() };
+    const c = new SafetyController(safety);
+    await c.sos({ id: 'u1', type: 'customer' }, { kind: 'LIFE_THREATENING', idempotencyKey: 'k' });
+    expect(safety.raiseSos).toHaveBeenCalledWith({ id: 'u1', type: 'customer' }, { kind: 'LIFE_THREATENING', idempotencyKey: 'k' });
+    await c.numbers('u1');
+    expect(safety.emergencyNumbers).toHaveBeenCalledWith('u1');
   });
 });

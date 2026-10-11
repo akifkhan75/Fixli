@@ -23,7 +23,7 @@ describe('JobsService', () => {
   const notifications: any = { notify: jest.fn().mockResolvedValue(1) };
   const matching: any = { matchJob: jest.fn().mockResolvedValue(3) };
   const config: any = { get: jest.fn((k: string) => ({ REQUIRE_JOB_PHOTOS: true, AUTO_CONFIRM_HOURS: 24 } as any)[k]) };
-  const svc = new JobsService(prisma, realtime, notifications, { assert: jest.fn() } as any, storage, matching, config, { record: jest.fn() } as any, { latest: jest.fn() } as any, { between: jest.fn().mockResolvedValue(false) } as any);
+  const svc = new JobsService(prisma, realtime, notifications, { assert: jest.fn() } as any, storage, matching, config, { record: jest.fn() } as any, { latest: jest.fn() } as any, { between: jest.fn().mockResolvedValue(false) } as any, { emit: jest.fn(), on: jest.fn() } as any);
 
   const customer: AuthUser = { id: 'c1', type: 'customer' };
   const worker: AuthUser = { id: 'w1', type: 'worker' };

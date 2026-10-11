@@ -82,7 +82,7 @@ export class NotificationService {
       const n = created.find((c) => c.userId === s.userId)!;
       return {
         session: s, notificationId: n.id,
-        msg: { to: s.pushToken!, title: n.title, body: n.body, data: { ...input.data, notificationId: n.id }, channelId: input.type.startsWith('job.request') ? 'requests' : 'default' },
+        msg: { to: s.pushToken!, title: n.title, body: n.body, data: { ...input.data, notificationId: n.id }, channelId: input.type.startsWith('job.request') || input.type === 'job.sos_request' ? 'requests' : 'default' },
       };
     });
     const results = await this.push.send(messages.map((m) => m.msg));

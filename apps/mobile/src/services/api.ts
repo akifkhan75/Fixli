@@ -457,3 +457,18 @@ export const markNotificationsRead = (ids?: string[]) =>
   request<{ updated: number }>('/notifications/read', { method: 'POST', body: JSON.stringify(ids ? { ids } : {}) });
 export const registerPushToken = (token: string) =>
   request<{ success: boolean }>('/notifications/push-token', { method: 'PUT', body: JSON.stringify({ token }) });
+
+// ── Safety ──────────────────────────────────────────────────
+export type SosKind = 'LIFE_THREATENING' | 'WATER' | 'ELECTRIC' | 'GAS' | 'IN_JOB';
+export interface SosResult {
+  incidentId: string; kind: SosKind; jobRequestId: string | null;
+  emergencyNumbers: { label: string; number: string }[];
+  contacts: { status: 'SENT' | 'PARTLY_SENT' | 'NO_CONTACTS' | 'NO_PROVIDER' | 'FAILED'; alerted: number; message: string } | null;
+}
+export const getEmergencyNumbers = () => request<{ countryCode: string; numbers: { label: string; number: string }[] }>('/safety/emergency-numbers');
+export const raiseSos = (data: { kind: SosKind; idempotencyKey: string; addressId?: string; jobRequestId?: string; note?: string }) =>
+  request<SosResult>('/safety/sos', { method: 'POST', body: JSON.stringify(data) });
+export interface TrustedContact { id: string; name: string; phone: string; notifyOnSos: boolean }
+export const getTrustedContacts = () => request<TrustedContact[]>('/safety/trusted-contacts');
+export const addTrustedContact = (name: string, phone: string) => request<TrustedContact>('/safety/trusted-contacts', { method: 'POST', body: JSON.stringify({ name, phone }) });
+export const removeTrustedContact = (id: string) => request<{ success: boolean }>(`/safety/trusted-contacts/${id}`, { method: 'DELETE' });

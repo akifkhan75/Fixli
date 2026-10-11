@@ -15,6 +15,7 @@ import { ReviewForm } from '../../../src/components/ds/ReviewForm';
 import { JobStepPhoto } from '../../../src/components/ds/JobStepPhoto';
 import { ChangeOrderForm } from '../../../src/components/ds/ChangeOrderForm';
 import { CallButton } from '../../../src/components/ds/CallButton';
+import { SOS_COPY } from '../../../src/safety/copy';
 import { MessageButton } from '../../../src/components/ds/MessageButton';
 import { PriceForm } from '../../../src/components/ds/PriceForm';
 import { useAppDispatch, useAppSelector } from '../../../src/hooks/useRedux';
@@ -143,6 +144,11 @@ export default function WorkerJobScreen() {
 
   return (
     <Screen title="Job" back footer={action} onRefresh={reload} refreshing={loading}>
+      {job.isEmergency && job.status === 'AWAITING_WORKER' ? (
+        <View style={{ backgroundColor: theme.colors.error, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 12 }} accessibilityRole="alert">
+          <Text variant="bodyLarge" weight="bold" color="#FFFFFF">{SOS_COPY.workerSosBanner(3)}</Text>
+        </View>
+      ) : null}
       <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>{statusSentence(job.status, 'worker', job.customer?.name)}</Text>
       <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, marginTop: 16, paddingVertical: 8 }}>
         <StatusTimeline currentPhase={toPhase(job.status)} />
@@ -230,6 +236,9 @@ export default function WorkerJobScreen() {
         />
       )}
 
+      {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? (
+        <View style={{ marginTop: 16 }}><Button title="Emergency / I feel unsafe" variant="ghost" onPress={() => router.push({ pathname: '/sos', params: { jobId: job.id } } as any)} /></View>
+      ) : null}
       <JobHistory events={job.events ?? []} viewer="worker" locale={locale} />
     </Screen>
   );

@@ -66,7 +66,9 @@ export class WorkersService {
   }
 
   async findPublicById(id: string, viewer?: { id: string; type: string }) {
-    const worker = await this.prisma.worker.findFirst({ where: { id, activationStatus: 'ACTIVE' }, select: PUBLIC_WORKER_SELECT });
+    const isSelfOrAdmin = viewer?.id === id || viewer?.type === 'admin';
+    const where: Prisma.WorkerWhereInput = isSelfOrAdmin ? { id } : { id, activationStatus: 'ACTIVE' };
+    const worker = await this.prisma.worker.findFirst({ where, select: PUBLIC_WORKER_SELECT });
     if (!worker) throw new NotFoundException('Worker not found');
     return this.toPublic(worker, viewer);
   }

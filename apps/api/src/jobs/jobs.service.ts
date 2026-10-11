@@ -16,6 +16,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../common/audit/audit.service';
 import { LiveLocationService } from '../tracking/live-location.service';
 import { BlocksService } from '../blocks/blocks.service';
+import { DomainEvents } from '../common/events/domain-events';
 import { systemMessage, SystemMessageKey } from '../chat/system-messages';
 import { StaffAccessService } from '../common/access/staff-access.service';
 import { NotificationType } from '../notifications/templates';
@@ -81,6 +82,7 @@ export class JobsService {
     private readonly audit: AuditService,
     private readonly location: LiveLocationService,
     private readonly blocks: BlocksService,
+    private readonly events: DomainEvents,
   ) {}
 
   private readonly logger = new Logger(JobsService.name);
@@ -145,7 +147,8 @@ export class JobsService {
 
   // ── create ────────────────────────────────────────────────
 
-  async create(user: AuthUser, dto: CreateJobDto) {
+  /** `skipMatching`: SOS dispatch offers the job to the nearest worker itself, then falls back to matching. */
+  async create(user: AuthUser, dto: CreateJobDto, opts: { skipMatching?: boolean } = {}) {
     if (user.type !== 'customer') throw new ForbiddenException('Only customers can request a service');
 
     // Same request sent twice (retry, double tap, flaky network) -> the same job.
@@ -250,7 +253,7 @@ export class JobsService {
 
     // Tell nearby eligible professionals. A failure here never loses the request: the
     // background sweeper retries unmatched requests every minute.
-    await this.matching.matchJob(jobId, 1).catch((e) => this.logger.error(`Matching failed for ${jobId}: ${(e as Error).message}`));
+    if (!opts.skipMatching) await this.matching.matchJob(jobId, 1).catch((e) => this.logger.error(`Matching failed for ${jobId}: ${(e as Error).message}`));
     void urgency;
     return this.findById(jobId, user);
   }
@@ -316,7 +319,9 @@ export class JobsService {
   }
 
   async accept(id: string, user: AuthUser) {
-    return this.workerTransition(id, user, 'ACCEPTED', 'WORKER_ACCEPTED');
+    const out = await this.workerTransition(id, user, 'ACCEPTED', 'WORKER_ACCEPTED');
+    this.events.emit('job.direct_answered', { jobId: id, workerId: user.id, accepted: true });
+    return out;
   }
 
   async enRoute(id: string, user: AuthUser) {
@@ -438,11 +443,14 @@ export class JobsService {
 
   async decline(id: string, user: AuthUser) {
     if (user.type !== 'worker') throw new ForbiddenException('Only a worker can decline');
-    return this.transition(id, user, 'MATCHES_FOUND', {
+    const out = await this.transition(id, user, 'MATCHES_FOUND', {
       onlyIf: { assignedWorkerId: user.id },
       data: { assignedWorkerId: null },
       event: { type: 'WORKER_DECLINED' },
     });
+    // SOS dispatch moves on to the next nearest worker at once.
+    this.events.emit('job.direct_answered', { jobId: id, workerId: user.id, accepted: false });
+    return out;
   }
 
   async cancel(id: string, user: AuthUser, dto: CancelJobDto = {}) {

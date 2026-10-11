@@ -46,6 +46,12 @@ export interface AppEnv {
   CASH_AUTO_CONFIRM_HOURS: number;
   /** Worker location points are deleted after this many days (D-F3). */
   LOCATION_RETENTION_DAYS: number;
+  /** SOS: how long the nearest worker has to accept before the next one is asked. */
+  SOS_ACCEPT_SECONDS: number;
+  /** SOS: how many workers are asked one by one before normal offers. */
+  SOS_DIRECT_TRIES: number;
+  /** Who sends trusted-contact alerts (and OTP later). none = not configured (D-F5). */
+  SMS_PROVIDER: 'none';
   /** Straight-line ETA until a routing provider is configured. */
   AVG_TRAVEL_SPEED_KMH: number;
   /** Staff must use an authenticator app (second factor). Default true; false only for tests. */
@@ -123,6 +129,10 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   const cashAutoConfirmHours = intIn('CASH_AUTO_CONFIRM_HOURS', 48, 1, 24 * 14);
   const locationRetentionDays = intIn('LOCATION_RETENTION_DAYS', 30, 1, 365);
   const travelSpeed = intIn('AVG_TRAVEL_SPEED_KMH', 20, 5, 120);
+  const sosAccept = intIn('SOS_ACCEPT_SECONDS', 180, 30, 900);
+  const sosTries = intIn('SOS_DIRECT_TRIES', 3, 1, 10);
+  const sms = str('SMS_PROVIDER') || 'none';
+  if (sms !== 'none') errors.push('SMS_PROVIDER: only "none" is available until a provider is chosen (doc 25 D-F5)');
 
   if (str('REDIS_URL') && !/^rediss?:\/\//.test(str('REDIS_URL'))) errors.push('REDIS_URL must be a redis:// or rediss:// URL');
 
@@ -167,6 +177,9 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     CASH_AUTO_CONFIRM_HOURS: cashAutoConfirmHours,
     LOCATION_RETENTION_DAYS: locationRetentionDays,
     AVG_TRAVEL_SPEED_KMH: travelSpeed,
+    SOS_ACCEPT_SECONDS: sosAccept,
+    SOS_DIRECT_TRIES: sosTries,
+    SMS_PROVIDER: 'none',
     ADMIN_TOTP_REQUIRED: totpRequired,
     TOTP_ENCRYPTION_KEY: totpKey || undefined,
     FRONTEND_URL: str('FRONTEND_URL') || undefined,

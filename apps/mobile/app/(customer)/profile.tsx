@@ -51,6 +51,7 @@ export default function AccountScreen() {
         { id: 'password', label: 'Change password', icon: 'lock-closed-outline', onPress: go('/change-password') },
         { id: 'devices', label: 'Your devices', icon: 'phone-portrait-outline', onPress: go('/devices') },
         { id: 'blocked', label: 'Blocked people', icon: 'hand-left-outline', onPress: go('/blocked') },
+        { id: 'trusted', label: 'Trusted contacts (SOS)', icon: 'people-outline', onPress: go('/trusted-contacts') },
         { id: 'delete', label: 'Delete account', icon: 'trash-outline', destructive: true, onPress: go('/delete-account') },
       ]} />
       <GroupedList items={[
