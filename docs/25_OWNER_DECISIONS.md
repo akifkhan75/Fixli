@@ -28,7 +28,7 @@
 | D-F3 | **Live-location history** | How long worker location points from a job are kept. | Not stored yet (F2). | 30 days, then deleted. | |
 | D-F4 | **What deleting an account keeps** | Which records survive account deletion. | Deletion only marks the account (F3 fixes it). | Anonymise the profile; keep payments, ledger and audit for the legal period (counsel). | |
 | D-F5 | **SMS / WhatsApp provider** | For trusted-contact SOS alerts (and OTP, O5). | No alerts are sent (F5). | One provider for both. | |
-| D-F6 | **Gas emergency numbers and SOS wording** | Numbers per city; the exact safety text. | Hard-coded national numbers (F5 fixes). | Ops confirms numbers; counsel reviews wording (L10). | |
+| D-F6 | **Gas emergency numbers and SOS wording** | Numbers per city (e.g. SNGPL / SSGC gas emergency lines) to add to `CountryConfig`; review the SOS wording in `apps/mobile/src/safety/copy.ts` and `apps/api/src/safety/safety-copy.ts`; confirm that a gas smell should go to plumbers. | Numbers from `CountryConfig` (Police 15, Rescue 1122). The gas steps say "call your gas company's emergency line" without a number. Gas emergencies go to plumbers. | Ops confirms numbers; counsel reviews wording (L10). | |
 | D-F7 | **Analytics provider** | Who receives anonymous usage events, and where it is hosted. | No analytics (F7). | PostHog (EU hosting), no personal data; decide with O9. | |
 
 ## B. Decided (for reference)
