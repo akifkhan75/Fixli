@@ -303,7 +303,7 @@ export class JobsService {
 
   async requestWorker(id: string, workerId: string, user: AuthUser) {
     if (user.type !== 'customer') throw new ForbiddenException('Only the customer can choose a worker');
-    const worker = await this.prisma.worker.findFirst({ where: { id: workerId, activationStatus: 'ACTIVE' }, select: { id: true } });
+    const worker = await this.prisma.worker.findFirst({ where: { id: workerId, activationStatus: 'ACTIVE', balanceBlocked: false }, select: { id: true } });
     if (!worker) throw new BadRequestException('That worker is not available');
     return this.transition(id, user, 'AWAITING_WORKER', {
       onlyIf: { customerId: user.id },

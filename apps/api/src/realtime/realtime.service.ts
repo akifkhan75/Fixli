@@ -11,7 +11,8 @@ export type RealtimeEvent =
   // staff feed (admin portal)
   | 'staff.verification_submitted'
   | 'staff.dispute_opened'
-  | 'staff.incident_reported';
+  | 'staff.incident_reported'
+  | 'staff.settlement_reported';
 
 export interface Envelope<T = unknown> {
   id: string;

@@ -12,7 +12,7 @@ describe('NotificationService', () => {
   const svc = new NotificationService(prisma, realtime as any, push as any);
   const input = {
     type: 'offer.received' as const, userIds: ['c1', 'c1'], eventKey: 'offer.received:o1:1',
-    params: { worker: 'Bilal', price: { minor: 150000, currency: 'USD' } }, data: { url: '/(customer)/job/j1', jobId: 'j1' },
+    params: { worker: 'Bilal', price: { minor: 150000, currency: 'PKR' } }, data: { url: '/(customer)/job/j1', jobId: 'j1' },
   };
 
   beforeEach(() => {

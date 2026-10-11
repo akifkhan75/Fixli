@@ -14,6 +14,9 @@ import { StatusTimeline } from '../../../src/components/ds/StatusTimeline';
 import { JobHistory, JobMedia } from '../../../src/components/ds/JobParts';
 import { ChangeOrdersList } from '../../../src/components/ds/ChangeOrdersList';
 import { ReviewForm } from '../../../src/components/ds/ReviewForm';
+import { CashConfirmCard } from '../../../src/components/ds/CashConfirmCard';
+import { ReportProblem } from '../../../src/components/ds/ReportProblem';
+import { FavoriteHeart } from '../../../src/components/ds/FavoriteHeart';
 import { ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
 import { OfferCard } from '../../../src/components/ds/OfferCard';
 import MapView, { Marker } from 'react-native-maps';
@@ -80,15 +83,11 @@ export default function CustomerJobScreen() {
     } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
   };
 
-  const payment = job.payments?.[0];
-  const confirmCash = async () => {
-    if (!payment) return;
-    setBusy(true);
-    try {
-      await api.confirmPayment(payment.id);
-      await reload();
-    } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
-  };
+  const payment = job.payments?.[0] as api.PaymentView | undefined;
+  const bookAgain = () => router.push({
+    pathname: '/(customer)/request-service',
+    params: { categoryId: job.category?.id, issue: job.issueCodes?.[0], ...(worker ? { workerId: worker.id } : {}) },
+  } as any);
 
   const footer = !cancellable && job.status !== 'AWAITING_CONFIRMATION' ? undefined : job.status === 'AWAITING_CONFIRMATION' ? (
     <Button title="Confirm Work is Done" variant="primary" size="lg" loading={busy} disabled={busy} onPress={async () => {
@@ -120,20 +119,12 @@ export default function CustomerJobScreen() {
       {job.agreedAmount && job.agreedCurrency && job.status !== 'CANCELLED' ? (
         <View style={{ marginTop: 6 }}>
           <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>Agreed price: {formatMoney(job.agreedAmount, job.agreedCurrency, locale)}</Text>
-          {payment?.status === 'MARKED_BY_WORKER' && (
-            <View style={{ backgroundColor: theme.colors.surfaceElevated, padding: 16, borderRadius: theme.borderRadius.lg, marginTop: 12 }}>
-              <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>Professional requested payment</Text>
-              <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>They marked that you paid them in cash. Please confirm this.</Text>
-              <View style={{ marginTop: 12 }}>
-                <Button title="Confirm Cash Given" variant="primary" loading={busy} disabled={busy} onPress={confirmCash} />
-              </View>
-            </View>
-          )}
-          {payment?.status === 'CONFIRMED' && (
-            <Text variant="bodySmall" weight="bold" color={theme.colors.success} style={{ marginTop: 8 }}>
-              Payment Confirmed
+          {payment?.status === 'MARKED_BY_WORKER' ? <CashConfirmCard payment={payment} locale={locale} onDone={reload} /> : null}
+          {payment && payment.status !== 'MARKED_BY_WORKER' ? (
+            <Text variant="bodySmall" weight="bold" color={payment.status === 'CONFIRMED' ? theme.colors.success : theme.colors.warning} style={{ marginTop: 8 }}>
+              {payment.status === 'CONFIRMED' ? `Paid in cash: ${formatMoney(payment.amount, payment.currency, locale)}` : payment.status === 'DISPUTED' ? 'You questioned this payment. Fixli support will contact you.' : 'Payment closed by support'}
             </Text>
-          )}
+          ) : null}
         </View>
       ) : null}
 
@@ -227,13 +218,18 @@ export default function CustomerJobScreen() {
             <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{worker.user.name}</Text>
             <Text variant="bodySmall" color={theme.colors.textSecondary}>{worker.isVerified ? 'ID checked' : 'Professional'}{worker.rating ? `  ·  ${worker.rating.toFixed(1)} ★` : ''}</Text>
           </View>
+          <FavoriteHeart workerId={worker.id} />
         </TouchableOpacity>
       ) : null}
 
+      {['AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? <ReportProblem jobId={job.id} onDone={reload} /> : null}
+      {job.status === 'COMPLETED' ? (
+        <View style={{ marginTop: 12 }}><Button title={worker ? `Book ${worker.user.name.split(' ')[0]} again` : 'Book again'} variant="secondary" onPress={bookAgain} /></View>
+      ) : null}
       {job.status === 'COMPLETED' && job.assignedWorker && currentUser && !job.reviews?.some(r => r.reviewerId === currentUser.id) && (
         <ReviewForm 
           jobId={job.id} 
-          targetId={job.assignedWorker.user.id} 
+          reviewing="worker"
           targetName={job.assignedWorker.user.name} 
           onSubmitted={reload} 
         />

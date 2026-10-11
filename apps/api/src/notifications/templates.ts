@@ -27,7 +27,16 @@ export type NotificationType =
   | 'job.auto_confirmed'
   | 'change_order.created'
   | 'change_order.approved'
-  | 'change_order.declined';
+  | 'change_order.declined'
+  | 'payment.cash_marked'
+  | 'payment.confirmed'
+  | 'payment.auto_confirmed'
+  | 'payment.disputed'
+  | 'settlement.confirmed'
+  | 'settlement.rejected'
+  | 'balance.paused'
+  | 'dispute.opened'
+  | 'dispute.updated';
 
 type Locale = 'en' | 'ur' | 'ar';
 export type Money = { minor: number; currency: string };
@@ -35,6 +44,15 @@ type P = Record<string, string | number | Money | undefined>;
 type T = (p: P) => { title: string; body: string };
 
 const en: Record<NotificationType, T> = {
+  'payment.cash_marked': (p) => ({ title: 'Did you pay in cash?', body: `The professional says you paid ${p.price} for "${p.title}". Confirm, or tell us if that's wrong.` }),
+  'payment.confirmed': (p) => ({ title: 'Cash payment confirmed', body: `${p.price} for "${p.title}". Fixli's fee: ${p.commission}.` }),
+  'payment.auto_confirmed': (p) => ({ title: 'Cash payment confirmed', body: `${p.price} for "${p.title}" was confirmed automatically. Fixli's fee: ${p.commission}.` }),
+  'payment.disputed': (p) => ({ title: 'The customer questioned a payment', body: `For "${p.title}". Fixli support will look into it; no fee is charged meanwhile.` }),
+  'settlement.confirmed': (p) => ({ title: 'Payment received', body: `We received ${p.price}. Thank you!` }),
+  'settlement.rejected': (p) => ({ title: "We couldn't find your payment", body: `${p.price}: ${p.reason ?? 'please check the reference and send it again.'}` }),
+  'balance.paused': () => ({ title: 'New jobs paused', body: 'Please settle what you owe Fixli to get new requests again. See Earnings.' }),
+  'dispute.opened': (p) => ({ title: 'A problem was reported', body: `About "${p.title}". Fixli support will contact you.` }),
+  'dispute.updated': (p) => ({ title: 'Update on a reported problem', body: `About "${p.title}": ${p.status}.` }),
   'job.en_route': (p) => ({ title: `${p.worker} is on the way`, body: `For "${p.title}". You can follow them on the job screen.` }),
   'job.arrived': (p) => ({ title: `${p.worker} has arrived`, body: `For "${p.title}".` }),
   'job.awaiting_confirmation': (p) => ({ title: 'Please check the work', body: `${p.worker} finished "${p.title}". Confirm it's done, or report a problem.` }),
@@ -61,6 +79,15 @@ const en: Record<NotificationType, T> = {
 };
 
 const ur: Record<NotificationType, T> = {
+  'payment.cash_marked': (p) => ({ title: 'کیا آپ نے نقد ادائیگی کی؟', body: `ماہر کے مطابق آپ نے "${p.title}" کے لیے ${p.price} ادا کیے۔ تصدیق کریں یا غلط ہو تو بتائیں۔` }),
+  'payment.confirmed': (p) => ({ title: 'نقد ادائیگی کی تصدیق', body: `"${p.title}" کے لیے ${p.price}۔ Fixli کی فیس: ${p.commission}۔` }),
+  'payment.auto_confirmed': (p) => ({ title: 'نقد ادائیگی کی تصدیق', body: `"${p.title}" کے لیے ${p.price} کی تصدیق خود بخود ہو گئی۔ Fixli کی فیس: ${p.commission}۔` }),
+  'payment.disputed': (p) => ({ title: 'گاہک نے ادائیگی پر سوال اٹھایا', body: `"${p.title}" کے لیے۔ Fixli سپورٹ دیکھے گی؛ تب تک کوئی فیس نہیں۔` }),
+  'settlement.confirmed': (p) => ({ title: 'ادائیگی موصول', body: `ہمیں ${p.price} موصول ہو گئے۔ شکریہ!` }),
+  'settlement.rejected': (p) => ({ title: 'آپ کی ادائیگی نہیں ملی', body: `${p.price}: ${p.reason ?? 'براہ کرم حوالہ نمبر چیک کر کے دوبارہ بھیجیں۔'}` }),
+  'balance.paused': () => ({ title: 'نئے کام روک دیے گئے', body: 'نئی درخواستیں دوبارہ پانے کے لیے Fixli کی واجب الادا رقم ادا کریں۔ آمدنی دیکھیں۔' }),
+  'dispute.opened': (p) => ({ title: 'ایک مسئلہ رپورٹ ہوا', body: `"${p.title}" کے بارے میں۔ Fixli سپورٹ آپ سے رابطہ کرے گی۔` }),
+  'dispute.updated': (p) => ({ title: 'رپورٹ شدہ مسئلے پر اپ ڈیٹ', body: `"${p.title}": ${p.status}۔` }),
   'job.en_route': (p) => ({ title: `${p.worker} راستے میں ہیں`, body: `"${p.title}" کے لیے۔ آپ کام کی اسکرین پر انہیں دیکھ سکتے ہیں۔` }),
   'job.arrived': (p) => ({ title: `${p.worker} پہنچ گئے`, body: `"${p.title}" کے لیے۔` }),
   'job.awaiting_confirmation': (p) => ({ title: 'کام چیک کریں', body: `${p.worker} نے "${p.title}" مکمل کیا۔ تصدیق کریں یا مسئلہ بتائیں۔` }),
@@ -87,6 +114,15 @@ const ur: Record<NotificationType, T> = {
 };
 
 const ar: Record<NotificationType, T> = {
+  'payment.cash_marked': (p) => ({ title: 'هل دفعت نقداً؟', body: `يقول المحترف إنك دفعت ${p.price} مقابل "${p.title}". أكّد أو أخبرنا إن كان ذلك خطأ.` }),
+  'payment.confirmed': (p) => ({ title: 'تم تأكيد الدفع النقدي', body: `${p.price} مقابل "${p.title}". رسوم Fixli: ${p.commission}.` }),
+  'payment.auto_confirmed': (p) => ({ title: 'تم تأكيد الدفع النقدي', body: `تم تأكيد ${p.price} مقابل "${p.title}" تلقائياً. رسوم Fixli: ${p.commission}.` }),
+  'payment.disputed': (p) => ({ title: 'اعترض العميل على دفعة', body: `بخصوص "${p.title}". سيراجعها دعم Fixli؛ لا رسوم حتى ذلك الحين.` }),
+  'settlement.confirmed': (p) => ({ title: 'تم استلام الدفعة', body: `استلمنا ${p.price}. شكراً لك!` }),
+  'settlement.rejected': (p) => ({ title: 'لم نجد دفعتك', body: `${p.price}: ${p.reason ?? 'يرجى التحقق من الرقم المرجعي وإرساله مجدداً.'}` }),
+  'balance.paused': () => ({ title: 'تم إيقاف الطلبات الجديدة', body: 'يرجى سداد المستحق لـ Fixli لتلقي طلبات جديدة. راجع الأرباح.' }),
+  'dispute.opened': (p) => ({ title: 'تم الإبلاغ عن مشكلة', body: `بخصوص "${p.title}". سيتواصل معك دعم Fixli.` }),
+  'dispute.updated': (p) => ({ title: 'تحديث بشأن مشكلة مبلّغ عنها', body: `بخصوص "${p.title}": ${p.status}.` }),
   'job.en_route': (p) => ({ title: `${p.worker} في الطريق`, body: `من أجل "${p.title}". يمكنك متابعته من شاشة الطلب.` }),
   'job.arrived': (p) => ({ title: `وصل ${p.worker}`, body: `من أجل "${p.title}".` }),
   'job.awaiting_confirmation': (p) => ({ title: 'يرجى مراجعة العمل', body: `أنهى ${p.worker} "${p.title}". أكّد الإنجاز أو أبلغ عن مشكلة.` }),

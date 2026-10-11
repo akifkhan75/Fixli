@@ -5,7 +5,7 @@ import { Text } from './Text';
 import { Button } from './Button';
 import { TextInput } from './TextInput';
 import { ChipChoice } from './ChipChoice';
-import { formatMoney, parseMajorToMinor } from '../../utils/money';
+import { currencyExponent, formatMoney, parseMajorToMinor } from '../../utils/money';
 import { useI18n } from '../../hooks/useI18n';
 
 const ETAS = [{ id: '30', label: '30 min' }, { id: '60', label: '1 hour' }, { id: '120', label: '2 hours' }, { id: '240', label: '4 hours' }, { id: '1440', label: 'Tomorrow' }];
@@ -20,7 +20,7 @@ export function PriceForm({ currency, usualMinor, initialMinor, initialEta, loca
   }) {
   const theme = useTheme();
   const { t } = useI18n();
-  const digits = useMemo(() => new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2, [currency]);
+  const digits = useMemo(() => currencyExponent(currency), [currency]);
   const toMajor = (minor: number) => String(Math.round(minor / 10 ** digits));
   const [text, setText] = useState(initialMinor ? toMajor(initialMinor) : '');
   const [eta, setEta] = useState<string[]>(initialEta ? [String(initialEta)] : ['60']);

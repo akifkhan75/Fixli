@@ -8,7 +8,7 @@ describe('UsersService', () => {
     $transaction: jest.fn((fn: any) => fn(tx)),
   };
   const storage = { consume: jest.fn() };
-  const svc = new UsersService(prisma, storage as any);
+  const svc = new UsersService(prisma, storage as any, { revokeAllExcept: jest.fn() } as any, { record: jest.fn() } as any);
   beforeEach(() => prisma.$transaction.mockImplementation((fn: any) => fn(tx)));
   afterEach(() => jest.resetAllMocks());
 

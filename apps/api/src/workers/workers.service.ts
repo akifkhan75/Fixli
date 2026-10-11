@@ -225,43 +225,4 @@ export class WorkersService {
     await this.audit.record({ actorId: userId, action: 'worker.submitted_for_review', entityType: 'Worker', entityId: userId });
     return this.findOwn(userId);
   }
-
-  async getEarnings(userId: string) {
-    // Return stats from LedgerEntry and payments
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const [ledgerCount, recentEntries] = await Promise.all([
-      this.prisma.ledgerEntry.count({ where: { workerId: userId } }),
-      this.prisma.ledgerEntry.findMany({
-        where: { workerId: userId, createdAt: { gte: today } },
-        orderBy: { createdAt: 'desc' },
-      }),
-    ]);
-
-    const lastLedger = await this.prisma.ledgerEntry.findFirst({
-      where: { workerId: userId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return {
-      currentBalance: lastLedger?.balanceAfter ?? 0,
-      todayEarnings: recentEntries.filter(e => e.type === 'COMMISSION_OWED').reduce((acc, e) => acc + Math.abs(e.amount), 0),
-      totalEntries: ledgerCount,
-    };
-  }
-
-  async getLedger(userId: string, skip: number = 0, take: number = 50) {
-    const [entries, total] = await Promise.all([
-      this.prisma.ledgerEntry.findMany({
-        where: { workerId: userId },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take,
-      }),
-      this.prisma.ledgerEntry.count({ where: { workerId: userId } }),
-    ]);
-
-    return { entries, total };
-  }
 }

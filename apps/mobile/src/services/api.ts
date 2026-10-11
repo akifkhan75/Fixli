@@ -265,11 +265,46 @@ export const decideChangeOrder = (id: string, status: 'APPROVED' | 'REJECTED') =
 
 // ── Payments & Reviews ───────────────────────────────────────
 
-export interface LedgerSummary { balance: number; currency: string; history: { id: string; type: string; amount: number; createdAt: string }[] }
-export const getWorkerEarnings = () => request<LedgerSummary>('/workers/me/earnings');
-export const markCashReceived = (jobId: string, amount: number, currency?: string) => request<{ success: boolean }>(`/payments/job/${jobId}/cash`, { method: 'POST', body: JSON.stringify({ amount, currency }) });
-export const confirmPayment = (paymentId: string) => request<{ success: boolean }>(`/payments/${paymentId}/confirm`, { method: 'POST' });
-export const submitReview = (data: { jobRequestId: string; targetId: string; rating: number; comment?: string }) => request<{ success: boolean }>('/reviews', { method: 'POST', body: JSON.stringify(data) });
+/** Earned = cash customers confirmed; commission is Fixli's fee; owed is what you haven't paid Fixli yet. */
+export interface Earnings {
+  currency: string; period: 'week' | 'month'; periodStart: string;
+  gross: number; commission: number; net: number; jobs: number;
+  today: { gross: number; commission: number; net: number; jobs: number };
+  owed: number; owedSince: string | null;
+  limits: { softMinor: number; hardMinor: number; maxDaysOwed: number; overSoft: boolean; blocked: boolean };
+  commissionRule: { rateBps: number; minMinor: number; maxMinor: number };
+  settlementRails: { id: string; label: string; account: string | null }[];
+  pendingSettlement: { id: string; amount: number; createdAt: string } | null;
+}
+export const getWorkerEarnings = (period: 'week' | 'month' = 'week') => request<Earnings>(`/workers/me/earnings?period=${period}`);
+export interface LedgerItem { id: string; type: 'COMMISSION_OWED' | 'COMMISSION_SETTLED' | 'ADJUSTMENT'; amount: number; currency: string; balanceAfter: number; jobRequestId: string | null; jobTitle: string | null; note: string | null; createdAt: string }
+export const getLedger = (cursor?: string) => request<{ items: LedgerItem[]; nextCursor: string | null }>(`/workers/me/ledger${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
+export const reportSettlement = (amount: number, rail: string, reference: string) =>
+  request<{ id: string; status: string }>('/workers/me/settlements', { method: 'POST', body: JSON.stringify({ amount, rail, reference }) });
+
+export interface PaymentView { id: string; method: string; amount: number; currency: string; status: 'MARKED_BY_WORKER' | 'CONFIRMED' | 'DISPUTED' | 'VOIDED' | string; createdAt: string }
+/** Worker: "I received the agreed amount in cash". The amount is the job's agreed total (never typed). */
+export const markCashReceived = (jobId: string) => request<PaymentView>(`/job-requests/${jobId}/payments/cash`, { method: 'POST', body: JSON.stringify({}) });
+export const confirmPayment = (paymentId: string) => request<PaymentView>(`/payments/${paymentId}/confirm`, { method: 'POST' });
+export const disputePayment = (paymentId: string, reason: string) => request<{ status: string; disputeId: string }>(`/payments/${paymentId}/dispute`, { method: 'POST', body: JSON.stringify({ reason }) });
+
+export type DisputeCategory = 'PAYMENT' | 'QUALITY' | 'DAMAGE' | 'NO_SHOW' | 'PRICE' | 'BEHAVIOUR' | 'OTHER';
+export const openDispute = (data: { jobRequestId: string; category: DisputeCategory; reason: string; description?: string; evidenceUploadIds?: string[] }) =>
+  request<{ id: string; status: string }>('/disputes', { method: 'POST', body: JSON.stringify(data) });
+
+export const WORKER_REVIEW_TAGS = ['ON_TIME', 'FRIENDLY', 'CLEAN', 'FAIR_PRICE', 'SKILLED', 'EXPLAINED_WELL'] as const;
+export const CUSTOMER_REVIEW_TAGS = ['RESPECTFUL', 'CLEAR_INSTRUCTIONS', 'PAID_PROMPTLY', 'EASY_ACCESS'] as const;
+/** The person reviewed is always the other side of the job (the server decides; no target id). */
+export const submitReview = (data: { jobRequestId: string; rating: number; comment?: string; tags?: string[] }) =>
+  request<{ id: string }>('/reviews', { method: 'POST', body: JSON.stringify(data) });
+
+export interface FavoriteWorker { id: string; workerId: string; worker: { id: string; rating: number; user: { name: string; profileImageUrl: string | null }; services: { category: { name: string } }[] } }
+export const getFavorites = () => request<FavoriteWorker[]>('/users/me/favorites');
+export const addFavorite = (workerId: string) => request<{ success: boolean }>(`/users/me/favorites/${workerId}`, { method: 'POST' });
+export const removeFavorite = (workerId: string) => request<{ success: boolean }>(`/users/me/favorites/${workerId}`, { method: 'DELETE' });
+
+/** Delete my account (password required). Refused during an active job or with commission owed. */
+export const deleteAccount = (password: string) => request<{ success: boolean }>('/users/me/delete', { method: 'POST', body: JSON.stringify({ password }) });
 
 // ── AI ─────────────────────────────────────────────────────
 

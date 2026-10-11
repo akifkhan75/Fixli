@@ -10,6 +10,8 @@ import { Screen } from '../../src/components/ds/Screen';
 import { Text } from '../../src/components/ds/Text';
 import { Button } from '../../src/components/ds/Button';
 import { Logo } from '../../src/components/ds/Logo';
+import { useI18n } from '../../src/hooks/useI18n';
+import { formatMoney } from '../../src/utils/money';
 import { NotificationBell } from '../../src/components/ds/NotificationBell';
 import { useLiveReload } from '../../src/hooks/useRealtime';
 import { useNotifications } from '../../src/hooks/useNotifications';
@@ -19,6 +21,7 @@ import * as api from '../../src/services/api';
 
 export default function TodayScreen() {
   const theme = useTheme();
+  const { locale } = useI18n();
   const user = useAppSelector(selectCurrentUser);
   const me = useApi(api.getWorkerMe);
   const jobs = useApi(async () => {
@@ -32,7 +35,8 @@ export default function TodayScreen() {
   const [toggling, setToggling] = useState(false);
   const [toggleError, setToggleError] = useState<string | undefined>();
 
-  useFocusEffect(useCallback(() => { me.reload(); jobs.reload(); }, [me.reload, jobs.reload]));
+  const earnings = useApi(() => api.getWorkerEarnings('week'), []);
+  useFocusEffect(useCallback(() => { me.reload(); jobs.reload(); earnings.reload(); }, [me.reload, jobs.reload, earnings.reload]));
   // New requests and booking changes appear without pulling to refresh.
   useLiveReload(jobs.reload, ['feed.updated', 'job.updated']);
   // Approval changes the whole screen (verification -> online toggle).
@@ -100,6 +104,19 @@ export default function TodayScreen() {
         </View>
       )}
       {toggleError ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 8 }}>{toggleError}</Text> : null}
+
+      {status === 'ACTIVE' && earnings.data ? (
+        <TouchableOpacity onPress={() => router.push('/(worker)/earnings' as any)} activeOpacity={0.8} accessibilityRole="button"
+          style={{ backgroundColor: earnings.data.limits.blocked ? theme.colors.error + '18' : theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16, marginTop: 16 }}>
+          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>TODAY</Text>
+          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginTop: 2 }}>{formatMoney(earnings.data.today.gross, earnings.data.currency, locale)}</Text>
+          {earnings.data.limits.blocked ? (
+            <Text variant="bodySmall" weight="semibold" color={theme.colors.error} style={{ marginTop: 4 }}>New requests are paused: pay what you owe Fixli ({formatMoney(earnings.data.owed, earnings.data.currency, locale)}).</Text>
+          ) : earnings.data.owed > 0 ? (
+            <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>You owe Fixli {formatMoney(earnings.data.owed, earnings.data.currency, locale)}</Text>
+          ) : null}
+        </TouchableOpacity>
+      ) : null}
 
       <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginTop: 28, marginBottom: 12 }}>Next job</Text>
       {jobs.loading && !jobs.data ? <LoadingState /> : jobs.error && !jobs.data ? <ErrorState message={jobs.error} onRetry={jobs.reload} /> : next ? (

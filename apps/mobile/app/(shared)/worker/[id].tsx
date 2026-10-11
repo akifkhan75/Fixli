@@ -7,6 +7,9 @@ import { useApi } from '../../../src/hooks/useApi';
 import { useI18n } from '../../../src/hooks/useI18n';
 import { Screen } from '../../../src/components/ds/Screen';
 import { Avatar } from '../../../src/components/ds/Avatar';
+import { FavoriteHeart } from '../../../src/components/ds/FavoriteHeart';
+import { useAppSelector } from '../../../src/hooks/useRedux';
+import { selectCurrentUser } from '../../../src/store/authSlice';
 import { Text } from '../../../src/components/ds/Text';
 import { ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
 import { localizedName } from '../../../src/utils/catalog';
@@ -22,6 +25,7 @@ export default function WorkerProfileScreen() {
   const theme = useTheme();
   const { locale } = useI18n();
   const { data: w, loading, error, reload } = useApi(() => api.getPublicWorker(id), [id]);
+  const viewer = useAppSelector(selectCurrentUser);
 
   if (loading && !w) return <Screen title="Professional" back><LoadingState /></Screen>;
   if (error && !w) return <Screen title="Professional" back><ErrorState message={error} onRetry={reload} /></Screen>;
@@ -36,7 +40,10 @@ export default function WorkerProfileScreen() {
     <Screen title="Professional" back>
       <View style={{ alignItems: 'center' }}>
         <Avatar name={w.user.name} imageUrl={w.user.profileImageUrl} size="xl" />
-        <Text variant="h2" weight="bold" color={theme.colors.textPrimary} style={{ marginTop: 12 }}>{w.user.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
+          <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>{w.user.name}</Text>
+          {viewer?.type === 'customer' ? <FavoriteHeart workerId={w.id} /> : null}
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
           <Ionicons name="star" size={16} color={theme.colors.accent} />
           <Text variant="body" color={theme.colors.textSecondary} style={{ marginStart: 4 }}>

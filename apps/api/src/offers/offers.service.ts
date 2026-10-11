@@ -25,7 +25,7 @@ export class OffersService {
   /** A worker can only act on a request the matching engine sent them, while it is open. */
   private async requireMatchedOpenJob(workerId: string, jobId: string) {
     const [worker, match] = await Promise.all([
-      this.prisma.worker.findUnique({ where: { id: workerId }, select: { activationStatus: true, currency: true } }),
+      this.prisma.worker.findUnique({ where: { id: workerId }, select: { activationStatus: true, currency: true, balanceBlocked: true } }),
       this.prisma.jobMatch.findUnique({
         where: { jobRequestId_workerId: { jobRequestId: jobId, workerId } },
         include: { jobRequest: { select: { id: true, status: true, customerId: true, assignedWorkerId: true } } },
@@ -33,6 +33,7 @@ export class OffersService {
     ]);
     if (!match) throw new NotFoundException('Job not found');
     if (worker?.activationStatus !== 'ACTIVE') throw new ForbiddenException({ code: 'WORKER_NOT_ACTIVE', message: 'Your account must be approved to send prices.' });
+    if (worker.balanceBlocked) throw new ForbiddenException({ code: 'COMMISSION_LIMIT', message: 'Settle what you owe Fixli to send new prices.' });
     if (match.declinedAt) throw new ConflictException({ code: 'ALREADY_DECLINED', message: 'You said this request is not for you.' });
     if (match.jobRequest.status !== 'MATCHES_FOUND' || match.jobRequest.assignedWorkerId) {
       throw new ConflictException({ code: 'REQUEST_CLOSED', message: 'This request is no longer open.' });

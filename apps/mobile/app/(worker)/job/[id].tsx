@@ -24,6 +24,13 @@ import { useI18n } from '../../../src/hooks/useI18n';
 import * as api from '../../../src/services/api';
 import { useLiveReload } from '../../../src/hooks/useRealtime';
 
+const PAYMENT_LABEL_WORKER: Record<string, string> = {
+  MARKED_BY_WORKER: 'Cash marked. Waiting for the customer to confirm.',
+  CONFIRMED: 'Cash payment confirmed',
+  DISPUTED: 'The customer questioned this payment. Fixli support will look into it.',
+  VOIDED: 'Payment not counted (resolved by support)',
+};
+
 export default function WorkerJobScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
@@ -128,7 +135,7 @@ export default function WorkerJobScreen() {
     setBusy(true);
     setActionError(undefined);
     try {
-      await api.markCashReceived(job.id, job.agreedAmount, job.agreedCurrency || 'USD');
+      await api.markCashReceived(job.id);
       await reload();
     } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
   };
@@ -202,11 +209,11 @@ export default function WorkerJobScreen() {
           <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>Agreed price: {formatMoney(job.agreedAmount, job.agreedCurrency, locale)}</Text>
           {needsPayment ? (
             <View style={{ marginTop: 12 }}>
-              <Button title="Mark Cash Received" variant="primary" loading={busy} disabled={busy} onPress={handleMarkCash} />
+              <Button title={`I received ${formatMoney(job.agreedAmount, job.agreedCurrency ?? 'PKR', locale)} in cash`} variant="primary" loading={busy} disabled={busy} onPress={handleMarkCash} />
             </View>
           ) : payment ? (
-            <Text variant="bodySmall" weight="bold" color={payment.status === 'CONFIRMED' ? theme.colors.success : theme.colors.warning} style={{ marginTop: 8 }}>
-              Payment: {payment.status.replace(/_/g, ' ')}
+            <Text variant="bodySmall" weight="bold" color={payment.status === 'CONFIRMED' ? theme.colors.success : payment.status === 'DISPUTED' ? theme.colors.error : theme.colors.warning} style={{ marginTop: 8 }}>
+              {PAYMENT_LABEL_WORKER[payment.status] ?? 'Payment recorded'}
             </Text>
           ) : null}
         </View>
@@ -215,7 +222,7 @@ export default function WorkerJobScreen() {
       {job.status === 'COMPLETED' && job.customer && currentUser && !job.reviews?.some(r => r.reviewerId === currentUser.id) && (
         <ReviewForm 
           jobId={job.id} 
-          targetId={job.customer.id} 
+          reviewing="customer"
           targetName={job.customer.name} 
           onSubmitted={reload} 
         />

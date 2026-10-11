@@ -42,6 +42,8 @@ export interface AppEnv {
   REQUIRE_JOB_PHOTOS: boolean;
   /** A finished job the customer hasn't confirmed completes by itself after this (D-F2). */
   AUTO_CONFIRM_HOURS: number;
+  /** Cash the worker marked and the customer didn't answer is confirmed after this (D-F2). */
+  CASH_AUTO_CONFIRM_HOURS: number;
   /** Worker location points are deleted after this many days (D-F3). */
   LOCATION_RETENTION_DAYS: number;
   /** Straight-line ETA until a routing provider is configured. */
@@ -118,6 +120,7 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   const rematchAfter = intIn('REMATCH_AFTER_MINUTES', 15, 1, 240);
   const rematchFactor = intIn('REMATCH_RADIUS_FACTOR', 1.5, 1, 5);
   const autoConfirmHours = intIn('AUTO_CONFIRM_HOURS', 24, 1, 24 * 14);
+  const cashAutoConfirmHours = intIn('CASH_AUTO_CONFIRM_HOURS', 48, 1, 24 * 14);
   const locationRetentionDays = intIn('LOCATION_RETENTION_DAYS', 30, 1, 365);
   const travelSpeed = intIn('AVG_TRAVEL_SPEED_KMH', 20, 5, 120);
 
@@ -161,6 +164,7 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     RUN_BACKGROUND_JOBS: (str('RUN_BACKGROUND_JOBS') || (nodeEnv === 'test' ? 'false' : 'true')) === 'true',
     REQUIRE_JOB_PHOTOS: (str('REQUIRE_JOB_PHOTOS') || 'true') === 'true',
     AUTO_CONFIRM_HOURS: autoConfirmHours,
+    CASH_AUTO_CONFIRM_HOURS: cashAutoConfirmHours,
     LOCATION_RETENTION_DAYS: locationRetentionDays,
     AVG_TRAVEL_SPEED_KMH: travelSpeed,
     ADMIN_TOTP_REQUIRED: totpRequired,

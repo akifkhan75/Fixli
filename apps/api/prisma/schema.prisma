@@ -223,6 +223,12 @@ model Worker {
   hasInsurance         Boolean          @default(false)
   equipment            String[]
   isOnline             Boolean          @default(false)
+  /// What this worker owes Fixli in commission (minor units, >= 0 in normal use).
+  ledgerBalance        Int              @default(0)
+  /// When the balance last went from zero to owing (for the maxDaysOwed limit).
+  owedSince            DateTime?
+  /// Over the hard limit or owing too long: no new requests or offers until settled.
+  balanceBlocked       Boolean          @default(false)
   /// Centre of the area the worker serves (their base), plus a label like "Gulshan-e-Iqbal, Karachi".
   serviceLat           Float?
   serviceLng           Float?
@@ -546,41 +552,62 @@ model Payment {
   jobRequestId   String
   jobRequest     JobRequest @relation(fields: [jobRequestId], references: [id])
   method         String // CASH, CARD, WALLET
+  /// Always the job's agreed total at the time it was marked (never typed by anyone).
   amount         Int
   currency       String     @default("USD")
   status         String // PENDING, MARKED_BY_WORKER, CONFIRMED, DISPUTED, CAPTURED, REFUNDED
   provider       String?
   providerRef    String?    @unique
   idempotencyKey String?    @unique
+  markedById     String?
+  markedAt       DateTime?
+  confirmedAt    DateTime?
+  /// Confirmed by the sweeper after CASH_AUTO_CONFIRM_HOURS because the customer didn't answer.
+  autoConfirmed  Boolean    @default(false)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+
+  /// One payment per job per method: marking cash twice returns the same row.
+  @@unique([jobRequestId, method])
 }
 
 model LedgerEntry {
-  id           String      @id @default(cuid())
-  workerId     String
-  worker       Worker      @relation(fields: [workerId], references: [id])
-  jobRequestId String?
-  jobRequest   JobRequest? @relation(fields: [jobRequestId], references: [id])
-  type         String // COMMISSION_OWED, COMMISSION_SETTLED, PAYOUT, ADJUSTMENT, REFUND
-  amount       Int // signed minor units
-  currency     String      @default("USD")
-  balanceAfter Int
-  createdById  String?
-  createdAt    DateTime    @default(now())
+  id             String      @id @default(cuid())
+  workerId       String
+  worker         Worker      @relation(fields: [workerId], references: [id])
+  jobRequestId   String?
+  jobRequest     JobRequest? @relation(fields: [jobRequestId], references: [id])
+  type           String // COMMISSION_OWED, COMMISSION_SETTLED, ADJUSTMENT
+  /// Change in what the worker owes Fixli, minor units: + adds to the debt, - reduces it.
+  amount         Int
+  currency       String      @default("USD")
+  /// Worker.ledgerBalance after this entry (written under a row lock, so it is exact).
+  balanceAfter   Int
+  /// e.g. "commission:<jobId>", "settlement:<id>": the same real event can't be booked twice.
+  idempotencyKey String?     @unique
+  note           String?
+  createdById    String?
+  createdAt      DateTime    @default(now())
+
+  @@index([workerId, createdAt])
 }
 
 model Settlement {
-  id        String   @id @default(cuid())
-  workerId  String
-  worker    Worker   @relation(fields: [workerId], references: [id])
-  amount    Int
-  currency  String   @default("USD")
-  rail      String
-  reference String
-  status    String // PENDING, COMPLETED, FAILED
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(cuid())
+  workerId     String
+  worker       Worker    @relation(fields: [workerId], references: [id])
+  amount       Int
+  currency     String    @default("USD")
+  rail         String
+  reference    String
+  status       String // PENDING, COMPLETED, FAILED
+  reviewedById String?
+  reviewedAt   DateTime?
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, createdAt])
 }
 
 model Dispute {
@@ -594,6 +621,8 @@ model Dispute {
   description  String?
   amountHeld   Int?
   evidenceKeys String[]
+  /// Set when the dispute is about a cash payment ("I didn't pay that").
+  paymentId    String?
   status       String     @default("OPEN") // OPEN, IN_REVIEW, RESOLVED, CLOSED
   resolution   String?
   resolvedById String?
@@ -695,6 +724,14 @@ model CountryConfig {
   countryCode      String   @unique
   currency         String
   emergencyNumbers Json
+  /// { rateBps, minMinor, maxMinor }: Fixli's commission per cash job (O8).
+  commission       Json
+  /// { softMinor, hardMinor, maxDaysOwed }: owed-balance limits that pause new work (O8).
+  cashLimits       Json
+  /// e.g. [{ id: "JAZZCASH", label: "JazzCash", account: "0300…" }]: how workers pay what they owe.
+  settlementRails  Json
+  /// Bumped on every change (admin edits are audited; F6).
+  version          Int      @default(1)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }

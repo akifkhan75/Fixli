@@ -36,6 +36,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { PaymentsModule } from './payments/payments.module';
+import { MoneyModule } from './money/money.module';
 import { SafetyModule } from './safety/safety.module';
 
 @Module({
@@ -77,6 +78,7 @@ import { SafetyModule } from './safety/safety.module';
     ServiceCatalogModule,
     PropertiesModule,
     RecurringJobsModule,
+    MoneyModule,
     PaymentsModule,
     SafetyModule,
   ],

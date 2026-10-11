@@ -16,6 +16,7 @@ export class StaffFeedService implements OnModuleDestroy {
       events.on('admin.verification_submitted', (p) => realtime.emitToStaff('verification.read', 'staff.verification_submitted', p)),
       events.on('admin.dispute_opened', (p) => realtime.emitToStaff('disputes.read', 'staff.dispute_opened', p)),
       events.on('admin.incident_reported', (p) => realtime.emitToStaff('safety.read', 'staff.incident_reported', p)),
+      events.on('admin.settlement_reported', (p) => realtime.emitToStaff('finance.read', 'staff.settlement_reported', p)),
     ];
   }
 

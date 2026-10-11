@@ -25,6 +25,10 @@ export type Permission =
   | 'disputes.read'
   | 'disputes.resolve'
   | 'finance.read'
+  /** Confirm or reject a worker's reported settlement (changes the ledger). */
+  | 'finance.settle'
+  /** Manual ledger corrections when resolving a dispute. */
+  | 'finance.adjust'
   | 'catalog.read'
   | 'catalog.edit'
   | 'config.read'
@@ -38,7 +42,7 @@ const ROLE_PERMISSIONS: Record<Exclude<AdminRole, 'Super Admin'>, Permission[]> 
   Verification: ['dashboard.view', 'verification.read', 'verification.decide', 'documents.view'],
   Support: ['dashboard.view', 'users.read', 'pii.view', 'jobs.read', 'jobs.cancel', 'disputes.read'],
   Safety: ['dashboard.view', 'safety.read', 'users.read', 'users.suspend', 'pii.view', 'jobs.read', 'reviews.moderate'],
-  Finance: ['dashboard.view', 'finance.read', 'disputes.read', 'disputes.resolve'],
+  Finance: ['dashboard.view', 'finance.read', 'finance.settle', 'finance.adjust', 'disputes.read', 'disputes.resolve'],
   Content: ['dashboard.view', 'catalog.read', 'catalog.edit', 'reviews.moderate'],
   Analytics: ['dashboard.view', 'jobs.read'],
   Auditor: ['dashboard.view', 'audit.read'],
@@ -55,7 +59,7 @@ export function hasPermission(roles: readonly string[] | null | undefined, p: Pe
 }
 
 /** Socket rooms a staff member joins: one per permission that has a live feed. */
-export const FEED_PERMISSIONS = ['verification.read', 'disputes.read', 'safety.read'] as const satisfies readonly Permission[];
+export const FEED_PERMISSIONS = ['verification.read', 'disputes.read', 'safety.read', 'finance.read'] as const satisfies readonly Permission[];
 
 export const PERMISSION_KEY = 'adminPermission';
 /** The one permission this admin route needs. Admin-only routes without it are refused. */

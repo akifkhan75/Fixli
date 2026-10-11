@@ -1,4 +1,5 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { CUSTOMER_REVIEW_TAGS, WORKER_REVIEW_TAGS } from './dto/review.dto';
 import { PrismaService } from '../database/prisma.service';
 import { JobAccessService } from '../common/access/job-access.service';
 import { CreateReviewDto } from './dto/review.dto';
@@ -21,6 +22,9 @@ export class ReviewsService {
 
     // The reviewee is always the other party; the client never chooses who is reviewed.
     const targetId = user.id === job.customerId ? job.assignedWorkerId : job.customerId;
+    const allowed: readonly string[] = targetId === job.assignedWorkerId ? WORKER_REVIEW_TAGS : CUSTOMER_REVIEW_TAGS;
+    const bad = (dto.tags ?? []).filter((t) => !allowed.includes(t));
+    if (bad.length) throw new BadRequestException({ code: 'INVALID_TAGS', message: 'Some tags do not apply to this person.', details: { tags: bad } });
 
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.review.findUnique({
@@ -42,7 +46,8 @@ export class ReviewsService {
       });
 
       if (targetId === job.assignedWorkerId) {
-        const agg = await tx.review.aggregate({ where: { targetId }, _avg: { rating: true } });
+        // Only published reviews count (moderation can hide one; the rating is then recomputed, F6).
+        const agg = await tx.review.aggregate({ where: { targetId, status: 'PUBLISHED', revieweeRole: 'worker' }, _avg: { rating: true } });
         await tx.worker.update({
           where: { id: targetId },
           data: { rating: Math.round((agg._avg.rating ?? 0) * 10) / 10 },
@@ -54,11 +59,13 @@ export class ReviewsService {
 
   findByTarget(targetId: string) {
     return this.prisma.review.findMany({
-      where: { targetId },
+      // Public: published reviews of professionals only. Customers' ratings stay private (doc 22).
+      where: { targetId, status: 'PUBLISHED', revieweeRole: 'worker' },
       select: {
         id: true,
         rating: true,
         comment: true,
+        tags: true,
         createdAt: true,
         reviewer: { select: { id: true, name: true, profileImageUrl: true } },
       },

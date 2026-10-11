@@ -47,7 +47,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const isoLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 export default function RequestServiceScreen() {
-  const params = useLocalSearchParams<{ categoryId?: string; issue?: string; isEmergency?: string }>();
+  const params = useLocalSearchParams<{ categoryId?: string; issue?: string; isEmergency?: string; workerId?: string }>();
   const emergency = params.isEmergency === 'true';
   const theme = useTheme();
   const { t, locale } = useI18n();
@@ -163,6 +163,9 @@ export default function RequestServiceScreen() {
       // Right after sending is when "we'll tell you when prices arrive" makes sense.
       void askForPush();
       await AsyncStorage.removeItem(DRAFT_KEY).catch(() => undefined);
+      // "Book again": ask the same professional first. If they're not available, the request
+      // simply stays open for others (matching already ran).
+      if (params.workerId) await api.requestWorkerForJob(job.id, params.workerId).catch(() => undefined);
       router.replace(`/(customer)/job/${job.id}` as any);
     } catch (e) {
       setError(e instanceof ApiError

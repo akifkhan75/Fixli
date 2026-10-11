@@ -1,10 +1,16 @@
 import { RequirePermission } from '../common/auth/permissions';
-import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Delete } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Patch, Post, Delete } from '@nestjs/common';
+import { IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+
+class DeleteAccountDto {
+  @IsString() @MinLength(1) @MaxLength(200)
+  password: string;
+}
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -33,10 +39,11 @@ export class UsersController {
     return this.usersService.updateMe(id, dto);
   }
 
-  @Delete('me')
-  @ApiOperation({ summary: 'Delete own account' })
-  deleteMe(@CurrentUser('id') id: string) {
-    return this.usersService.deleteMe(id);
+  @Post('me/delete')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Delete my account (needs my password; refused during an active job or with commission owed)' })
+  deleteMe(@CurrentUser('id') id: string, @Body() dto: DeleteAccountDto) {
+    return this.usersService.deleteMe(id, dto.password);
   }
 
   @Get('me/favorites')

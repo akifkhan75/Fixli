@@ -19,7 +19,7 @@ const MAX_RADIUS_KM = 50;
 
 /**
  * Finds eligible professionals for an open request and tells them about it.
- * Hard filters (doc 04 F): approved, online, active account, has the skill, within their own
+ * Hard filters (doc 04 F): approved, online, not paused for unpaid commission, active account, has the skill, within their own
  * travel radius, working during the requested time, not already told about this job.
  */
 @Injectable()
@@ -112,6 +112,7 @@ export class MatchingService {
       JOIN "WorkerService" ws ON ws."workerId" = w.id AND ws."categoryId" = ${job.categoryId}
       WHERE w."activationStatus" = 'ACTIVE'
         AND w."isOnline" = true
+        AND w."balanceBlocked" = false
         AND u.status = 'ACTIVE'
         AND w.id <> ${job.customerId}
         AND NOT EXISTS (SELECT 1 FROM "JobMatch" m WHERE m."jobRequestId" = ${job.id} AND m."workerId" = w.id)`;

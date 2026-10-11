@@ -79,6 +79,7 @@ export default function WorkerAccountScreen() {
       <GroupedList title="Security" items={[
         { id: 'password', label: 'Change password', icon: 'lock-closed-outline', onPress: go('/change-password') },
         { id: 'devices', label: 'Your devices', icon: 'phone-portrait-outline', onPress: go('/devices') },
+        { id: 'delete', label: 'Delete account', icon: 'trash-outline', destructive: true, onPress: go('/delete-account') },
       ]} />
       <GroupedList items={[
         { id: 'logout', label: 'Log out', icon: 'log-out-outline', destructive: true, onPress: () => dispatch(logoutUser()) },
