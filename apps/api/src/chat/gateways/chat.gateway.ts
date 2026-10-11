@@ -17,11 +17,12 @@ import { ChatService } from '../chat.service';
 import { PrismaService } from '../../database/prisma.service';
 import { DomainEvents } from '../../common/events/domain-events';
 import { RealtimeService } from '../../realtime/realtime.service';
+import { FEED_PERMISSIONS, hasPermission } from '../../common/auth/permissions';
 
 class SendMessagePayload {
   @IsString() @IsNotEmpty() @MaxLength(64) threadId: string;
   @IsOptional() @IsString() @MaxLength(4000) text?: string;
-  @IsOptional() @IsString() @MaxLength(256) imageKey?: string;
+  @IsOptional() @IsString() @MaxLength(64) imageUploadId?: string;
   @IsOptional() @IsString() @MaxLength(128) clientId?: string;
 }
 class ThreadPayload {
@@ -88,7 +89,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayInit {
           expiresAt: { gt: new Date() },
           user: { status: 'ACTIVE' },
         },
-        select: { user: { select: { id: true, type: true } } },
+        select: { user: { select: { id: true, type: true, adminRoles: true } } },
       });
       if (!session) throw new Error('no live session');
       const user = session.user;
@@ -96,7 +97,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayInit {
       client.data.userId = user.id;
       client.data.userType = user.type;
       client.data.sessionId = payload.sid;
-      await client.join([`user:${user.id}`, `role:${user.type}`, `session:${payload.sid}`]);
+      // Staff also join one room per live-feed permission their roles grant. Roles are read here,
+      // from the database; changing someone's roles signs them out, so they reconnect with the new set.
+      const staffRooms = user.type === 'admin' ? FEED_PERMISSIONS.filter((p) => hasPermission(user.adminRoles, p)).map((p) => `staff:${p}`) : [];
+      await client.join([`user:${user.id}`, `role:${user.type}`, `session:${payload.sid}`, ...staffRooms]);
       client.emit('ready', { userId: user.id });
     } catch {
       client.emit('error', { code: 'UNAUTHORIZED' });

@@ -22,7 +22,7 @@ describe('JobsService', () => {
   const realtime: any = { emitToUsers: jest.fn() };
   const notifications: any = { notify: jest.fn().mockResolvedValue(1) };
   const matching: any = { matchJob: jest.fn().mockResolvedValue(3) };
-  const svc = new JobsService(prisma, realtime, notifications, storage, matching);
+  const svc = new JobsService(prisma, realtime, notifications, { assert: jest.fn() } as any, storage, matching);
 
   const customer: AuthUser = { id: 'c1', type: 'customer' };
   const worker: AuthUser = { id: 'w1', type: 'worker' };

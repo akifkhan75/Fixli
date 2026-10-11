@@ -10,6 +10,9 @@ import { COUNTRIES, isCountryCode } from '@fixli/shared';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { JobStepPhotosDto } from './dto/job-step.dto';
+import { systemMessage, SystemMessageKey } from '../chat/system-messages';
+import { StaffAccessService } from '../common/access/staff-access.service';
 import { NotificationType } from '../notifications/templates';
 import { StorageService } from '../storage/storage.service';
 import { CreateJobDto } from './dto/create-job.dto';
@@ -57,6 +60,7 @@ export class JobsService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
     private readonly notifications: NotificationService,
+    private readonly staff: StaffAccessService,
     private readonly storage: StorageService,
     private readonly matching: MatchingService,
   ) {}
@@ -236,6 +240,7 @@ export class JobsService {
   // ── read ──────────────────────────────────────────────────
 
   async findAll(user: AuthUser, filters?: JobQueryDto) {
+    await this.staff.assert(user, 'jobs.read');
     const and: Prisma.JobRequestWhereInput[] = [this.visibleTo(user)];
     if (filters?.status) and.push({ status: filters.status });
     if (filters?.serviceId) and.push({ serviceId: filters.serviceId });
@@ -255,6 +260,7 @@ export class JobsService {
   }
 
   async findById(id: string, user: AuthUser) {
+    await this.staff.assert(user, 'jobs.read', 'disputes.read', 'safety.read');
     const job = await this.prisma.jobRequest.findFirst({
       where: { AND: [{ id }, this.visibleTo(user)] },
       include: DETAIL_INCLUDE,
@@ -301,22 +307,29 @@ export class JobsService {
     return this.workerTransition(id, user, 'ARRIVED', 'ARRIVED');
   }
 
-  async start(id: string, user: AuthUser, dto?: { beforePhotoKey?: string }) {
+  async start(id: string, user: AuthUser, dto: JobStepPhotosDto = {}) {
     if (user.type !== 'worker') throw new ForbiddenException('Only the assigned worker can do this');
-    const result = await this.transition(id, user, 'IN_PROGRESS', { onlyIf: { assignedWorkerId: user.id }, event: { type: 'WORK_STARTED' } });
-    if (dto?.beforePhotoKey) {
-      await this.prisma.jobMedia.create({ data: { jobRequestId: id, kind: 'PHOTO', phase: 'BEFORE', storageKey: dto.beforePhotoKey, mime: 'image/jpeg', createdById: user.id } });
-    }
-    return result;
+    return this.transition(id, user, 'IN_PROGRESS', {
+      onlyIf: { assignedWorkerId: user.id },
+      event: { type: 'WORK_STARTED' },
+      inTx: (tx) => this.attachPhotos(tx, id, user.id, dto.photoUploadIds, 'BEFORE'),
+    });
   }
 
-  async finish(id: string, user: AuthUser, dto?: { afterPhotoKey?: string }) {
+  async finish(id: string, user: AuthUser, dto: JobStepPhotosDto = {}) {
     if (user.type !== 'worker') throw new ForbiddenException('Only the assigned worker can do this');
-    const result = await this.transition(id, user, 'AWAITING_CONFIRMATION', { onlyIf: { assignedWorkerId: user.id }, event: { type: 'WORK_FINISHED' } });
-    if (dto?.afterPhotoKey) {
-      await this.prisma.jobMedia.create({ data: { jobRequestId: id, kind: 'PHOTO', phase: 'AFTER', storageKey: dto.afterPhotoKey, mime: 'image/jpeg', createdById: user.id } });
-    }
-    return result;
+    return this.transition(id, user, 'AWAITING_CONFIRMATION', {
+      onlyIf: { assignedWorkerId: user.id },
+      event: { type: 'WORK_FINISHED' },
+      inTx: (tx) => this.attachPhotos(tx, id, user.id, dto.photoUploadIds, 'AFTER'),
+    });
+  }
+
+  /** Worker's own JOB_PHOTO uploads become the job's before/after evidence (real MIME, used once). */
+  private async attachPhotos(tx: Prisma.TransactionClient, jobId: string, workerId: string, uploadIds: string[] | undefined, phase: 'BEFORE' | 'AFTER') {
+    if (!uploadIds?.length) return;
+    const files = await this.storage.consumeFiles(workerId, uploadIds, 'JOB_PHOTO', tx);
+    await tx.jobMedia.createMany({ data: files.map((f) => ({ jobRequestId: jobId, kind: 'PHOTO' as const, phase, storageKey: f.key, mime: f.mime, createdById: workerId })) });
   }
 
   async confirm(id: string, user: AuthUser) {
@@ -342,6 +355,7 @@ export class JobsService {
   }
 
   async cancel(id: string, user: AuthUser, dto: CancelJobDto = {}) {
+    await this.staff.assert(user, 'jobs.cancel');
     const scope: Prisma.JobRequestWhereInput =
       user.type === 'customer' ? { customerId: user.id }
       : user.type === 'worker' ? { assignedWorkerId: user.id }
@@ -370,6 +384,8 @@ export class JobsService {
       onlyIf: Prisma.JobRequestWhereInput;
       data?: Prisma.JobRequestUncheckedUpdateManyInput;
       event: { type: string; payload?: Record<string, unknown> };
+      /** Extra writes that must commit with the status change (e.g. before/after photos). */
+      inTx?: (tx: Prisma.TransactionClient) => Promise<void>;
     },
   ) {
     const job = await this.prisma.jobRequest.findFirst({
@@ -397,6 +413,7 @@ export class JobsService {
         },
         select: { id: true },
       });
+      if (opts.inTx) await opts.inTx(tx);
 
       if (to === 'ACCEPTED' || to === 'IN_PROGRESS' || to === 'COMPLETED') {
         const actualWorkerId = opts.data && 'assignedWorkerId' in opts.data ? (opts.data.assignedWorkerId as string | null) : job.assignedWorkerId;
@@ -411,19 +428,14 @@ export class JobsService {
             });
           }
           
-          let sysMsg = '';
-          if (opts.event.type === 'WORK_STARTED') sysMsg = 'The professional has started the work.';
-          if (opts.event.type === 'WORK_COMPLETED') sysMsg = 'The professional has marked the work as completed.';
-          if (opts.event.type === 'EN_ROUTE') sysMsg = 'The professional is on the way.';
+          const key: SystemMessageKey | null =
+            opts.event.type === 'WORK_STARTED' ? 'job.started'
+            : opts.event.type === 'WORK_COMPLETED' ? 'job.completed'
+            : opts.event.type === 'EN_ROUTE' ? 'job.en_route'
+            : null;
 
-          if (sysMsg) {
-            await tx.message.create({
-              data: {
-                conversationId: conv.id,
-                isSystem: true,
-                text: sysMsg
-              }
-            });
+          if (key) {
+            await tx.message.create({ data: systemMessage(conv.id, key) });
             await tx.conversation.update({
               where: { id: conv.id },
               data: { lastMessageAt: new Date() }

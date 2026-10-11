@@ -38,6 +38,10 @@ export interface AppEnv {
   REMATCH_RADIUS_FACTOR: number;
   /** Run the background sweeper (offer expiry, re-matching) in this process. */
   RUN_BACKGROUND_JOBS: boolean;
+  /** Staff must use an authenticator app (second factor). Default true; false only for tests. */
+  ADMIN_TOTP_REQUIRED: boolean;
+  /** 32 bytes, base64: encrypts staff authenticator secrets at rest. Required in production. */
+  TOTP_ENCRYPTION_KEY?: string;
   /** Enables multi-instance realtime (socket.io Redis adapter) and shared rate limits. */
   REDIS_URL?: string;
   EXPO_PUSH_URL?: string;
@@ -108,6 +112,12 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
 
   if (str('REDIS_URL') && !/^rediss?:\/\//.test(str('REDIS_URL'))) errors.push('REDIS_URL must be a redis:// or rediss:// URL');
 
+  const totpKey = str('TOTP_ENCRYPTION_KEY');
+  if (totpKey && Buffer.from(totpKey, 'base64').length !== 32) errors.push('TOTP_ENCRYPTION_KEY must be 32 bytes, base64 (openssl rand -base64 32)');
+  if (nodeEnv === 'production' && !totpKey) errors.push('TOTP_ENCRYPTION_KEY is required in production');
+  const totpRequired = (str('ADMIN_TOTP_REQUIRED') || (nodeEnv === 'test' ? 'false' : 'true')) === 'true';
+  if (nodeEnv === 'production' && !totpRequired) errors.push('ADMIN_TOTP_REQUIRED cannot be false in production');
+
   if (errors.length) {
     throw new Error(`Invalid environment configuration:\n - ${errors.join('\n - ')}`);
   }
@@ -138,6 +148,8 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     EXPO_PUSH_URL: str('EXPO_PUSH_URL') || undefined,
     EXPO_ACCESS_TOKEN: str('EXPO_ACCESS_TOKEN') || undefined,
     RUN_BACKGROUND_JOBS: (str('RUN_BACKGROUND_JOBS') || (nodeEnv === 'test' ? 'false' : 'true')) === 'true',
+    ADMIN_TOTP_REQUIRED: totpRequired,
+    TOTP_ENCRYPTION_KEY: totpKey || undefined,
     FRONTEND_URL: str('FRONTEND_URL') || undefined,
     GEMINI_API_KEY: str('GEMINI_API_KEY') || undefined,
     GEMINI_MODEL: str('GEMINI_MODEL') || undefined,

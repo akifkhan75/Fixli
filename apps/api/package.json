@@ -18,7 +18,8 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:studio": "prisma studio",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "db:seed:catalog": "ts-node prisma/seed-catalog.ts"
+    "db:seed:catalog": "ts-node prisma/seed-catalog.ts",
+    "admin:create": "ts-node scripts/create-admin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3",

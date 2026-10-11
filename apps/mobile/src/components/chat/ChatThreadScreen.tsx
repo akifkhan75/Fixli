@@ -93,7 +93,7 @@ export function ChatThreadScreen() {
       id: clientId, // temporary ID
       conversationId: id,
       text,
-      imageKey: null,
+      imageUrl: null,
       isSystem: false,
       createdAt: new Date().toISOString(),
       sender: { id: user!.id, name: user!.name },

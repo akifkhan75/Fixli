@@ -19,7 +19,8 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { SessionService, TokenPair } from './session.service';
-import { AdminLoginDto, ChangePasswordDto, LoginDto, SignupDto } from './dto/auth.dto';
+import { AdminLoginDto, ChangePasswordDto, LoginDto, SignupDto, TotpActivateDto } from './dto/auth.dto';
+import { StaffTwoFactorService } from './staff-two-factor.service';
 
 const BCRYPT_COST = process.env.NODE_ENV === 'test' ? 4 : 12;
 const MAX_FAILED = 5;
@@ -49,6 +50,7 @@ export class AuthService {
     private readonly sessions: SessionService,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    private readonly twoFactor: StaffTwoFactorService,
   ) {}
 
   private enabledCountries(): string[] {
@@ -146,7 +148,15 @@ export class AuthService {
   async adminLogin(dto: AdminLoginDto) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email.trim().toLowerCase() } });
     // Same generic failure for "no such admin" and "not an admin".
-    return this.finishLogin(user?.type === 'admin' ? user : null, dto.password, dto, 'email');
+    // Staff need a second factor (authenticator code) after the password; see StaffTwoFactorService.
+    return this.finishLogin(user?.type === 'admin' ? user : null, dto.password, dto, 'email', (u) => this.twoFactor.check(u.id, dto.code));
+  }
+
+  /** Finish first-time authenticator setup: confirms the code, then signs the staff member in. */
+  async activateStaffTwoFactor(dto: TotpActivateDto) {
+    const { userId, recoveryCodes } = await this.twoFactor.activate(dto.setupToken, dto.code);
+    const result = await this.issueSession(userId, dto, 'email');
+    return { ...result, recoveryCodes };
   }
 
   private async finishLogin(
@@ -154,6 +164,8 @@ export class AuthService {
     password: string,
     device: { deviceId: string; deviceName?: string; platform?: string },
     via: 'phone' | 'email',
+    /** Extra check after the password (staff second factor). Throws to refuse. */
+    secondFactor?: (user: { id: string }) => Promise<void>,
   ) {
     const generic = new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Phone number or password is wrong.' });
 
@@ -186,13 +198,18 @@ export class AuthService {
       throw new ForbiddenException({ code: 'ACCOUNT_SUSPENDED', message: 'This account is not active. Please contact support.' });
     }
 
+    if (secondFactor) await secondFactor(user);
+    return this.issueSession(user.id, device, via);
+  }
+
+  private async issueSession(userId: string, device: { deviceId: string; deviceName?: string; platform?: string }, via: 'phone' | 'email') {
     const fresh = await this.prisma.user.update({
-      where: { id: user.id },
+      where: { id: userId },
       data: { failedLoginAttempts: 0, lockoutUntil: null, lastLoginAt: new Date() },
       select: PUBLIC_USER_SELECT,
     });
     const tokens: TokenPair = await this.sessions.create(fresh, device);
-    await this.audit.record({ actorId: user.id, action: 'auth.login', entityType: 'User', entityId: user.id, after: { via } });
+    await this.audit.record({ actorId: userId, action: 'auth.login', entityType: 'User', entityId: userId, after: { via } });
     return { user: fresh, ...tokens };
   }
 

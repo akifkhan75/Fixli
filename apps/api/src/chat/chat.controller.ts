@@ -33,7 +33,6 @@ export class ChatController {
   @Post(':id/messages')
   @ApiOperation({ summary: 'Send a message in a conversation you belong to' })
   sendMessage(@Param('id') id: string, @CurrentUser('id') senderId: string, @Body() dto: SendMessageDto) {
-    // Override the threadId from DTO with the path param, just to be safe
     return this.chatService.sendMessage(senderId, { ...dto, threadId: id });
   }
 

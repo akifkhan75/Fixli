@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class CreateDisputeDto {
   @IsString() @IsNotEmpty() @MaxLength(64)
@@ -13,11 +13,13 @@ export class CreateDisputeDto {
   @IsOptional() @IsString() @MaxLength(2000)
   description?: string;
 
-  @IsOptional()
+  /** Amount in dispute, integer minor units. */
+  @IsOptional() @IsInt() @Min(0) @Max(100_000_000)
   amountHeld?: number;
 
-  @IsOptional() @IsString({ each: true })
-  evidenceKeys?: string[];
+  /** Your own JOB_PHOTO upload ids (never storage keys). */
+  @IsOptional() @IsArray() @ArrayMaxSize(6) @IsString({ each: true }) @MaxLength(64, { each: true })
+  evidenceUploadIds?: string[];
 }
 
 export class ResolveDisputeDto {

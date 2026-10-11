@@ -1,13 +1,24 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationService } from '../notifications/notifications.service';
-import { SendMessageDto } from './dto/send-message.dto';
+import { StorageService } from '../storage/storage.service';
+import { systemMessage } from './system-messages';
+
+const MESSAGE_INCLUDE = {
+  sender: { select: { id: true, name: true } },
+  reads: { select: { userId: true, readAt: true } },
+} as const;
+
+const firstName = (name?: string | null) => (name ?? 'Someone').trim().split(/\s+/)[0] || 'Someone';
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notifications: NotificationService
+    private readonly notifications: NotificationService,
+    private readonly storage: StorageService,
   ) {}
 
   async getConversationsForUser(userId: string, cursor?: string) {
@@ -46,10 +57,11 @@ export class ChatService {
     const unreadMap = new Map(unreadCounts.map(u => [u.conversationId, u._count.id]));
 
     return {
-      items: items.map(item => ({
+      items: await Promise.all(items.map(async (item) => ({
         ...item,
-        unreadCount: unreadMap.get(item.id) || 0
-      })),
+        messages: await Promise.all(item.messages.map((m) => this.present(m))),
+        unreadCount: unreadMap.get(item.id) || 0,
+      }))),
       nextCursor
     };
   }
@@ -69,10 +81,7 @@ export class ChatService {
     const take = 50;
     const items = await this.prisma.message.findMany({
       where: { conversationId, ...(before && { createdAt: { lt: new Date(before) } }) },
-      include: { 
-        sender: { select: { id: true, name: true } },
-        reads: { select: { userId: true, readAt: true } }
-      },
+      include: MESSAGE_INCLUDE,
       orderBy: { createdAt: 'desc' },
       take: take + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
@@ -84,78 +93,69 @@ export class ChatService {
       nextCursor = nextItem!.id;
     }
 
-    return { items, nextCursor };
+    return { items: await Promise.all(items.map((m) => this.present(m))), nextCursor };
   }
 
   async sendMessage(
     senderId: string,
-    dto: { threadId: string; text?: string; isSystem?: boolean; imageKey?: string; clientId?: string }
+    dto: { threadId: string; text?: string; imageUploadId?: string; clientId?: string },
   ) {
     const conversation = await this.requireConversation(dto.threadId, senderId);
-    
     if (conversation.isReadOnly) {
-      throw new BadRequestException('Conversation is read-only');
+      throw new BadRequestException({ code: 'CONVERSATION_READ_ONLY', message: 'This chat is closed.' });
+    }
+    const text = dto.text?.trim() || undefined;
+    if (!text && !dto.imageUploadId) {
+      throw new BadRequestException({ code: 'EMPTY_MESSAGE', message: 'Write a message or add a photo.' });
     }
 
-    // Check idempotency
     if (dto.clientId) {
       const existing = await this.prisma.message.findUnique({
         where: { conversationId_clientId: { conversationId: dto.threadId, clientId: dto.clientId } },
-        include: { sender: { select: { id: true, name: true } } }
+        include: MESSAGE_INCLUDE,
       });
-      if (existing) return existing;
+      if (existing) return this.present(existing);
     }
 
-    const hasContactInfo = dto.text && !dto.isSystem && (
-      /[\d\s\-\+\(\)]{8,}/.test(dto.text) || // basic phone heuristic
-      /https?:\/\/[^\s]+/.test(dto.text) ||
-      /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]\b/i.test(dto.text)
+    const hasContactInfo = !!text && (
+      /[\d\s\-\+\(\)]{8,}/.test(text) || // basic phone heuristic (F4 replaces this detector)
+      /https?:\/\/[^\s]+/.test(text) ||
+      /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]\b/i.test(text)
     );
 
-    const txOps: any[] = [
-      this.prisma.message.create({
-        data: { 
-          conversationId: dto.threadId, 
-          senderId, 
-          text: dto.text,
-          isSystem: dto.isSystem ?? false,
-          imageKey: dto.imageKey,
-          clientId: dto.clientId
-        },
-        include: { sender: { select: { id: true, name: true } } },
-      }),
-      this.prisma.conversation.update({
-        where: { id: dto.threadId },
-        data: { lastMessageAt: new Date() },
-      }),
-    ];
-
-    if (hasContactInfo) {
-      txOps.push(this.prisma.message.create({
-        data: {
-          conversationId: dto.threadId,
-          isSystem: true,
-          text: 'Please keep communication on Fixli. Sharing contact info or links can be unsafe.'
-        }
-      }));
-    }
-
-    const [message] = await this.prisma.$transaction(txOps);
-    
-    // Notify other participants
-    const otherParticipants = conversation.participants.filter(p => p.id !== senderId);
-    if (otherParticipants.length > 0 && !dto.isSystem && dto.text) {
-      const sender = conversation.participants.find(p => p.id === senderId);
-      this.notifications.notify({
-        type: 'chat.message',
-        userIds: otherParticipants.map(p => p.id),
-        eventKey: `message:${message.id}`,
-        params: { sender: sender?.name ?? 'Someone', text: dto.text },
-        data: { url: `/(shared)/chat/${dto.threadId}` },
+    const message = await this.prisma.$transaction(async (tx) => {
+      // The photo must be the sender's own finished CHAT_PHOTO upload, used once (Phase 3 rules).
+      const [imageKey] = dto.imageUploadId ? await this.storage.consume(senderId, [dto.imageUploadId], 'CHAT_PHOTO', tx) : [];
+      const m = await tx.message.create({
+        data: { conversationId: dto.threadId, senderId, text, imageKey, isSystem: false, clientId: dto.clientId },
+        include: MESSAGE_INCLUDE,
       });
+      await tx.conversation.update({ where: { id: dto.threadId }, data: { lastMessageAt: new Date() } });
+      if (hasContactInfo) await tx.message.create({ data: systemMessage(dto.threadId, 'chat.contact_warning') });
+      return m;
+    });
+
+    const others = conversation.participants.filter((p) => p.id !== senderId);
+    if (others.length) {
+      const sender = conversation.participants.find((p) => p.id === senderId);
+      // The push says who wrote, never what: message text stays out of lock screens and the
+      // notification list (doc 16 privacy, doc 27 F1.5).
+      await this.notifications.notify({
+        type: 'chat.message',
+        userIds: others.map((p) => p.id),
+        eventKey: `message:${message.id}`,
+        params: { sender: firstName(sender?.name) },
+        data: { url: `/thread/${dto.threadId}`, conversationId: dto.threadId },
+      }).catch((e) => this.logger.error(`Chat notification failed: ${(e as Error).message}`));
     }
 
-    return message;
+    return this.present(message);
+  }
+
+  /** Images go out as short-lived signed links; storage keys never leave the server. */
+  async present<T extends { imageKey?: string | null }>(m: T): Promise<Omit<T, 'imageKey'> & { imageUrl: string | null }> {
+    const { imageKey, ...rest } = m;
+    return { ...rest, imageUrl: imageKey ? await this.storage.signedUrlForKey(imageKey, 600) : null };
   }
 
   async markAsRead(conversationId: string, userId: string) {

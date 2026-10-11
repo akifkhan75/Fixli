@@ -4,7 +4,9 @@ import * as api from './api';
 interface AuthValue {
   user: api.AdminUser | null;
   ready: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, code?: string) => Promise<void>;
+  /** After authenticator setup, which signs in by itself. */
+  signedIn: (user: api.AdminUser) => void;
   signOut: () => Promise<void>;
 }
 
@@ -20,15 +22,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => api.setExpiredHandler(null);
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    setUser(await api.login(email.trim(), password));
+  const signIn = useCallback(async (email: string, password: string, code?: string) => {
+    setUser(await api.login(email.trim(), password, code?.replace(/\s/g, '') || undefined));
   }, []);
+  const signedIn = useCallback((u: api.AdminUser) => setUser(u), []);
   const signOut = useCallback(async () => {
     await api.logout();
     setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, ready, signIn, signOut }), [user, ready, signIn, signOut]);
+  const value = useMemo(() => ({ user, ready, signIn, signedIn, signOut }), [user, ready, signIn, signedIn, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

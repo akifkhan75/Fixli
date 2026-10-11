@@ -1,3 +1,4 @@
+import { JobStepPhotosDto } from './dto/job-step.dto';
 import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JobsService, AuthUser } from './jobs.service';
@@ -70,13 +71,13 @@ export class JobsController {
 
   @Post(':id/start')
   @ApiOperation({ summary: 'Assigned worker starts the work' })
-  start(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: { beforePhotoKey?: string }) {
+  start(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: JobStepPhotosDto) {
     return this.jobsService.start(id, user, dto);
   }
 
   @Post(':id/finish')
   @ApiOperation({ summary: 'Assigned worker finishes the work (awaiting confirmation)' })
-  finish(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: { afterPhotoKey?: string }) {
+  finish(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: JobStepPhotosDto) {
     return this.jobsService.finish(id, user, dto);
   }
 

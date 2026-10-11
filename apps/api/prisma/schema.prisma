@@ -116,7 +116,11 @@ model User {
   failedLoginAttempts Int        @default(0)
   lockoutUntil        DateTime?
   adminRoles          String[]
+  /// Authenticator secret, AES-256-GCM encrypted (common/auth/crypto). Pending until totpEnabledAt is set.
   totpSecret          String?
+  totpEnabledAt       DateTime?
+  /// sha256 of unused one-time recovery codes.
+  totpRecoveryHashes  String[]
 
   worker          Worker?
   addresses       Address[]
@@ -611,6 +615,9 @@ model Message {
   text           String? // optional if imageKey is present
   imageKey       String? // object-storage key for image message
   isSystem       Boolean      @default(false)
+  /// Server-written messages: template key + params (chat/system-messages.ts); `text` is the English fallback.
+  systemKey      String?
+  systemParams   Json?
   clientId       String? // idempotency
   createdAt      DateTime     @default(now())
 

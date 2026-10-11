@@ -70,7 +70,7 @@ export function ChatListScreen() {
               numberOfLines={1}
               style={{ flex: 1 }}
             >
-              {lastMsg ? (lastMsg.imageKey ? '📷 Image' : lastMsg.text) : 'No messages yet'}
+              {lastMsg ? (lastMsg.imageUrl ? '📷 Image' : lastMsg.text) : 'No messages yet'}
             </Text>
             {unread && (
               <View style={[styles.unreadCountBadge, { backgroundColor: theme.colors.primary }]}>

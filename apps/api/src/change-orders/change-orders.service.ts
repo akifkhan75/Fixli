@@ -1,3 +1,4 @@
+import { StorageService } from '../storage/storage.service';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { JobAccessService } from '../common/access/job-access.service';
@@ -10,6 +11,7 @@ export class ChangeOrdersService {
     private readonly prisma: PrismaService,
     private readonly access: JobAccessService,
     private readonly audit: AuditService,
+    private readonly storage: StorageService,
   ) {}
 
   async create(workerId: string, dto: CreateChangeOrderDto) {
@@ -17,26 +19,37 @@ export class ChangeOrdersService {
     if (!['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(job.status)) {
       throw new ConflictException('Extra work can only be requested on an active job');
     }
-    return this.prisma.changeOrder.create({
-      data: {
-        jobRequestId: dto.jobRequestId,
-        reason: dto.reason,
-        addedScope: dto.addedScope,
-        revisedPrice: dto.revisedPrice,
-        currency: dto.currency?.toUpperCase() ?? 'USD',
-        mediaKeys: dto.mediaKeys ?? [],
-        status: 'PENDING',
-      },
+    const created = await this.prisma.$transaction(async (tx) => {
+      const mediaKeys = dto.photoUploadIds?.length ? await this.storage.consume(workerId, dto.photoUploadIds, 'JOB_PHOTO', tx) : [];
+      return tx.changeOrder.create({
+        data: {
+          jobRequestId: dto.jobRequestId,
+          reason: dto.reason,
+          addedScope: dto.addedScope,
+          revisedPrice: dto.revisedPrice,
+          currency: dto.currency?.toUpperCase() ?? 'USD',
+          mediaKeys,
+          status: 'PENDING',
+        },
+      });
     });
+    return this.present(created);
+  }
+
+  /** Photos go out as short-lived signed links; keys stay on the server. */
+  private async present<T extends { mediaKeys: string[] }>(co: T) {
+    const { mediaKeys, ...rest } = co;
+    return { ...rest, photos: await Promise.all(mediaKeys.map((k) => this.storage.signedUrlForKey(k, 600))) };
   }
 
   async findByJob(jobId: string, user: { id: string; type: string }) {
     await this.access.requireParticipant(jobId, user);
-    return this.prisma.changeOrder.findMany({
+    const rows = await this.prisma.changeOrder.findMany({
       where: { jobRequestId: jobId },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+    return Promise.all(rows.map((r) => this.present(r)));
   }
 
   async updateStatus(id: string, customerId: string, status: 'APPROVED' | 'REJECTED') {
@@ -58,6 +71,6 @@ export class ChangeOrdersService {
       entityType: 'ChangeOrder',
       entityId: id,
     });
-    return this.prisma.changeOrder.findUnique({ where: { id } });
+    return this.present(await this.prisma.changeOrder.findUniqueOrThrow({ where: { id } }));
   }
 }

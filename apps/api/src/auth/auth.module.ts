@@ -6,6 +6,8 @@ import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { STAFF_SECURITY, StaffTwoFactorService } from './staff-two-factor.service';
+import { SecretBox } from '../common/auth/secret-box';
 
 @Module({
   imports: [
@@ -22,7 +24,17 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, SessionService, JwtStrategy],
+  providers: [
+    AuthService, SessionService, JwtStrategy, StaffTwoFactorService,
+    {
+      provide: STAFF_SECURITY,
+      inject: [ConfigService],
+      useFactory: (c: ConfigService) => ({
+        totpRequired: c.get<boolean>('ADMIN_TOTP_REQUIRED') !== false,
+        box: new SecretBox(c.get<string>('TOTP_ENCRYPTION_KEY'), c.get<string>('JWT_SECRET') ?? ''),
+      }),
+    },
+  ],
   exports: [AuthService, SessionService, JwtModule],
 })
 export class AuthModule {}

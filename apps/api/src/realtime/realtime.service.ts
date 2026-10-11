@@ -7,7 +7,11 @@ export type RealtimeEvent =
   | 'notification.created'
   | 'job.updated'
   | 'offers.updated'
-  | 'feed.updated';
+  | 'feed.updated'
+  // staff feed (admin portal)
+  | 'staff.verification_submitted'
+  | 'staff.dispute_opened'
+  | 'staff.incident_reported';
 
 export interface Envelope<T = unknown> {
   id: string;
@@ -29,6 +33,13 @@ export class RealtimeService {
 
   attach(server: Namespace) {
     this.server = server;
+  }
+
+  /** Staff holding `permission` (rooms joined at connect from their roles; see ChatGateway). */
+  emitToStaff<T>(permission: string, type: RealtimeEvent, data: T): Envelope<T> {
+    const envelope: Envelope<T> = { id: randomUUID(), type, occurredAt: new Date().toISOString(), data };
+    this.server?.to(`staff:${permission}`).emit(type, envelope);
+    return envelope;
   }
 
   emitToUsers<T>(userIds: string[], type: RealtimeEvent, data: T): Envelope<T> {

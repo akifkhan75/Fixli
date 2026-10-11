@@ -202,15 +202,12 @@ export class WorkersService {
     if (['SUSPENDED', 'REJECTED'].includes(worker.activationStatus)) {
       throw new ForbiddenException('Your account cannot submit documents. Please contact support.');
     }
-    await this.prisma.$transaction(async (tx) => {
+    const verificationCase = await this.prisma.$transaction(async (tx) => {
       const keys = await this.storage.consume(userId, dto.uploadIds, 'VERIFICATION', tx);
-      const verificationCase = await tx.verificationCase.create({ data: { workerId: userId, type: dto.type, documentKeys: keys, reference: dto.reference } });
-      
-      this.events.emit('admin.verification_submitted', {
-        caseId: verificationCase.id,
-        workerId: userId,
-      });
+      return tx.verificationCase.create({ data: { workerId: userId, type: dto.type, documentKeys: keys, reference: dto.reference } });
     });
+    // After commit, so staff never open a case that was rolled back.
+    this.events.emit('admin.verification_submitted', { caseId: verificationCase.id, workerId: userId });
     await this.audit.record({ actorId: userId, action: 'verification.submitted', entityType: 'Worker', entityId: userId, after: { type: dto.type } });
     return this.findOwn(userId);
   }

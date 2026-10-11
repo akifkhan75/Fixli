@@ -47,9 +47,9 @@ async function main() {
   });
 
   await prisma.user.create({
-    data: { id: 'admin1', name: 'Dev Admin', email: 'admin@fixli.dev', password: hashedPassword, type: 'admin' },
+    data: { id: 'admin1', name: 'Dev Admin', email: 'admin@fixli.dev', password: hashedPassword, type: 'admin', adminRoles: ['Super Admin'] },
   });
-  console.log('Dev logins (password: password123): customer 0300 1234567 · worker 0311 2345678 · admin admin@fixli.dev');
+  console.log('Dev logins (password: password123): customer 0300 1234567 · worker 0311 2345678 · admin admin@fixli.dev (sets up an authenticator at first sign-in)');
 
   // Workers
   await prisma.worker.create({

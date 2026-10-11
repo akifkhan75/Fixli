@@ -245,14 +245,14 @@ export const acceptJob = jobAction('accept');
 export const declineJob = jobAction('decline');
 export const enRouteJob = jobAction('en-route');
 export const arriveJob = jobAction('arrive');
-export const startJob = (id: string, beforePhotoKey?: string) => request<JobView>(`/job-requests/${id}/start`, { method: 'POST', body: JSON.stringify({ beforePhotoKey }) });
-export const finishJob = (id: string, afterPhotoKey?: string) => request<JobView>(`/job-requests/${id}/finish`, { method: 'POST', body: JSON.stringify({ afterPhotoKey }) });
+export const startJob = (id: string, photoUploadIds?: string[]) => request<JobView>(`/job-requests/${id}/start`, { method: 'POST', body: JSON.stringify({ photoUploadIds }) });
+export const finishJob = (id: string, photoUploadIds?: string[]) => request<JobView>(`/job-requests/${id}/finish`, { method: 'POST', body: JSON.stringify({ photoUploadIds }) });
 export const completeJob = jobAction('complete');
 export const confirmJob = jobAction('confirm');
 export const cancelJob = jobAction('cancel');
 
 export interface ChangeOrder { id: string; jobRequestId: string; reason: string; addedScope: string; revisedPrice: number; currency: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; createdAt: string }
-export const createChangeOrder = (data: { jobRequestId: string; reason: string; addedScope: string; revisedPrice: number; currency?: string; mediaKeys?: string[] }) => request<ChangeOrder>('/change-orders', { method: 'POST', body: JSON.stringify(data) });
+export const createChangeOrder = (data: { jobRequestId: string; reason: string; addedScope: string; revisedPrice: number; currency?: string; photoUploadIds?: string[] }) => request<ChangeOrder>('/change-orders', { method: 'POST', body: JSON.stringify(data) });
 export const getChangeOrders = (jobId: string) => request<ChangeOrder[]>(`/change-orders/job/${jobId}`);
 export const decideChangeOrder = (id: string, status: 'APPROVED' | 'REJECTED') => request<ChangeOrder>(`/change-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 
@@ -275,7 +275,7 @@ export async function generateQuoteDraft(jobDescription: string, workerNotes: st
 
 export interface ChatParticipant { id: string; name: string; profileImageUrl: string | null }
 export interface ConversationItem { id: string; lastMessageAt: string | null; isReadOnly: boolean; unreadCount: number; participants: ChatParticipant[]; messages: ChatMessage[] }
-export interface ChatMessage { id: string; conversationId: string; text: string | null; imageKey: string | null; isSystem: boolean; createdAt: string; sender: { id: string; name: string } | null; reads: { userId: string; readAt: string }[] }
+export interface ChatMessage { id: string; conversationId: string; text: string | null; imageUrl: string | null; isSystem: boolean; systemKey?: string | null; createdAt: string; sender: { id: string; name: string } | null; reads: { userId: string; readAt: string }[] }
 
 export async function getConversations(cursor?: string): Promise<Page<ConversationItem>> {
   return request<Page<ConversationItem>>(`/conversations${cursor ? `?cursor=${cursor}` : ''}`);
@@ -285,7 +285,7 @@ export async function getConversationMessages(id: string, cursor?: string): Prom
   return request<Page<ChatMessage>>(`/conversations/${id}/messages${cursor ? `?cursor=${cursor}` : ''}`);
 }
 
-export async function sendChatMessage(threadId: string, data: { text?: string; imageKey?: string; clientId?: string }): Promise<ChatMessage> {
+export async function sendChatMessage(threadId: string, data: { text?: string; imageUploadId?: string; clientId?: string }): Promise<ChatMessage> {
   return request<ChatMessage>(`/conversations/${threadId}/messages`, {
     method: 'POST',
     body: JSON.stringify(data),

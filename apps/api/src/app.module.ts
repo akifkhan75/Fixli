@@ -32,6 +32,7 @@ import { RedisThrottlerStorage } from './common/throttle/redis-throttler.storage
 import { validateEnv } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { PaymentsModule } from './payments/payments.module';
 import { SafetyModule } from './safety/safety.module';
@@ -83,6 +84,8 @@ import { SafetyModule } from './safety/safety.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Staff routes: one permission each, deny by default (common/auth/permissions.ts).
+    { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

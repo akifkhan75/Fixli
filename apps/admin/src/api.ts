@@ -6,10 +6,12 @@ if (!BASE) throw new Error('VITE_API_URL is not set. Copy apps/admin/.env.exampl
 export class ApiError extends Error {
   status: number;
   code?: string;
-  constructor(message: string, status: number, code?: string) {
+  details?: Record<string, unknown>;
+  constructor(message: string, status: number, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -35,7 +37,7 @@ export function hasStoredSession(): boolean {
 
 async function toError(res: Response): Promise<ApiError> {
   const body = await res.json().catch(() => null);
-  return new ApiError(body?.error?.message ?? 'Something went wrong', res.status, body?.error?.code);
+  return new ApiError(body?.error?.message ?? 'Something went wrong', res.status, body?.error?.code, body?.error?.details);
 }
 
 function save(tokens: { token: string; refreshToken: string }) {
@@ -79,15 +81,29 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 
 export interface AdminUser { id: string; name: string; email: string | null; type: string }
 
-export async function login(email: string, password: string): Promise<AdminUser> {
-  const res = await fetch(`${BASE}/auth/admin/login`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, deviceId: deviceId(), deviceName: 'Admin web', platform: 'web' }),
-  });
+async function post<T>(path: string, body: object): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) throw await toError(res);
-  const body = await res.json();
+  return res.json();
+}
+const device = () => ({ deviceId: deviceId(), deviceName: 'Admin web', platform: 'web' });
+
+/**
+ * Staff sign-in: password, then the authenticator code. Throws ApiError with code
+ * TOTP_REQUIRED (ask for the code), INVALID_CODE, or TOTP_SETUP_REQUIRED (details.setupToken: enrol).
+ */
+export async function login(email: string, password: string, code?: string): Promise<AdminUser> {
+  const body = await post<{ user: AdminUser; token: string; refreshToken: string }>('/auth/admin/login', { email, password, ...(code ? { code } : {}), ...device() });
   save(body);
   return body.user;
+}
+
+export const beginTotpSetup = (setupToken: string) => post<{ secret: string; otpauthUrl: string }>('/auth/admin/totp/setup', { setupToken });
+
+export async function activateTotp(setupToken: string, code: string): Promise<{ user: AdminUser; recoveryCodes: string[] }> {
+  const body = await post<{ user: AdminUser; token: string; refreshToken: string; recoveryCodes: string[] }>('/auth/admin/totp/activate', { setupToken, code, ...device() });
+  save(body);
+  return { user: body.user, recoveryCodes: body.recoveryCodes };
 }
 
 export async function restore(): Promise<AdminUser | null> {

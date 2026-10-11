@@ -62,9 +62,9 @@ export class SafetyService {
       where: { userId, notifyOnSos: true },
     });
     
-    for (const contact of contacts) {
-      this.logger.log(`[Simulated] Sending SOS SMS to ${contact.name} at ${contact.phone} for incident ${incidentId}`);
-    }
+    // No SMS provider yet (doc 27 F5 / D-F5): nothing is sent. Log counts only, never contacts'
+    // names or numbers.
+    if (contacts.length) this.logger.warn(`Incident ${incidentId}: ${contacts.length} trusted contact(s) NOT notified (no SMS provider configured)`);
   }
 
   async getTrustedContacts(userId: string) {

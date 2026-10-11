@@ -1,3 +1,4 @@
+import { RequirePermission } from '../common/auth/permissions';
 import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -13,6 +14,7 @@ export class UsersController {
 
   @Get()
   @Roles('admin')
+  @RequirePermission('users.read')
   @ApiOperation({ summary: 'List all users (admin only)' })
   findAll() {
     return this.usersService.findAll();

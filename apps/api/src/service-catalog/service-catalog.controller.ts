@@ -1,3 +1,4 @@
+import { RequirePermission } from '../common/auth/permissions';
 import { Controller, Get, Post, Body, Patch, Param } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ServiceCatalogService } from './service-catalog.service';
@@ -26,6 +27,7 @@ export class ServiceCatalogController {
 
   @Post('categories')
   @Roles('admin')
+  @RequirePermission('catalog.edit')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new service category (Admin)' })
   createCategory(
@@ -36,6 +38,7 @@ export class ServiceCatalogController {
 
   @Patch('categories/:id')
   @Roles('admin')
+  @RequirePermission('catalog.edit')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a service category (Admin)' })
   updateCategory(
@@ -47,6 +50,7 @@ export class ServiceCatalogController {
 
   @Post('categories/:id/services')
   @Roles('admin')
+  @RequirePermission('catalog.edit')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add a new service to a category (Admin)' })
   addService(
@@ -58,6 +62,7 @@ export class ServiceCatalogController {
 
   @Patch('services/:id')
   @Roles('admin')
+  @RequirePermission('catalog.edit')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a specific service (Admin)' })
   updateService(
