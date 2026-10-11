@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import {
   BadRequestException,
   ConflictException,
@@ -14,6 +15,7 @@ import { JobStepPhotosDto } from './dto/job-step.dto';
 import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../common/audit/audit.service';
 import { LiveLocationService } from '../tracking/live-location.service';
+import { BlocksService } from '../blocks/blocks.service';
 import { systemMessage, SystemMessageKey } from '../chat/system-messages';
 import { StaffAccessService } from '../common/access/staff-access.service';
 import { NotificationType } from '../notifications/templates';
@@ -78,6 +80,7 @@ export class JobsService {
     private readonly config: ConfigService,
     private readonly audit: AuditService,
     private readonly location: LiveLocationService,
+    private readonly blocks: BlocksService,
   ) {}
 
   private readonly logger = new Logger(JobsService.name);
@@ -304,7 +307,7 @@ export class JobsService {
   async requestWorker(id: string, workerId: string, user: AuthUser) {
     if (user.type !== 'customer') throw new ForbiddenException('Only the customer can choose a worker');
     const worker = await this.prisma.worker.findFirst({ where: { id: workerId, activationStatus: 'ACTIVE', balanceBlocked: false }, select: { id: true } });
-    if (!worker) throw new BadRequestException('That worker is not available');
+    if (!worker || (await this.blocks.between(user.id, workerId))) throw new BadRequestException('That worker is not available');
     return this.transition(id, user, 'AWAITING_WORKER', {
       onlyIf: { customerId: user.id },
       data: { assignedWorkerId: workerId },
@@ -540,11 +543,11 @@ export class JobsService {
       id ? (await this.prisma.user.findUnique({ where: { id }, select: { name: true } }))?.name ?? 'Your professional' : 'Your professional';
     const toCustomer = (type: NotificationType, worker: string) => this.notifications.notify({
       type, userIds: [job.customerId], eventKey: `${type}:${eventId}`,
-      params: { title, worker }, data: { url: `/(customer)/job/${job.id}`, jobId: job.id },
+      params: { title, worker }, data: { url: routes.customerJob(job.id), jobId: job.id },
     });
     const toWorker = (type: NotificationType) => job.workerId ? this.notifications.notify({
       type, userIds: [job.workerId], eventKey: `${type}:${eventId}`,
-      params: { title }, data: { url: `/(worker)/job/${job.id}`, jobId: job.id },
+      params: { title }, data: { url: routes.workerJob(job.id), jobId: job.id },
     }) : Promise.resolve(0);
 
     switch (eventType) {
@@ -552,7 +555,7 @@ export class JobsService {
         if (job.workerId) {
           await this.notifications.notify({
             type: 'job.direct_request', userIds: [job.workerId], eventKey: `job.direct_request:${eventId}`,
-            params: { title }, data: { url: `/(worker)/job/${job.id}`, jobId: job.id },
+            params: { title }, data: { url: routes.workerJob(job.id), jobId: job.id },
           });
         }
         return;
@@ -574,7 +577,7 @@ export class JobsService {
         for (const u of others) {
           await this.notifications.notify({
             type: 'job.cancelled', userIds: [u], eventKey: `job.cancelled:${eventId}`, params: { title },
-            data: { url: u === job.customerId ? `/(customer)/job/${job.id}` : `/(worker)/job/${job.id}`, jobId: job.id },
+            data: { url: routes.jobFor(job.id, u === job.customerId ? 'customer' : 'worker'), jobId: job.id },
           });
         }
         return;

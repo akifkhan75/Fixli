@@ -1,3 +1,5 @@
+import { BlocksService } from '../blocks/blocks.service';
+import { routes } from '@fixli/shared';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -86,7 +88,7 @@ export class MatchingService {
       await this.notifications.notify({
         type: 'job.request', userIds: [r.workerId], eventKey: `job.request:${job.id}`,
         params: { title: job.title ?? 'Repair', area: job.area ?? job.city ?? undefined, distance: r.distanceKm ?? undefined },
-        data: { url: `/(worker)/job/${job.id}`, jobId: job.id, isEmergency: job.isEmergency },
+        data: { url: routes.workerJob(job.id), jobId: job.id, isEmergency: job.isEmergency },
       });
     }
     if (ranked.length) this.realtime.emitToUsers(ranked.map((r) => r.workerId), 'feed.updated', { jobId: job.id });
@@ -95,7 +97,7 @@ export class MatchingService {
       // Honest, once: we widened the search and still nobody is free. The request stays open.
       await this.notifications.notify({
         type: 'job.no_one_available', userIds: [job.customerId], eventKey: `job.no_one_available:${job.id}`,
-        params: { title: job.title ?? 'your request' }, data: { url: `/(customer)/job/${job.id}`, jobId: job.id },
+        params: { title: job.title ?? 'your request' }, data: { url: routes.customerJob(job.id), jobId: job.id },
       });
     }
     this.logger.log(`Job ${job.id} round ${round}: ${candidates.length} in range, ${ranked.length} notified`);
@@ -115,6 +117,7 @@ export class MatchingService {
         AND w."balanceBlocked" = false
         AND u.status = 'ACTIVE'
         AND w.id <> ${job.customerId}
+        AND ${BlocksService.notBlockedSql(job.customerId)}
         AND NOT EXISTS (SELECT 1 FROM "JobMatch" m WHERE m."jobRequestId" = ${job.id} AND m."workerId" = w.id)`;
 
     if (job.latitude != null && job.longitude != null) {

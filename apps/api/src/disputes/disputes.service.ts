@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import { NotificationService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LedgerService } from '../money/ledger.service';
@@ -65,12 +66,14 @@ export class DisputesService {
       disputeId: dispute.id,
       jobId: dispute.jobRequestId,
     });
+    // Reopen the job's chat while the problem is looked at.
+    await this.prisma.conversation.updateMany({ where: { jobRequestId: job.id, isReadOnly: true }, data: { isReadOnly: false, closedAt: null } });
     // The other party hears about it (and job screens refresh). An open dispute pauses auto-confirm.
     const other = user.id === job.customerId ? job.assignedWorkerId : job.customerId;
     if (other) {
       await this.notifications.notify({
         type: 'dispute.opened', userIds: [other], eventKey: `dispute.opened:${dispute.id}`, params: { title: details.title ?? 'your job' },
-        data: { url: other === job.customerId ? `/(customer)/job/${job.id}` : `/(worker)/job/${job.id}`, jobId: job.id },
+        data: { url: routes.jobFor(job.id, other === job.customerId ? 'customer' : 'worker'), jobId: job.id },
       });
     }
     this.realtime.emitToUsers([job.customerId, job.assignedWorkerId ?? ''], 'job.updated', { jobId: job.id });
@@ -169,11 +172,14 @@ export class DisputesService {
       after: { status: after.status, resolution: after.resolution, paymentOutcome: dto.paymentOutcome, adjustment: dto.ledgerAdjustment },
     });
     const parties = [before.jobRequest.customerId, before.jobRequest.assignedWorkerId].filter((u): u is string => !!u);
-    await this.notifications.notify({
-      type: 'dispute.updated', userIds: parties, eventKey: `dispute.updated:${id}:${dto.status}`,
-      params: { title: before.jobRequest.title ?? 'your job', status: STATUS_TEXT[dto.status] },
-      data: { url: `/(customer)/job/${before.jobRequestId}`, jobId: before.jobRequestId },
-    });
+    // Each side gets a link to their own job screen.
+    for (const u of parties) {
+      await this.notifications.notify({
+        type: 'dispute.updated', userIds: [u], eventKey: `dispute.updated:${id}:${dto.status}`,
+        params: { title: before.jobRequest.title ?? 'your job', status: STATUS_TEXT[dto.status] },
+        data: { url: routes.jobFor(before.jobRequestId, u === before.jobRequest.customerId ? 'customer' : 'worker'), jobId: before.jobRequestId },
+      });
+    }
     this.realtime.emitToUsers(parties, 'job.updated', { jobId: before.jobRequestId });
     const { evidenceKeys, ...rest } = after;
     return { ...rest, evidenceCount: evidenceKeys.length };

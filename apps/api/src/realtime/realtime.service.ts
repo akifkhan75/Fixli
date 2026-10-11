@@ -8,6 +8,11 @@ export type RealtimeEvent =
   | 'job.updated'
   | 'offers.updated'
   | 'feed.updated'
+  // chat
+  | 'message.created'
+  | 'message.read'
+  | 'conversation.updated'
+  | 'chat.typing'
   // staff feed (admin portal)
   | 'staff.verification_submitted'
   | 'staff.dispute_opened'

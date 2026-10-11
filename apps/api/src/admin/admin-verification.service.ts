@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import { NotificationService } from '../notifications/notifications.service';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
@@ -76,7 +77,7 @@ export class AdminVerificationService {
       type: status === 'APPROVED' ? 'verification.approved' : 'verification.needs_fix',
       userIds: [c.workerId], eventKey: `verification:${id}`,
       params: { doc: c.type, reason: dto.reason?.trim() || undefined },
-      data: { url: '/(worker-setup)/setup/documents' },
+      data: { url: routes.workerDocuments() },
     });
     await this.syncWorkerStatus(c.workerId);
     return { id, status };
@@ -96,7 +97,7 @@ export class AdminVerificationService {
     if (state('ID') === 'APPROVED' && state('SELFIE') === 'APPROVED') {
       await this.prisma.worker.update({ where: { id: workerId }, data: { activationStatus: 'ACTIVE', isVerified: true } });
       await this.audit.record({ action: 'worker.activated', entityType: 'Worker', entityId: workerId });
-      await this.notifications.notify({ type: 'worker.activated', userIds: [workerId], eventKey: `worker.activated:${workerId}`, params: {}, data: { url: '/(worker)/today' } });
+      await this.notifications.notify({ type: 'worker.activated', userIds: [workerId], eventKey: `worker.activated:${workerId}`, params: {}, data: { url: routes.workerToday() } });
     } else if (['REJECTED', 'NEEDS_INFO'].some((s) => state('ID') === s || state('SELFIE') === s)) {
       await this.prisma.worker.update({ where: { id: workerId }, data: { activationStatus: 'ONBOARDING' } });
     }

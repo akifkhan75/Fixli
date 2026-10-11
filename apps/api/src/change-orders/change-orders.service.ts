@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { JobAccessService } from '../common/access/job-access.service';
@@ -53,7 +54,7 @@ export class ChangeOrdersService {
       await tx.jobEvent.create({ data: { jobRequestId: dto.jobRequestId, actorId: workerId, type: 'CHANGE_ORDER_PROPOSED', payload: { changeOrderId: co.id, from: locked.agreedAmount, to: dto.revisedPrice, currency: co.currency } } });
       return { co, customerId: locked.customerId, title: locked.title };
     });
-    await this.tell(created.customerId, 'change_order.created', created.co, created.title, `/(customer)/job/${dto.jobRequestId}`);
+    await this.tell(created.customerId, 'change_order.created', created.co, created.title, routes.customerJob(dto.jobRequestId));
     this.realtime.emitToUsers([created.customerId, workerId], 'job.updated', { jobId: dto.jobRequestId });
     return this.present(created.co);
   }
@@ -94,7 +95,7 @@ export class ChangeOrdersService {
     });
     await this.audit.record({ actorId: customerId, action: `change_order.${status.toLowerCase()}`, entityType: 'ChangeOrder', entityId: id, before: { price: result.job.agreedAmount }, after: { price: status === 'APPROVED' ? result.co.revisedPrice : result.job.agreedAmount } });
     if (result.job.assignedWorkerId) {
-      await this.tell(result.job.assignedWorkerId, status === 'APPROVED' ? 'change_order.approved' : 'change_order.declined', result.co, result.job.title, `/(worker)/job/${result.job.id}`);
+      await this.tell(result.job.assignedWorkerId, status === 'APPROVED' ? 'change_order.approved' : 'change_order.declined', result.co, result.job.title, routes.workerJob(result.job.id));
     }
     this.realtime.emitToUsers([customerId, result.job.assignedWorkerId ?? ''], 'job.updated', { jobId: result.job.id });
     return this.present(result.co);

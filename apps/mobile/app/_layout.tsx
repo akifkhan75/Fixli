@@ -8,6 +8,7 @@ import { store } from '../src/store';
 import { useAppSelector, useAppDispatch } from '../src/hooks/useRedux';
 import { selectCurrentUser, selectSessionRestored, restoreSession } from '../src/store/authSlice';
 import { realtime } from '../src/services/socket';
+import { chatOutbox } from '../src/services/chatOutbox';
 import { NotificationsProvider } from '../src/hooks/useNotifications';
 import { useWorkerLocationTracker } from '../src/hooks/useWorkerLocationTracker';
 import * as Sentry from '@sentry/react-native';
@@ -22,9 +23,15 @@ function SocketHandler() {
   const currentUser = useAppSelector(selectCurrentUser);
 
   useEffect(() => {
-    if (currentUser?.id) void realtime.connect();
-    else realtime.disconnect();
-    return () => realtime.disconnect();
+    if (!currentUser?.id) {
+      realtime.disconnect();
+      // Signed out: this account's unsent messages don't stay on the phone.
+      void chatOutbox.clear();
+      return undefined;
+    }
+    void realtime.connect();
+    const stopOutbox = chatOutbox.start(); // unsent chat messages go out when the connection is back
+    return () => { stopOutbox(); realtime.disconnect(); };
   }, [currentUser?.id]);
 
   return null;

@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { computeCommission } from '@fixli/shared';
@@ -63,7 +64,7 @@ export class PaymentsService {
     await this.notifications.notify({
       type: 'payment.cash_marked', userIds: [job.customerId], eventKey: `payment.cash_marked:${payment.id}`,
       params: { title: job.title ?? 'your job', price: { minor: payment.amount, currency: payment.currency } },
-      data: { url: `/(customer)/job/${jobId}`, jobId },
+      data: { url: routes.customerJob(jobId), jobId },
     });
     this.realtime.emitToUsers([job.customerId, workerId], 'job.updated', { jobId });
     return payment;
@@ -118,7 +119,7 @@ export class PaymentsService {
       await this.notifications.notify({
         type: auto ? 'payment.auto_confirmed' : 'payment.confirmed', userIds: [workerId], eventKey: `payment.confirmed:${p.id}`,
         params: { title: p.jobRequest.title ?? 'your job', price: { minor: p.amount, currency: p.currency }, commission: { minor: result.commission, currency: p.currency } },
-        data: { url: `/(worker)/job/${p.jobRequestId}`, jobId: p.jobRequestId },
+        data: { url: routes.workerJob(p.jobRequestId), jobId: p.jobRequestId },
       });
       this.realtime.emitToUsers([p.jobRequest.customerId, workerId], 'job.updated', { jobId: p.jobRequestId });
       if (result.becameBlocked) await this.ledger.notifyPaused(workerId, p.id);
@@ -142,7 +143,7 @@ export class PaymentsService {
     if (payment.jobRequest.assignedWorkerId) {
       await this.notifications.notify({
         type: 'payment.disputed', userIds: [payment.jobRequest.assignedWorkerId], eventKey: `payment.disputed:${paymentId}`,
-        params: { title: payment.jobRequest.title ?? 'your job' }, data: { url: `/(worker)/job/${payment.jobRequestId}`, jobId: payment.jobRequestId },
+        params: { title: payment.jobRequest.title ?? 'your job' }, data: { url: routes.workerJob(payment.jobRequestId), jobId: payment.jobRequestId },
       });
     }
     this.realtime.emitToUsers([customerId, payment.jobRequest.assignedWorkerId ?? ''], 'job.updated', { jobId: payment.jobRequestId });

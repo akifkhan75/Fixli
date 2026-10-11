@@ -127,7 +127,6 @@ export default function SignupScreen() {
             />
             <View style={{ height: 16 }} />
             <PasswordField
-              isNew
               label={t('auth.createPassword')}
               value={password}
               onChangeText={(v) => { clearError(); setPassword(v); }}

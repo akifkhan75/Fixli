@@ -1,7 +1,7 @@
 import { ChatGateway } from './chat.gateway';
 
 describe('ChatGateway (socket security)', () => {
-  const chat = { sendMessage: jest.fn(), requireThread: jest.fn() };
+  const chat = { typing: jest.fn() };
   const jwt = { verify: jest.fn() };
   const prisma = { session: { findFirst: jest.fn() }, jobRequest: { findFirst: jest.fn() }, conversation: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() } as any };
   const emit = jest.fn();
@@ -60,22 +60,13 @@ describe('ChatGateway (socket security)', () => {
     expect(disconnectSockets).toHaveBeenCalledWith(true);
   });
 
-  it('delivers messages to conversation participants', async () => {
-    chat.sendMessage.mockResolvedValue({ id: 'm1' });
-    prisma.conversation = {
-      findUnique: jest.fn().mockResolvedValue({
-        participants: [{ id: 'u1' }, { id: 'u2' }]
-      })
-    };
-    
+  it('messages are not sent over the socket (REST only); typing goes through the throttled service', async () => {
+    expect((gateway as any).handleMessage).toBeUndefined();
     const c = client({ data: { userId: 'u1', userType: 'customer' } });
-    await gateway.handleMessage(c as any, { threadId: 't1', text: 'hi', receiverId: 'attacker' });
-    // extra fields are rejected by payload validation
-    expect(chat.sendMessage).not.toHaveBeenCalled();
-    
-    await gateway.handleMessage(c as any, { threadId: 't1', text: 'hi' });
-    expect(gateway.server.to).toHaveBeenCalledWith('user:u2');
-    expect(emit).toHaveBeenCalledWith('message.created', { id: 'm1' });
+    await gateway.handleTyping(c as any, { threadId: 't1' });
+    expect(chat.typing).toHaveBeenCalledWith('u1', 't1');
+    await gateway.handleTyping(c as any, { threadId: 't1', extra: 'x' });
+    expect(chat.typing).toHaveBeenCalledTimes(1);
   });
 
   it('only a worker can send location; the server decides the receiver from the job', async () => {

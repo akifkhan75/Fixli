@@ -1,251 +1,279 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  View,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  Image,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, Image, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { routes } from '@fixli/shared';
 import { useTheme } from '../../hooks/useTheme';
-import { Text } from '../ds/Text';
-import { Screen } from '../ds/Screen';
-import { LoadingState, ErrorState } from '../ds/EmptyState';
+import { useI18n } from '../../hooks/useI18n';
+import { friendlyError } from '../../hooks/useApi';
+import { useRealtime, useLiveReload } from '../../hooks/useRealtime';
+import { usePhotoUpload } from '../../hooks/usePhotoUpload';
 import { useAppSelector } from '../../hooks/useRedux';
 import { selectCurrentUser } from '../../store/authSlice';
-import * as api from '../../services/api';
+import { chatOutbox, newClientId, type OutboxItem } from '../../services/chatOutbox';
 import { realtime } from '../../services/socket';
-import { useI18n } from '../../hooks/useI18n';
+import * as api from '../../services/api';
+import { Screen } from '../ds/Screen';
+import { Text } from '../ds/Text';
+import { Button } from '../ds/Button';
+import { ChipChoice } from '../ds/ChipChoice';
+import { ErrorState, LoadingState } from '../ds/EmptyState';
 
+type Row =
+  | { kind: 'day'; key: string; label: string }
+  | { kind: 'msg'; key: string; m: api.ChatMessage }
+  | { kind: 'out'; key: string; o: OutboxItem };
+
+const REPORT_REASONS: { id: api.ReportReason; label: string }[] = [
+  { id: 'HARASSMENT', label: 'Harassment' },
+  { id: 'SCAM', label: 'Scam or asking for money' },
+  { id: 'UNSAFE', label: 'I feel unsafe' },
+  { id: 'INAPPROPRIATE', label: 'Inappropriate messages' },
+  { id: 'OTHER', label: 'Something else' },
+];
+
+const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+
+/**
+ * One chat. Messages go into the outbox first (sent in order, once, even after going offline);
+ * everything the other side does arrives live: new messages, read ticks, typing.
+ */
 export function ChatThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const router = useRouter();
-  const user = useAppSelector(selectCurrentUser);
-  const { t } = useI18n();
-  
+  const { locale } = useI18n();
+  const me = useAppSelector(selectCurrentUser);
   const [messages, setMessages] = useState<api.ChatMessage[]>([]);
+  const [meta, setMeta] = useState<api.ConversationMeta | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [inputText, setInputText] = useState('');
-  const [sending, setSending] = useState(false);
-  
-  const flatListRef = useRef<FlatList>(null);
+  const [text, setText] = useState('');
+  const [typingUntil, setTypingUntil] = useState(0);
+  const [hint, setHint] = useState(false);
+  const [menu, setMenu] = useState<null | 'menu' | 'report'>(null);
+  const [reportReason, setReportReason] = useState<string[]>([]);
+  const [actionMsg, setActionMsg] = useState<string | undefined>();
+  const photo = usePhotoUpload('CHAT_PHOTO');
+  const lastTypingSent = useRef(0);
 
-  const fetchMessages = useCallback(async () => {
+  const merge = useCallback((incoming: api.ChatMessage[]) => {
+    setMessages((prev) => {
+      const byId = new Map(prev.map((m) => [m.id, m]));
+      for (const m of incoming) byId.set(m.id, { ...byId.get(m.id), ...m });
+      return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    });
+  }, []);
+
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
       const res = await api.getConversationMessages(id!);
-      setMessages(res.items);
+      merge(res.items);
+      setMeta(res.conversation);
+      setCursor(res.nextCursor);
       setError(null);
-      
-      // Mark as read in the background
-      await api.markMessagesAsRead(id!);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load messages');
+      void api.markMessagesAsRead(id!).catch(() => undefined);
+    } catch (e) {
+      setError(friendlyError(e));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, merge]);
+
+  useEffect(() => { void load(); }, [load]);
+  // After a gap (offline, app in background), re-read rather than trust that nothing was missed.
+  useLiveReload(load, ['conversation.updated'], (e) => e.data?.conversationId === id, { fallbackMs: 300_000 });
 
   useEffect(() => {
-    if (id) {
-      fetchMessages();
-    }
-  }, [id, fetchMessages]);
-
-  useEffect(() => {
-    if (!id) return;
-    
-    const handleNewMessage = (msg: api.ChatMessage) => {
-      if (msg.conversationId === id) {
-        setMessages((prev) => {
-          // avoid duplicates if optimistic update already added it (based on ID or clientId)
-          if (prev.some(m => m.id === msg.id || ((msg as any).clientId && (m as any).clientId === (msg as any).clientId))) return prev;
-          return [msg, ...prev]; // inverted list
-        });
-        
-        // If we are currently viewing this thread, automatically mark this new message as read
-        if (msg.sender?.id !== user?.id) {
-          api.markMessagesAsRead(id).catch(() => {});
-        }
+    const refresh = () => void chatOutbox.list(id!).then(setOutbox);
+    refresh();
+    return chatOutbox.subscribe((e) => {
+      refresh();
+      if (e.type === 'sent' && e.message.conversationId === id) {
+        merge([e.message]);
+        if (e.message.warning === 'CONTACT_INFO') setHint(true);
       }
-    };
+    });
+  }, [id, merge]);
 
-    const unsubscribe = realtime.onNewMessage(handleNewMessage as any);
-    return unsubscribe;
-  }, [id, user?.id]);
-
-  const sendMessage = async () => {
-    const text = inputText.trim();
-    if (!text || !id) return;
-    
-    setInputText('');
-    setSending(true);
-
-    const clientId = Date.now().toString() + Math.random().toString(36).substring(7);
-    const optimisticMsg: api.ChatMessage = {
-      id: clientId, // temporary ID
-      conversationId: id,
-      text,
-      imageUrl: null,
-      isSystem: false,
-      createdAt: new Date().toISOString(),
-      sender: { id: user!.id, name: user!.name },
-      reads: [],
-      clientId, // Store clientId for deduping
-    } as any;
-
-    setMessages(prev => [optimisticMsg, ...prev]);
-
-    try {
-      // The socket gateway listens to sendMessage and handles it
-      // or we can use the API directly. We will use the REST API here for simplicity.
-      await api.sendChatMessage(id, { text, clientId });
-    } catch (err) {
-      // Revert optimistic update on error if you wanted, or show error state.
-      // For now, keep it simple.
-    } finally {
-      setSending(false);
+  useRealtime(['message.created', 'message.read', 'chat.typing'], (e) => {
+    if (e.data?.conversationId !== id) return;
+    if (e.type === 'message.created') {
+      merge([e.data]);
+      if (e.data.sender?.id !== me?.id) { setTypingUntil(0); void api.markMessagesAsRead(id!).catch(() => undefined); }
+    } else if (e.type === 'message.read') {
+      const ids = new Set<string>(e.data.messageIds);
+      setMessages((prev) => prev.map((m) => (ids.has(m.id) && !m.reads.some((r) => r.userId === e.data.userId) ? { ...m, reads: [...m.reads, { userId: e.data.userId, readAt: e.data.readAt }] } : m)));
+    } else if (e.type === 'chat.typing' && e.data.userId !== me?.id) {
+      setTypingUntil(Date.now() + 5_000);
     }
+  });
+  useEffect(() => {
+    if (!typingUntil) return undefined;
+    const t = setTimeout(() => setTypingUntil(0), Math.max(0, typingUntil - Date.now()));
+    return () => clearTimeout(t);
+  }, [typingUntil]);
+
+  const older = async () => {
+    if (!cursor) return;
+    const res = await api.getConversationMessages(id!, cursor);
+    merge(res.items);
+    setCursor(res.nextCursor);
   };
 
-  const renderMessage = ({ item }: { item: api.ChatMessage }) => {
-    if (item.isSystem) {
+  const onType = (v: string) => {
+    setText(v);
+    if (Date.now() - lastTypingSent.current > 3_000) { lastTypingSent.current = Date.now(); realtime.typing(id!); }
+  };
+
+  const sendText = async () => {
+    const t = text.trim();
+    if (!t || !me) return;
+    setText('');
+    await chatOutbox.add({ clientId: newClientId(), conversationId: id!, senderId: me.id, text: t });
+  };
+  const sendPhoto = async (source: 'camera' | 'library') => {
+    if (!me) return;
+    const up = await photo.run(source);
+    if (up) await chatOutbox.add({ clientId: newClientId(), conversationId: id!, senderId: me.id, imageUploadId: up.id, localImageUri: up.localUri });
+  };
+
+  const block = async () => {
+    try { await api.blockInConversation(id!); setMenu(null); setActionMsg('Blocked. You won\'t get messages, requests or prices from each other.'); await load(); }
+    catch (e) { setActionMsg(friendlyError(e)); }
+  };
+  const report = async () => {
+    if (!reportReason[0]) return;
+    try { await api.reportInConversation(id!, reportReason[0] as api.ReportReason); setMenu(null); setActionMsg('Thanks. The Fixli safety team will look into it.'); }
+    catch (e) { setActionMsg(friendlyError(e)); }
+  };
+
+  // Newest first (inverted list): server messages + my outbox items, with a day label between days.
+  const rows = useMemo<Row[]>(() => {
+    const sentClientIds = new Set(messages.map((m) => m.clientId).filter(Boolean));
+    const out = outbox.filter((o) => !sentClientIds.has(o.clientId)).map((o) => ({ at: o.createdAt, row: { kind: 'out' as const, key: o.clientId, o } }));
+    const ms = messages.map((m) => ({ at: m.createdAt, row: { kind: 'msg' as const, key: m.id, m } }));
+    const all = [...out, ...ms].sort((a, b) => b.at.localeCompare(a.at));
+    const res: Row[] = [];
+    all.forEach((x, i) => {
+      res.push(x.row);
+      const d = new Date(x.at);
+      const nextOlder = all[i + 1] ? new Date(all[i + 1].at) : null;
+      if (!nextOlder || !sameDay(d, nextOlder)) {
+        res.push({ kind: 'day', key: `day-${d.toDateString()}`, label: sameDay(d, new Date()) ? 'Today' : d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' }) });
+      }
+    });
+    return res;
+  }, [messages, outbox, locale]);
+
+  if (loading && !messages.length) return <Screen title="Chat" back><LoadingState /></Screen>;
+  if (error && !messages.length) return <Screen title="Chat" back><ErrorState message={error} onRetry={load} /></Screen>;
+
+  const other = meta?.counterpart;
+  const closed = meta?.isReadOnly;
+  const blocked = meta?.blocked;
+  const canSend = !closed && !blocked;
+  const tick = (m: api.ChatMessage) => (other && m.reads.some((r) => r.userId === other.id) ? 'checkmark-done' : 'checkmark');
+
+  const bubble = (mine: boolean, children: React.ReactNode, footer: React.ReactNode) => (
+    <View style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '80%', marginVertical: 3, padding: 10, borderRadius: 16, backgroundColor: mine ? theme.colors.primary : theme.colors.surfaceElevated }}>
+      {children}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>{footer}</View>
+    </View>
+  );
+  const time = (iso: string, mine: boolean) => <Text variant="caption" color={mine ? 'rgba(255,255,255,0.75)' : theme.colors.textTertiary}>{new Date(iso).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })}</Text>;
+
+  const renderRow = ({ item }: { item: Row }) => {
+    if (item.kind === 'day') return <Text variant="caption" color={theme.colors.textTertiary} style={{ textAlign: 'center', marginVertical: 10 }}>{item.label}</Text>;
+    if (item.kind === 'out') {
+      const o = item.o;
+      const failed = o.status === 'failed';
       return (
-        <View style={styles.systemMessageContainer}>
-          <Text variant="caption" color={theme.colors.textTertiary} style={{ textAlign: 'center' }}>
-            {item.text}
-          </Text>
-        </View>
+        <TouchableOpacity disabled={!failed} onPress={() => void chatOutbox.retry(o.clientId)} onLongPress={() => void chatOutbox.discard(o.clientId)}
+          accessibilityRole={failed ? 'button' : undefined} accessibilityLabel={failed ? 'Not sent. Tap to retry, hold to delete.' : 'Sending'}>
+          {bubble(true, <>
+            {o.localImageUri ? <Image source={{ uri: o.localImageUri }} style={{ width: 200, height: 200, borderRadius: 10, opacity: 0.7 }} /> : null}
+            {o.text ? <Text variant="bodyLarge" color={theme.colors.onPrimary}>{o.text}</Text> : null}
+          </>, failed
+            ? <><Ionicons name="alert-circle" size={14} color="#FFFFFF" /><Text variant="caption" color="#FFFFFF">Not sent · Tap to retry</Text></>
+            : <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.75)" accessibilityLabel="Sending" />)}
+        </TouchableOpacity>
       );
     }
-
-    const isMe = item.sender?.id === user?.id;
-    return (
-      <View style={[styles.messageBubble, isMe ? [styles.messageMine, { backgroundColor: theme.colors.primary }] : [styles.messageTheirs, { backgroundColor: theme.colors.surfaceElevated }]]}>
-        <Text variant="bodyLarge" color={isMe ? theme.colors.onPrimary : theme.colors.textPrimary}>
-          {item.text}
-        </Text>
-        <Text variant="caption" color={isMe ? 'rgba(255,255,255,0.7)' : theme.colors.textTertiary} style={{ marginTop: 4, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
-          {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
-      </View>
-    );
+    const m = item.m;
+    if (m.isSystem) return <Text variant="caption" color={theme.colors.textTertiary} style={{ textAlign: 'center', marginVertical: 8, paddingHorizontal: 24 }}>{m.text}</Text>;
+    const mine = m.sender?.id === me?.id;
+    return bubble(mine, <>
+      {m.imageUrl ? <Image source={{ uri: m.imageUrl }} accessibilityLabel="Photo" style={{ width: 200, height: 200, borderRadius: 10 }} /> : null}
+      {m.text ? <Text variant="bodyLarge" color={mine ? theme.colors.onPrimary : theme.colors.textPrimary}>{m.text}</Text> : null}
+    </>, <>{time(m.createdAt, mine)}{mine ? <Ionicons name={tick(m)} size={14} color="rgba(255,255,255,0.85)" accessibilityLabel={tick(m) === 'checkmark-done' ? 'Read' : 'Sent'} /> : null}</>);
   };
 
-  if (loading && !messages.length) return <Screen><LoadingState /></Screen>;
-  if (error && !messages.length) return <Screen><ErrorState message={error} onRetry={fetchMessages} /></Screen>;
+  const composer = canSend ? (
+    <View>
+      {hint ? (
+        <TouchableOpacity onPress={() => setHint(false)} accessibilityRole="button" style={{ backgroundColor: theme.colors.warning + '22', borderRadius: 10, padding: 10, marginBottom: 8 }}>
+          <Text variant="bodySmall" color={theme.colors.textPrimary}>Tip: keep chatting and paying through Fixli. If something goes wrong, we can only help with what happened here.</Text>
+        </TouchableOpacity>
+      ) : null}
+      {photo.error ? <Text variant="bodySmall" color={theme.colors.error} style={{ marginBottom: 6 }}>{photo.error}</Text> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+        <TouchableOpacity onPress={() => void sendPhoto('library')} onLongPress={() => void sendPhoto('camera')} disabled={photo.busy} accessibilityRole="button" accessibilityLabel="Send a photo (hold for camera)" style={{ padding: 8 }}>
+          <Ionicons name={photo.busy ? 'hourglass-outline' : 'image-outline'} size={26} color={theme.colors.textSecondary} />
+        </TouchableOpacity>
+        <RNTextInput
+          value={text} onChangeText={onType} placeholder="Type a message" placeholderTextColor={theme.colors.textTertiary} multiline maxLength={4000}
+          accessibilityLabel="Message"
+          style={{ flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, backgroundColor: theme.colors.surface, color: theme.colors.textPrimary, writingDirection: 'auto' as any }}
+        />
+        <TouchableOpacity onPress={sendText} disabled={!text.trim()} accessibilityRole="button" accessibilityLabel="Send"
+          style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: text.trim() ? theme.colors.primary : theme.colors.surfaceElevated }}>
+          <Ionicons name="send" size={20} color={text.trim() ? theme.colors.onPrimary : theme.colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  ) : (
+    <Text variant="body" color={theme.colors.textSecondary} style={{ textAlign: 'center' }}>
+      {blocked ? "You can't message each other." : closed ? `This chat closed${meta?.closedAt ? ` on ${new Date(meta.closedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short' })}` : ''}. Report a problem on the job if you need help.` : ''}
+    </Text>
+  );
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1, backgroundColor: theme.colors.background }} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={[styles.header, { borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+    <Screen title={other?.name ?? 'Chat'} back scroll={false} footer={composer}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 6 }}>
+        {meta?.job ? (
+          <TouchableOpacity style={{ flex: 1 }} accessibilityRole="button" onPress={() => router.push(routes.jobFor(meta.job!.id, me?.type === 'worker' ? 'worker' : 'customer') as any)}>
+            <Text variant="bodySmall" color={theme.colors.primary} numberOfLines={1}>{meta.job.title ?? 'View job'} ›</Text>
+          </TouchableOpacity>
+        ) : <View style={{ flex: 1 }} />}
+        {typingUntil ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginEnd: 8 }}>typing…</Text> : null}
+        <TouchableOpacity onPress={() => setMenu(menu ? null : 'menu')} accessibilityRole="button" accessibilityLabel="More options" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.textSecondary} />
         </TouchableOpacity>
-        <Text variant="h3" weight="bold" color={theme.colors.textPrimary}>{t('chat.title')}</Text>
-        <View style={{ width: 24 }} />
       </View>
-
+      {menu === 'menu' ? (
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
+          {!blocked ? <View style={{ flex: 1 }}><Button title="Block" variant="secondary" onPress={block} /></View> : null}
+          <View style={{ flex: 1 }}><Button title="Report" variant="danger" onPress={() => setMenu('report')} /></View>
+        </View>
+      ) : menu === 'report' ? (
+        <View style={{ gap: 8, marginBottom: 8 }}>
+          <ChipChoice options={REPORT_REASONS} selectedIds={reportReason} onChange={setReportReason} />
+          <Button title="Send report" variant="danger" disabled={!reportReason[0]} onPress={report} />
+        </View>
+      ) : null}
+      {actionMsg ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginBottom: 6 }}>{actionMsg}</Text> : null}
       <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={item => item.id}
-        renderItem={renderMessage}
+        data={rows}
+        keyExtractor={(r) => r.key}
+        renderItem={renderRow}
         inverted
-        contentContainerStyle={styles.listContent}
+        onEndReached={older}
+        onEndReachedThreshold={0.3}
+        contentContainerStyle={{ paddingVertical: 8 }}
         showsVerticalScrollIndicator={false}
       />
-
-      <View style={[styles.inputContainer, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.textPrimary }]}
-          placeholder="Type a message..."
-          placeholderTextColor={theme.colors.textTertiary}
-          value={inputText}
-          onChangeText={setInputText}
-          multiline
-        />
-        <TouchableOpacity 
-          style={[styles.sendButton, { backgroundColor: inputText.trim() ? theme.colors.primary : theme.colors.surfaceElevated }]}
-          onPress={sendMessage}
-          disabled={!inputText.trim()}
-        >
-          <Ionicons name="send" size={20} color={inputText.trim() ? theme.colors.onPrimary : theme.colors.textSecondary} />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    padding: 8,
-    marginLeft: -8,
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  systemMessageContainer: {
-    marginVertical: 12,
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  messageBubble: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
-    marginVertical: 4,
-  },
-  messageMine: {
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
-  },
-  messageTheirs: {
-    alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-    borderTopWidth: 1,
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    fontSize: 16,
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 12,
-  },
-});

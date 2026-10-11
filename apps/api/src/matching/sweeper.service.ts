@@ -79,10 +79,12 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
           isReadOnly: false,
           jobRequest: {
             status: { in: ['COMPLETED', 'CANCELLED'] },
-            updatedAt: { lte: cutoff }
+            updatedAt: { lte: cutoff },
+            // A problem is being looked at: both sides may still need to talk.
+            disputes: { none: { status: { in: ['OPEN', 'IN_REVIEW'] } } },
           }
         },
-        data: { isReadOnly: true }
+        data: { isReadOnly: true, closedAt: now }
       });
 
       return { expired: expired.count, matched: unmatched.length, widened: stale.length, readOnly: readOnlyCount.count };

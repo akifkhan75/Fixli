@@ -316,28 +316,34 @@ export async function generateQuoteDraft(jobDescription: string, workerNotes: st
 // ── Chat ─────────────────────────────────────────────────────
 
 export interface ChatParticipant { id: string; name: string; profileImageUrl: string | null }
-export interface ConversationItem { id: string; lastMessageAt: string | null; isReadOnly: boolean; unreadCount: number; participants: ChatParticipant[]; messages: ChatMessage[] }
-export interface ChatMessage { id: string; conversationId: string; text: string | null; imageUrl: string | null; isSystem: boolean; systemKey?: string | null; createdAt: string; sender: { id: string; name: string } | null; reads: { userId: string; readAt: string }[] }
-
-export async function getConversations(cursor?: string): Promise<Page<ConversationItem>> {
-  return request<Page<ConversationItem>>(`/conversations${cursor ? `?cursor=${cursor}` : ''}`);
+export interface ConversationItem {
+  id: string; job: { id: string; title: string | null; status: string } | null; counterpart: ChatParticipant | null;
+  lastMessage: ChatMessage | null; lastMessageAt: string | null; unreadCount: number;
+  isReadOnly: boolean; closedAt: string | null; blockedByMe: boolean;
 }
-
-export async function getConversationMessages(id: string, cursor?: string): Promise<Page<ChatMessage>> {
-  return request<Page<ChatMessage>>(`/conversations/${id}/messages${cursor ? `?cursor=${cursor}` : ''}`);
+export interface ChatMessage {
+  id: string; conversationId: string; clientId?: string | null; text: string | null; imageUrl: string | null;
+  isSystem: boolean; systemKey?: string | null; createdAt: string;
+  sender: { id: string; name: string } | null; reads: { userId: string; readAt: string }[];
 }
+export interface ConversationMeta { id: string; job: { id: string; title: string | null } | null; counterpart: { id: string; name: string } | null; isReadOnly: boolean; closedAt: string | null; blocked: boolean }
 
-export async function sendChatMessage(threadId: string, data: { text?: string; imageUploadId?: string; clientId?: string }): Promise<ChatMessage> {
-  return request<ChatMessage>(`/conversations/${threadId}/messages`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function markMessagesAsRead(threadId: string): Promise<boolean> {
-  const result = await request<{ success: boolean }>(`/conversations/${threadId}/read`, { method: 'POST' });
-  return result.success;
-}
+export const getConversations = (cursor?: string) => request<Page<ConversationItem>>(`/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
+export const getConversationMessages = (id: string, cursor?: string) =>
+  request<Page<ChatMessage> & { conversation: ConversationMeta }>(`/conversations/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
+/** Idempotent by clientId: the outbox may retry safely. `warning` is a reminder for the sender only. */
+export const sendChatMessage = (conversationId: string, data: { text?: string; imageUploadId?: string; clientId: string }) =>
+  request<ChatMessage & { warning?: 'CONTACT_INFO' }>(`/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify(data) });
+export const markMessagesAsRead = (id: string) => request<{ success: boolean }>(`/conversations/${id}/read`, { method: 'POST' });
+export const conversationForJob = (jobId: string) => request<{ id: string }>(`/conversations/by-job/${jobId}`);
+export const sendTyping = (id: string) => request<void>(`/conversations/${id}/typing`, { method: 'POST' }).catch(() => undefined);
+export const blockInConversation = (id: string, reason?: string) => request<{ success: boolean }>(`/conversations/${id}/block`, { method: 'POST', body: JSON.stringify(reason ? { reason } : {}) });
+export type ReportReason = 'HARASSMENT' | 'SCAM' | 'UNSAFE' | 'INAPPROPRIATE' | 'OTHER';
+export const reportInConversation = (id: string, reason: ReportReason, details?: string) =>
+  request<{ success: boolean }>(`/conversations/${id}/report`, { method: 'POST', body: JSON.stringify({ reason, details }) });
+export interface BlockedPerson { blockedId: string; createdAt: string; blocked: { name: string; profileImageUrl: string | null; type: string } }
+export const getBlocked = () => request<BlockedPerson[]>('/users/me/blocks');
+export const unblock = (userId: string) => request<{ success: boolean }>(`/users/me/blocks/${userId}`, { method: 'DELETE' });
 
 // ── Services ─────────────────────────────────────────────────
 

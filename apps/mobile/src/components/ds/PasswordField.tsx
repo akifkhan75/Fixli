@@ -5,7 +5,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { TextInput, TextInputProps } from './TextInput';
 
 /** Password input with a show/hide toggle (people mistype on small keyboards). */
-export const PasswordField = ({ isNew, ...props }: TextInputProps & { isNew?: boolean }) => {
+export const PasswordField = ({ isNew, textContentType, autoComplete, ...props }: TextInputProps & { isNew?: boolean }) => {
   const theme = useTheme();
   const [visible, setVisible] = useState(false);
   return (
@@ -13,8 +13,8 @@ export const PasswordField = ({ isNew, ...props }: TextInputProps & { isNew?: bo
       secureTextEntry={!visible}
       autoCapitalize="none"
       autoCorrect={false}
-      autoComplete={isNew ? 'new-password' : 'current-password'}
-      textContentType={isNew ? 'newPassword' : 'password'}
+      autoComplete={autoComplete ?? (isNew ? 'off' : 'current-password')}
+      textContentType={textContentType ?? 'password'}
       rightIcon={
         <TouchableOpacity
           onPress={() => setVisible((v) => !v)}

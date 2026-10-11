@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
@@ -84,7 +85,7 @@ export class SettlementsService {
     await this.notifications.notify({
       type: approve ? 'settlement.confirmed' : 'settlement.rejected', userIds: [out.workerId], eventKey: `settlement:${id}`,
       params: { price: { minor: out.amount, currency: out.currency }, reason: note?.trim() || undefined },
-      data: { url: '/(worker)/earnings' },
+      data: { url: routes.workerEarnings() },
     });
     this.realtime.emitToUsers([out.workerId], 'job.updated', { settlementId: id });
     return out;

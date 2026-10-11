@@ -1,9 +1,9 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { ApiError, createUploadSlot, completeUpload } from './api';
 
-export type UploadPurpose = 'AVATAR' | 'VERIFICATION' | 'PORTFOLIO' | 'JOB_PHOTO';
+export type UploadPurpose = 'AVATAR' | 'VERIFICATION' | 'PORTFOLIO' | 'JOB_PHOTO' | 'CHAT_PHOTO';
 
-const MAX_EDGE: Record<UploadPurpose, number> = { AVATAR: 800, PORTFOLIO: 1600, VERIFICATION: 2000, JOB_PHOTO: 1600 };
+const MAX_EDGE: Record<UploadPurpose, number> = { AVATAR: 800, PORTFOLIO: 1600, VERIFICATION: 2000, JOB_PHOTO: 1600, CHAT_PHOTO: 1600 };
 
 /** Shrinks a camera photo to a sensible size/quality before upload (phones shoot 5-10 MB). */
 export async function prepareImage(uri: string, purpose: UploadPurpose, width?: number) {

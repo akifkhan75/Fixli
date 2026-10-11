@@ -637,6 +637,8 @@ model Conversation {
   jobRequest    JobRequest? @relation(fields: [jobRequestId], references: [id])
   lastMessageAt DateTime?
   isReadOnly    Boolean     @default(false)
+  /// When it became read-only (some days after the job ended). A dispute reopens it.
+  closedAt      DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -658,6 +660,8 @@ model Message {
   systemKey      String?
   systemParams   Json?
   clientId       String? // idempotency
+  /// Looked like contact sharing (phone, link, WhatsApp…): the sender was reminded; staff can review.
+  isFlagged      Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   reads MessageRead[]

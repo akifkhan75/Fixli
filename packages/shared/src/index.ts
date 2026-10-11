@@ -9,3 +9,4 @@ export * from './countries';
 export * from './phone';
 export * from './password';
 export * from './money';
+export * from './routes';

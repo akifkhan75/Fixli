@@ -15,6 +15,7 @@ import { ReviewForm } from '../../../src/components/ds/ReviewForm';
 import { JobStepPhoto } from '../../../src/components/ds/JobStepPhoto';
 import { ChangeOrderForm } from '../../../src/components/ds/ChangeOrderForm';
 import { CallButton } from '../../../src/components/ds/CallButton';
+import { MessageButton } from '../../../src/components/ds/MessageButton';
 import { PriceForm } from '../../../src/components/ds/PriceForm';
 import { useAppDispatch, useAppSelector } from '../../../src/hooks/useRedux';
 import { startTracking, stopTracking } from '../../../src/store/trackingSlice';
@@ -158,6 +159,7 @@ export default function WorkerJobScreen() {
         <ChangeOrderForm currentMinor={job.agreedAmount ?? null} currency={job.agreedCurrency ?? me.data?.currency ?? 'PKR'} locale={locale} busy={busy}
           onSubmit={submitChangeOrder} onCancel={() => setCreatingChangeOrder(false)} />
       ) : null}
+      {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? <MessageButton jobId={job.id} label="Message the customer" /> : null}
       {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? <CallButton jobId={job.id} label="Call the customer" /> : null}
 
       {job.status !== 'CANCELLED' && (

@@ -12,9 +12,10 @@ async function main() {
   console.log('🌱 Seeding DEV database (demo accounts, password: password123)...');
 
   // Clean existing data
-  await prisma.chatMessage.deleteMany();
-  await prisma.chatThread.deleteMany();
-  await prisma.transaction.deleteMany();
+  await prisma.message.deleteMany();
+  await prisma.conversation.deleteMany();
+  await prisma.ledgerEntry.deleteMany();
+  await prisma.payment.deleteMany();
   await prisma.jobEvidence.deleteMany();
   await prisma.changeOrder.deleteMany();
   await prisma.quote.deleteMany();

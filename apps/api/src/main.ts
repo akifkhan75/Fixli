@@ -64,7 +64,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.PORT || 3002;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   Logger.log(`Fixli API listening on :${port}${isProd ? '' : ` (docs at /docs)`}`, 'Bootstrap');
 }
 

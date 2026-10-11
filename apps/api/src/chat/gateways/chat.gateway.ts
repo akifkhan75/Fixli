@@ -20,12 +20,6 @@ import { RealtimeService } from '../../realtime/realtime.service';
 import { LiveLocationService } from '../../tracking/live-location.service';
 import { FEED_PERMISSIONS, hasPermission } from '../../common/auth/permissions';
 
-class SendMessagePayload {
-  @IsString() @IsNotEmpty() @MaxLength(64) threadId: string;
-  @IsOptional() @IsString() @MaxLength(4000) text?: string;
-  @IsOptional() @IsString() @MaxLength(64) imageUploadId?: string;
-  @IsOptional() @IsString() @MaxLength(128) clientId?: string;
-}
 class ThreadPayload {
   @IsString() @IsNotEmpty() @MaxLength(64) threadId: string;
 }
@@ -110,43 +104,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayInit {
     }
   }
 
-  @SubscribeMessage('sendMessage')
-  async handleMessage(@ConnectedSocket() client: AuthedSocket, @MessageBody() raw: unknown) {
-    const data = parse(SendMessagePayload, raw);
-    if (!data || !client.data.userId) return { error: 'INVALID' };
-
-    const message = await this.chatService.sendMessage(client.data.userId, data);
-    
-    // Find conversation participants
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: data.threadId },
-      include: { participants: { select: { id: true } } }
-    });
-
-    if (conversation) {
-      for (const p of conversation.participants) {
-        if (p.id !== client.data.userId) {
-          this.server.to(`user:${p.id}`).emit('message.created', message);
-        }
-      }
-    }
-
-    client.emit('message.created', message);
-    return message;
-  }
-
+  /** Typing over the socket too (cheaper than REST); same throttle. Messages are sent over REST. */
   @SubscribeMessage('typing')
   async handleTyping(@ConnectedSocket() client: AuthedSocket, @MessageBody() raw: unknown) {
     const data = parse(ThreadPayload, raw);
     if (!data || !client.data.userId) return;
-    const conversation = await this.prisma.conversation.findFirst({
-      where: { id: data.threadId, participants: { some: { id: client.data.userId } } },
-      include: { participants: { select: { id: true } } }
-    });
-    if (conversation) {
-      const other = conversation.participants.find((p) => p.id !== client.data.userId);
-      if (other) this.server.to(`user:${other.id}`).emit('typing', { threadId: data.threadId, userId: client.data.userId });
-    }
+    await this.chatService.typing(client.data.userId, data.threadId);
   }
 
   @SubscribeMessage('locationUpdate')

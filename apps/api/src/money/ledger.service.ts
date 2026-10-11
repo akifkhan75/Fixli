@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
@@ -69,7 +70,7 @@ export class LedgerService {
 
   /** Tell the worker why new work stopped (after the transaction that paused them commits). */
   notifyPaused(workerId: string, key: string) {
-    return this.notifications.notify({ type: 'balance.paused', userIds: [workerId], eventKey: `balance.paused:${key}`, params: {}, data: { url: '/(worker)/earnings' } });
+    return this.notifications.notify({ type: 'balance.paused', userIds: [workerId], eventKey: `balance.paused:${key}`, params: {}, data: { url: routes.workerEarnings() } });
   }
 
   /** Daily-ish: workers who have owed for too long get paused (the hard limit applies at once). */

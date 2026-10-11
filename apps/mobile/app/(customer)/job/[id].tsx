@@ -23,6 +23,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { useAppDispatch, useAppSelector } from '../../../src/hooks/useRedux';
 import { useWorkerLiveLocation } from '../../../src/hooks/useWorkerLiveLocation';
 import { CallButton } from '../../../src/components/ds/CallButton';
+import { MessageButton } from '../../../src/components/ds/MessageButton';
 import { formatMoney } from '../../../src/utils/money';
 import { CANCEL_REASON_LABEL, formatWindow, statusSentence, toPhase } from '../../../src/utils/jobStatus';
 import { humanize, localizedName } from '../../../src/utils/catalog';
@@ -182,6 +183,7 @@ export default function CustomerJobScreen() {
           {!live ? <Text variant="bodySmall" color={theme.colors.textTertiary} style={{ marginTop: 6 }}>Waiting for their location…</Text> : null}
         </View>
       ) : null}
+      {worker && ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? <MessageButton jobId={job.id} label="Message the professional" /> : null}
       {worker && ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? <CallButton jobId={job.id} label="Call the professional" /> : null}
 
       {cancelling ? (
