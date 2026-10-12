@@ -93,18 +93,7 @@ export class AdminService {
     }));
   }
 
-  async cancelJob(id: string, adminId: string, reason: string) {
-    // F6 routes this through the job state machine; until then refuse finished jobs and unknown ids.
-    const job = await this.prisma.jobRequest.findUnique({ where: { id }, select: { status: true } });
-    if (!job) throw new NotFoundException('Job not found');
-    if (job.status === 'COMPLETED' || job.status === 'CANCELLED') {
-      throw new BadRequestException({ code: 'JOB_CLOSED', message: 'This job is already finished.' });
-    }
-    const updated = await this.prisma.jobRequest.update({ where: { id }, data: { status: 'CANCELLED', cancelledById: adminId, cancelReason: 'OTHER' } });
-    await this.prisma.jobEvent.create({ data: { jobRequestId: id, actorId: adminId, type: 'CANCELLED', fromStatus: job.status, toStatus: 'CANCELLED', payload: { by: 'admin', reason } } });
-    await this.audit.record({ actorId: adminId, action: 'job.cancelled', entityType: 'JobRequest', entityId: id, before: { status: job.status }, after: { status: 'CANCELLED', reason } });
-    return updated;
-  }
+
 
   // Audits
   async getAuditLogs(skip = 0, take = 100) {
@@ -173,7 +162,7 @@ export class AdminService {
   async resetTwoFactor(id: string, adminId: string, reason: string) {
     const staff = await this.prisma.user.findFirst({ where: { id, type: 'admin' }, select: { id: true } });
     if (!staff) throw new NotFoundException('Staff member not found');
-    await this.prisma.user.update({ where: { id }, data: { totpSecret: null, totpEnabledAt: null, totpRecoveryHashes: [] } });
+    await this.prisma.user.update({ where: { id }, data: { totpSecret: null, totpEnabledAt: null, totpRecoveryHashes: [], totpLastStep: null } });
     await this.sessions.revokeAllExcept(id);
     await this.audit.record({ actorId: adminId, action: 'staff.2fa_reset', entityType: 'User', entityId: id, after: { reason } });
     return { id, twoFactor: 'reset' };

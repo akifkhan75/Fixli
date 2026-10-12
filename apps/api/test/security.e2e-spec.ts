@@ -302,7 +302,10 @@ describe('Security (doc 27 F1, e2e)', () => {
     it('afterwards the password alone is not enough; password + code works', async () => {
       expect((await login().expect(401)).body.error.code).toBe('TOTP_REQUIRED');
       expect((await login({ code: '123456' }).expect(401)).body.error.code).toBe('INVALID_CODE');
-      await login({ code: totp(secret) }).expect(200);
+      // The code used for enrolment can't be replayed; the next one (still inside the ±30 s window) works.
+      expect((await login({ code: totp(secret) }).expect(401)).body.error.code).toBe('CODE_ALREADY_USED');
+      await login({ code: totp(secret, Date.now() + 30_000) }).expect(200);
+      expect((await login({ code: totp(secret, Date.now() + 30_000) }).expect(401)).body.error.code).toBe('CODE_ALREADY_USED');
     });
 
     it('a recovery code works exactly once', async () => {

@@ -1,8 +1,17 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CUSTOMER_REVIEW_TAGS, WORKER_REVIEW_TAGS } from './dto/review.dto';
 import { PrismaService } from '../database/prisma.service';
 import { JobAccessService } from '../common/access/job-access.service';
 import { CreateReviewDto } from './dto/review.dto';
+
+const ABUSE = /\b(idiot|stupid|chor|thief|liar|kutta|kutti|bastard|harami|fraud)\b/i;
+/** Auto-moderation: a 1-star review with no real explanation, or abusive words, gets a moderator's look. */
+export function needsLook(rating: number, comment?: string | null): boolean {
+  const c = comment?.trim() ?? '';
+  return ABUSE.test(c) || (rating === 1 && c.length < 10);
+}
+
+export const REVIEW_REPORT_REASONS = ['ABUSIVE', 'FALSE', 'PERSONAL_INFO', 'NOT_ABOUT_THE_JOB', 'OTHER'] as const;
 
 @Injectable()
 export class ReviewsService {
@@ -42,6 +51,7 @@ export class ReviewsService {
           rating: dto.rating,
           comment: dto.comment,
           tags: dto.tags ?? [],
+          flagged: needsLook(dto.rating, dto.comment),
         },
       });
 
@@ -72,5 +82,16 @@ export class ReviewsService {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+  }
+
+  /** "This review is unfair/abusive": into the moderation queue (one report per person). */
+  async report(reviewId: string, reporterId: string, reason: (typeof REVIEW_REPORT_REASONS)[number]) {
+    const r = await this.prisma.review.findFirst({ where: { id: reviewId, status: 'PUBLISHED' }, select: { id: true } });
+    if (!r) throw new NotFoundException('Review not found');
+    await this.prisma.reviewReport.upsert({
+      where: { reviewId_reporterId: { reviewId, reporterId } },
+      create: { reviewId, reporterId, reason }, update: { reason },
+    });
+    return { success: true };
   }
 }

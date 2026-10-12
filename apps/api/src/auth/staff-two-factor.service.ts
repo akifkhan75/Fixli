@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { SecretBox } from '../common/auth/secret-box';
-import { generateRecoveryCodes, generateSecret, hashRecoveryCode, otpauthUrl, verifyTotp } from '../common/auth/totp';
+import { generateRecoveryCodes, generateSecret, hashRecoveryCode, matchTotpStep, otpauthUrl } from '../common/auth/totp';
 
 export const STAFF_SECURITY = Symbol('STAFF_SECURITY');
 export interface StaffSecurity {
@@ -34,7 +34,7 @@ export class StaffTwoFactorService {
   async check(userId: string, code?: string) {
     const u = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { totpSecret: true, totpEnabledAt: true, totpRecoveryHashes: true, failedLoginAttempts: true },
+      select: { totpSecret: true, totpEnabledAt: true, totpRecoveryHashes: true, failedLoginAttempts: true, totpLastStep: true },
     });
 
     if (!u.totpEnabledAt || !u.totpSecret) {
@@ -52,7 +52,16 @@ export class StaffTwoFactorService {
     }
 
     const c = code.trim();
-    if (/^\d{6}$/.test(c) && verifyTotp(this.security.box.open(u.totpSecret), c)) return;
+    const step = /^\d{6}$/.test(c) ? matchTotpStep(this.security.box.open(u.totpSecret), c) : null;
+    if (step !== null) {
+      // Each code works once: a code seen by someone over the shoulder can't be replayed.
+      const fresh = await this.prisma.user.updateMany({
+        where: { id: userId, OR: [{ totpLastStep: null }, { totpLastStep: { lt: step } }] },
+        data: { totpLastStep: step },
+      });
+      if (fresh.count === 1) return;
+      throw new UnauthorizedException({ code: 'CODE_ALREADY_USED', message: 'That code was already used. Wait for the next one.' });
+    }
 
     const hash = hashRecoveryCode(c);
     if (u.totpRecoveryHashes.includes(hash)) {
@@ -103,13 +112,14 @@ export class StaffTwoFactorService {
   /** Step 2: the first code proves the app is set up; recovery codes are shown once. */
   async activate(setupToken: string, code: string): Promise<{ userId: string; recoveryCodes: string[] }> {
     const user = await this.userFromSetupToken(setupToken);
-    if (!user.totpSecret || !verifyTotp(this.security.box.open(user.totpSecret), code)) {
+    const step = user.totpSecret ? matchTotpStep(this.security.box.open(user.totpSecret), code) : null;
+    if (step === null) {
       throw new UnauthorizedException({ code: 'INVALID_CODE', message: 'That code is not right. Scan the QR code again and enter the new code.' });
     }
     const { codes, hashes } = generateRecoveryCodes();
     const done = await this.prisma.user.updateMany({
       where: { id: user.id, totpEnabledAt: null },
-      data: { totpEnabledAt: new Date(), totpRecoveryHashes: hashes },
+      data: { totpEnabledAt: new Date(), totpRecoveryHashes: hashes, totpLastStep: step },
     });
     if (done.count !== 1) throw new ForbiddenException({ code: 'TOTP_ALREADY_SET', message: 'An authenticator is already set up.' });
     await this.audit.record({ actorId: user.id, action: 'auth.2fa_enabled', entityType: 'User', entityId: user.id });

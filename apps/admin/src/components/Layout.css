@@ -215,3 +215,12 @@
   padding: 2rem;
   overflow-y: auto;
 }
+
+.nav-count { margin-left: auto; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--danger, #ef4444); color: #fff; font-size: .75rem; font-weight: 700; text-align: center; }
+.live-dot { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--text-muted); }
+.live-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--warning, #f59e0b); }
+.live-dot.on::before { background: var(--success, #22c55e); }
+.toast-stack { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; max-width: min(360px, calc(100vw - 32px)); }
+.toast { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 12px; }
+.toast-link { flex: 1; text-align: left; background: none; border: 0; color: var(--text-primary); font: inherit; cursor: pointer; }
+.toast-close { background: none; border: 0; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; }

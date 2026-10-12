@@ -51,3 +51,15 @@ describe('SecretBox', () => {
     expect(() => new SecretBox(Buffer.alloc(16).toString('base64'), 'x')).toThrow();
   });
 });
+
+import { matchTotpStep } from './totp';
+describe('TOTP replay protection support', () => {
+  it('returns the matched time step, so the same code can be refused the second time', () => {
+    const s = base32Encode(Buffer.from('12345678901234567890'));
+    const now = 1_700_000_000_000;
+    const step = Math.floor(now / 30_000);
+    expect(matchTotpStep(s, totp(s, now), now)).toBe(step);
+    expect(matchTotpStep(s, totp(s, now - 30_000), now)).toBe(step - 1);
+    expect(matchTotpStep(s, '000000', now)).toBeNull();
+  });
+});

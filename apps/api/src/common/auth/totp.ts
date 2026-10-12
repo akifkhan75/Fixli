@@ -49,10 +49,16 @@ export function totp(secretB32: string, at = Date.now(), digits = 6): string {
 
 /** Accepts the current code or one step either side (clock drift). Constant-time compare. */
 export function verifyTotp(secretB32: string, code: string, at = Date.now()): boolean {
-  if (!/^\d{6}$/.test(code)) return false;
+  return matchTotpStep(secretB32, code, at) !== null;
+}
+
+/** The time step the code belongs to (for replay protection), or null if it doesn't match. */
+export function matchTotpStep(secretB32: string, code: string, at = Date.now()): number | null {
+  if (!/^\d{6}$/.test(code)) return null;
   const key = base32Decode(secretB32);
   const step = Math.floor(at / 1000 / 30);
-  return [-1, 0, 1].some((d) => timingSafeEqual(Buffer.from(hotp(key, step + d)), Buffer.from(code)));
+  for (const d of [-1, 0, 1]) if (timingSafeEqual(Buffer.from(hotp(key, step + d)), Buffer.from(code))) return step + d;
+  return null;
 }
 
 export function otpauthUrl(secretB32: string, account: string, issuer = 'Fixli Staff'): string {

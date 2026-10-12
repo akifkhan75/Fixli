@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/c
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminVerificationService } from './admin-verification.service';
 import { AdminService } from './admin.service';
+import { AdminConsoleService } from './admin-console.service';
 import {
   ActionReasonDto, IncidentQueryDto, JobListQueryDto, PageQueryDto, SetRolesDto, UserSearchDto,
   VerificationDecisionDto, VerificationQueryDto,
@@ -25,6 +26,7 @@ export class AdminController {
   constructor(
     private readonly verification: AdminVerificationService,
     private readonly adminService: AdminService,
+    private readonly console: AdminConsoleService,
   ) {}
 
   @Get('stats')
@@ -74,7 +76,7 @@ export class AdminController {
   @RequirePermission('users.suspend')
   @ApiOperation({ summary: 'Suspend a user' })
   suspendUser(@Param('id') id: string, @CurrentUser('id') adminId: string, @Body() dto: ActionReasonDto) {
-    return this.adminService.suspendUser(id, adminId, dto.reason);
+    return this.console.suspendUser(id, adminId, dto.reason);
   }
 
   // --- Jobs ---
@@ -89,7 +91,7 @@ export class AdminController {
   @RequirePermission('jobs.cancel')
   @ApiOperation({ summary: 'Cancel a job' })
   cancelJob(@Param('id') id: string, @CurrentUser('id') adminId: string, @Body() dto: ActionReasonDto) {
-    return this.adminService.cancelJob(id, adminId, dto.reason);
+    return this.console.cancelJob(id, adminId, dto.reason);
   }
 
   // --- Safety ---

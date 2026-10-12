@@ -38,7 +38,8 @@ export type NotificationType =
   | 'dispute.opened'
   | 'dispute.updated'
   | 'job.sos_request'
-  | 'sos.searching_wider';
+  | 'sos.searching_wider'
+  | 'job.reassigned';
 
 type Locale = 'en' | 'ur' | 'ar';
 export type Money = { minor: number; currency: string };
@@ -46,6 +47,7 @@ type P = Record<string, string | number | Money | undefined>;
 type T = (p: P) => { title: string; body: string };
 
 const en: Record<NotificationType, T> = {
+  'job.reassigned': (p) => ({ title: 'Finding you another professional', body: `${p.worker} can no longer do "${p.title}". We're asking others near you now.` }),
   'job.sos_request': (p) => ({ title: 'Emergency near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. Can you go now? Answer within ${p.minutes} minutes.` }),
   'sos.searching_wider': (p) => ({ title: 'Still finding help', body: `Nobody nearby could come straight away. We sent "${p.title}" to more professionals; prices will arrive shortly.` }),
   'payment.cash_marked': (p) => ({ title: 'Did you pay in cash?', body: `The professional says you paid ${p.price} for "${p.title}". Confirm, or tell us if that's wrong.` }),
@@ -83,6 +85,7 @@ const en: Record<NotificationType, T> = {
 };
 
 const ur: Record<NotificationType, T> = {
+  'job.reassigned': (p) => ({ title: 'آپ کے لیے دوسرا ماہر', body: `${p.worker} اب "${p.title}" نہیں کر سکتے۔ ہم قریب کے دوسرے ماہرین سے پوچھ رہے ہیں۔` }),
   'job.sos_request': (p) => ({ title: 'آپ کے قریب ایمرجنسی', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ کیا آپ ابھی جا سکتے ہیں؟ ${p.minutes} منٹ میں جواب دیں۔` }),
   'sos.searching_wider': (p) => ({ title: 'مدد تلاش کی جا رہی ہے', body: `قریب کوئی فوراً نہیں آ سکا۔ ہم نے "${p.title}" مزید ماہرین کو بھیج دیا ہے؛ جلد قیمتیں آئیں گی۔` }),
   'payment.cash_marked': (p) => ({ title: 'کیا آپ نے نقد ادائیگی کی؟', body: `ماہر کے مطابق آپ نے "${p.title}" کے لیے ${p.price} ادا کیے۔ تصدیق کریں یا غلط ہو تو بتائیں۔` }),
@@ -120,6 +123,7 @@ const ur: Record<NotificationType, T> = {
 };
 
 const ar: Record<NotificationType, T> = {
+  'job.reassigned': (p) => ({ title: 'نبحث لك عن محترف آخر', body: `لم يعد بإمكان ${p.worker} تنفيذ "${p.title}". نسأل محترفين آخرين بالقرب منك.` }),
   'job.sos_request': (p) => ({ title: 'حالة طارئة بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. هل يمكنك الذهاب الآن؟ أجب خلال ${p.minutes} دقائق.` }),
   'sos.searching_wider': (p) => ({ title: 'ما زلنا نبحث عن مساعدة', body: `لم يتمكن أحد قريب من الحضور فوراً. أرسلنا "${p.title}" إلى محترفين آخرين؛ ستصل الأسعار قريباً.` }),
   'payment.cash_marked': (p) => ({ title: 'هل دفعت نقداً؟', body: `يقول المحترف إنك دفعت ${p.price} مقابل "${p.title}". أكّد أو أخبرنا إن كان ذلك خطأ.` }),

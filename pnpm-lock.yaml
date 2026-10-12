@@ -37,6 +37,9 @@ importers:
       react-router-dom:
         specifier: ^7.18.4
         version: 7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      socket.io-client:
+        specifier: ^4.7.0
+        version: 4.8.4
     devDependencies:
       '@types/node':
         specifier: ^24.13.3

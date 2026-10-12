@@ -17,6 +17,7 @@ import { AuditService } from '../common/audit/audit.service';
 import { LiveLocationService } from '../tracking/live-location.service';
 import { BlocksService } from '../blocks/blocks.service';
 import { DomainEvents } from '../common/events/domain-events';
+import { FeatureFlagsService } from '../common/flags/feature-flags.service';
 import { systemMessage, SystemMessageKey } from '../chat/system-messages';
 import { StaffAccessService } from '../common/access/staff-access.service';
 import { NotificationType } from '../notifications/templates';
@@ -83,6 +84,7 @@ export class JobsService {
     private readonly location: LiveLocationService,
     private readonly blocks: BlocksService,
     private readonly events: DomainEvents,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   private readonly logger = new Logger(JobsService.name);
@@ -334,7 +336,7 @@ export class JobsService {
 
   async start(id: string, user: AuthUser, dto: JobStepPhotosDto = {}) {
     if (user.type !== 'worker') throw new ForbiddenException('Only the assigned worker can do this');
-    this.requirePhotoOrReason(dto, 'before');
+    await this.requirePhotoOrReason(dto, 'before');
     return this.transition(id, user, 'IN_PROGRESS', {
       onlyIf: { assignedWorkerId: user.id },
       event: { type: 'WORK_STARTED', payload: dto.photoSkipReason ? { photoSkipped: dto.photoSkipReason } : undefined },
@@ -344,7 +346,7 @@ export class JobsService {
 
   async finish(id: string, user: AuthUser, dto: JobStepPhotosDto = {}) {
     if (user.type !== 'worker') throw new ForbiddenException('Only the assigned worker can do this');
-    this.requirePhotoOrReason(dto, 'after');
+    await this.requirePhotoOrReason(dto, 'after');
     return this.transition(id, user, 'AWAITING_CONFIRMATION', {
       onlyIf: { assignedWorkerId: user.id },
       data: { finishedAt: new Date() },
@@ -354,8 +356,8 @@ export class JobsService {
   }
 
   /** Evidence protects both sides (doc 22): a photo, or a stated reason why there isn't one. */
-  private requirePhotoOrReason(dto: JobStepPhotosDto, which: 'before' | 'after') {
-    if (this.config.get('REQUIRE_JOB_PHOTOS') === false) return;
+  private async requirePhotoOrReason(dto: JobStepPhotosDto, which: 'before' | 'after') {
+    if ((await this.flags.get<boolean>('REQUIRE_JOB_PHOTOS')) === false) return;
     if (dto.photoUploadIds?.length || dto.photoSkipReason) return;
     throw new BadRequestException({
       code: 'PHOTO_REQUIRED',
@@ -464,6 +466,53 @@ export class JobsService {
       data: { cancelReason: dto.reason ?? 'OTHER', cancelledById: user.id },
       event: { type: 'CANCELLED', payload: { reason: dto.reason ?? 'OTHER', note: dto.note?.trim() || undefined, by: user.type } },
     });
+  }
+
+  /**
+   * Staff: the booked worker can't or won't come. The job goes back to open, the worker is told,
+   * and matching runs again (the previous worker isn't asked again).
+   */
+  async reassign(id: string, admin: AuthUser, reason: string) {
+    await this.staff.assert(admin, 'jobs.manage');
+    const out = await this.transition(id, admin, 'MATCHES_FOUND', {
+      onlyIf: {},
+      data: { assignedWorkerId: null, acceptedOfferId: null, bookedAt: null, agreedAmount: null, agreedCurrency: null },
+      event: { type: 'REASSIGNED', payload: { reason, by: 'admin' } },
+    });
+    await this.prisma.offer.updateMany({ where: { jobRequestId: id, status: 'ACCEPTED' }, data: { status: 'WITHDRAWN' } });
+    await this.matching.matchJob(id, 1).catch((e) => this.logger.error(`Re-matching ${id} failed: ${(e as Error).message}`));
+    return out;
+  }
+
+  /**
+   * After an account is suspended: its open requests are cancelled and its pending prices
+   * withdrawn. Live bookings are not touched (a worker may be at someone's home) but get a
+   * timeline note and are returned so Ops can call both sides.
+   */
+  async releaseSuspended(userId: string, staff: AuthUser) {
+    const open = await this.prisma.jobRequest.findMany({ where: { customerId: userId, status: { in: ['CREATED', 'MATCHES_FOUND', 'AWAITING_WORKER'] } }, select: { id: true } });
+    const cancelled: string[] = [];
+    for (const j of open) {
+      try {
+        await this.transition(j.id, staff, 'CANCELLED', {
+          onlyIf: {},
+          data: { cancelReason: 'OTHER', cancelledById: staff.id },
+          event: { type: 'CANCELLED', payload: { reason: 'OTHER', note: 'Account suspended', by: 'admin' } },
+        });
+        cancelled.push(j.id);
+      } catch (e) {
+        this.logger.warn(`Could not cancel ${j.id} after suspension: ${(e as Error).message}`);
+      }
+    }
+    const withdrawn = await this.prisma.offer.updateMany({ where: { workerId: userId, status: 'PENDING' }, data: { status: 'WITHDRAWN' } });
+    const activeBookings = await this.prisma.jobRequest.findMany({
+      where: { status: { in: BUSY_STATUSES }, OR: [{ customerId: userId }, { assignedWorkerId: userId }] },
+      select: { id: true, status: true, title: true },
+    });
+    if (activeBookings.length) {
+      await this.prisma.jobEvent.createMany({ data: activeBookings.map((j) => ({ jobRequestId: j.id, type: 'PARTY_SUSPENDED', payload: { userId, by: staff.id } })) });
+    }
+    return { cancelled, offersWithdrawn: withdrawn.count, activeBookings };
   }
 
   private async workerTransition(id: string, user: AuthUser, to: JobStatus, eventType: string) {
@@ -579,6 +628,15 @@ export class JobsService {
         await toCustomer('job.auto_confirmed', await workerName(job.workerId));
         return;
       case 'WORKER_DECLINED': return void (await toCustomer('job.declined', await workerName(job.previousWorkerId)));
+      case 'REASSIGNED':
+        await toCustomer('job.reassigned', await workerName(job.previousWorkerId));
+        if (job.previousWorkerId) {
+          await this.notifications.notify({
+            type: 'job.cancelled', userIds: [job.previousWorkerId], eventKey: `job.cancelled:${eventId}`, params: { title },
+            data: { url: routes.workerJobs(), jobId: job.id },
+          });
+        }
+        return;
       case 'CANCELLED': {
         // Whoever didn't cancel hears about it.
         const others = [job.customerId, job.workerId].filter((u): u is string => !!u && u !== actor.id);

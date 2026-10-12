@@ -121,6 +121,8 @@ model User {
   totpEnabledAt       DateTime?
   /// sha256 of unused one-time recovery codes.
   totpRecoveryHashes  String[]
+  /// Last accepted authenticator time step: a code can't be used twice (replay protection).
+  totpLastStep        Int?
 
   worker          Worker?
   addresses       Address[]
@@ -187,6 +189,7 @@ model ServiceCategory {
   workers       WorkerService[]
   packages      ServicePackage[]
   subscriptions SubscriptionPlan[]
+  priceBands    PriceBand[]
   jobs          JobRequest[]
 }
 
@@ -530,19 +533,22 @@ model ChangeOrder {
 }
 
 model Review {
-  id           String     @id @default(cuid())
+  id           String         @id @default(cuid())
   jobRequestId String
-  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id])
+  jobRequest   JobRequest     @relation(fields: [jobRequestId], references: [id])
   reviewerId   String
-  reviewer     User       @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewer     User           @relation("ReviewsGiven", fields: [reviewerId], references: [id])
   targetId     String
-  target       User       @relation("ReviewsReceived", fields: [targetId], references: [id])
-  revieweeRole String     @default("worker")
+  target       User           @relation("ReviewsReceived", fields: [targetId], references: [id])
+  revieweeRole String         @default("worker")
   rating       Int
   comment      String?
   tags         String[]
-  status       String     @default("PUBLISHED")
-  createdAt    DateTime   @default(now())
+  status       String         @default("PUBLISHED")
+  /// Needs a moderator's look (auto rules or a report). Hidden reviews have status HIDDEN.
+  flagged      Boolean        @default(false)
+  reports      ReviewReport[]
+  createdAt    DateTime       @default(now())
 
   @@unique([jobRequestId, reviewerId])
   @@index([targetId])
@@ -697,12 +703,12 @@ model Block {
 }
 
 model Incident {
-  id                  String      @id @default(cuid())
+  id                  String         @id @default(cuid())
   reporterId          String
-  reporter            User        @relation("IncidentsReported", fields: [reporterId], references: [id])
+  reporter            User           @relation("IncidentsReported", fields: [reporterId], references: [id])
   targetId            String?
   jobRequestId        String?
-  jobRequest          JobRequest? @relation(fields: [jobRequestId], references: [id])
+  jobRequest          JobRequest?    @relation(fields: [jobRequestId], references: [id])
   type                String // SOS, REPORT_PROBLEM, REPORT_USER
   severity            String // LIFE_THREATENING, PROPERTY_DAMAGE, MODERATE
   /// SOS kind: LIFE_THREATENING, WATER, ELECTRIC, GAS, IN_JOB
@@ -710,12 +716,13 @@ model Incident {
   description         String?
   /// Trusted-contact alert outcome: SENT, PARTLY_SENT, NO_PROVIDER, NO_CONTACTS, FAILED (null = not an alerting incident)
   contactsAlertStatus String?
-  contactsAlerted     Int         @default(0)
+  contactsAlerted     Int            @default(0)
   /// "sos:<userId>:<client key>": a double tap or a retry returns the same emergency.
-  idempotencyKey      String?     @unique
-  status              String      @default("OPEN") // OPEN, INVESTIGATING, RESOLVED
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  idempotencyKey      String?        @unique
+  status              String         @default("OPEN") // OPEN, INVESTIGATING, RESOLVED
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  notes               IncidentNote[]
 }
 
 model TrustedContact {
@@ -989,4 +996,66 @@ model SosDispatch {
   updatedAt       DateTime   @updatedAt
 
   @@index([status, expiresAt])
+}
+
+/// "This review is unfair / abusive": puts it in the moderation queue.
+model ReviewReport {
+  id         String   @id @default(cuid())
+  reviewId   String
+  review     Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporterId String
+  reason     String
+  createdAt  DateTime @default(now())
+
+  @@unique([reviewId, reporterId])
+}
+
+/// Staff notes on a safety incident (who did what, when).
+model IncidentNote {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  authorId   String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@index([incidentId, createdAt])
+}
+
+/// Typical price range per service per city (O1). Edited by staff; shown in the app only once approved.
+model PriceBand {
+  id          String          @id @default(cuid())
+  categoryId  String
+  category    ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  issueCode   String?
+  city        String
+  currency    String
+  minMinor    Int
+  maxMinor    Int
+  approved    Boolean         @default(false)
+  updatedById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([categoryId, issueCode, city])
+}
+
+/// Every saved version of a country's settings (money rules, limits, rails, emergency numbers).
+model CountryConfigVersion {
+  id          String   @id @default(cuid())
+  countryCode String
+  version     Int
+  data        Json
+  editedById  String?
+  createdAt   DateTime @default(now())
+
+  @@unique([countryCode, version])
+}
+
+/// Runtime switches staff can change without a release (audited).
+model FeatureFlag {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }

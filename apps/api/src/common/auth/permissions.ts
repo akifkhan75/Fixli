@@ -21,7 +21,13 @@ export type Permission =
   | 'pii.view'
   | 'jobs.read'
   | 'jobs.cancel'
+  /** Take a job back from a worker who didn't come, and find someone else. */
+  | 'jobs.manage'
+  /** Read a job's chat (audited). */
+  | 'chat.read'
   | 'safety.read'
+  /** Change an incident's status, add notes. */
+  | 'safety.manage'
   | 'disputes.read'
   | 'disputes.resolve'
   | 'finance.read'
@@ -32,21 +38,37 @@ export type Permission =
   | 'catalog.read'
   | 'catalog.edit'
   | 'config.read'
+  /** Country settings and feature flags (versioned, audited). */
+  | 'config.edit'
   | 'reviews.moderate'
   | 'recurring.manage'
   | 'audit.read'
   | 'staff.manage';
 
+export const ALL_PERMISSIONS: Permission[] = [
+  'dashboard.view', 'verification.read', 'verification.decide', 'documents.view', 'users.read', 'users.suspend', 'pii.view',
+  'jobs.read', 'jobs.cancel', 'jobs.manage', 'chat.read', 'safety.read', 'safety.manage', 'disputes.read', 'disputes.resolve',
+  'finance.read', 'finance.settle', 'finance.adjust', 'catalog.read', 'catalog.edit', 'config.read', 'config.edit',
+  'reviews.moderate', 'recurring.manage', 'audit.read', 'staff.manage',
+];
+
 const ROLE_PERMISSIONS: Record<Exclude<AdminRole, 'Super Admin'>, Permission[]> = {
-  Operations: ['dashboard.view', 'verification.read', 'users.read', 'users.suspend', 'pii.view', 'jobs.read', 'jobs.cancel', 'safety.read', 'disputes.read', 'disputes.resolve', 'catalog.read', 'config.read', 'reviews.moderate', 'recurring.manage'],
+  Operations: ['dashboard.view', 'verification.read', 'users.read', 'users.suspend', 'pii.view', 'jobs.read', 'jobs.cancel', 'jobs.manage', 'chat.read', 'safety.read', 'safety.manage', 'disputes.read', 'disputes.resolve', 'catalog.read', 'config.read', 'reviews.moderate', 'recurring.manage'],
   Verification: ['dashboard.view', 'verification.read', 'verification.decide', 'documents.view'],
-  Support: ['dashboard.view', 'users.read', 'pii.view', 'jobs.read', 'jobs.cancel', 'disputes.read'],
-  Safety: ['dashboard.view', 'safety.read', 'users.read', 'users.suspend', 'pii.view', 'jobs.read', 'reviews.moderate'],
-  Finance: ['dashboard.view', 'finance.read', 'finance.settle', 'finance.adjust', 'disputes.read', 'disputes.resolve'],
-  Content: ['dashboard.view', 'catalog.read', 'catalog.edit', 'reviews.moderate'],
+  Support: ['dashboard.view', 'users.read', 'pii.view', 'jobs.read', 'jobs.cancel', 'jobs.manage', 'chat.read', 'disputes.read'],
+  Safety: ['dashboard.view', 'safety.read', 'safety.manage', 'chat.read', 'users.read', 'users.suspend', 'pii.view', 'jobs.read', 'reviews.moderate'],
+  Finance: ['dashboard.view', 'finance.read', 'finance.settle', 'finance.adjust', 'disputes.read', 'disputes.resolve', 'chat.read', 'config.read'],
+  Content: ['dashboard.view', 'catalog.read', 'catalog.edit', 'reviews.moderate', 'config.read'],
   Analytics: ['dashboard.view', 'jobs.read'],
   Auditor: ['dashboard.view', 'audit.read'],
 };
+
+/** Everything a set of roles may do (for the portal's menu). */
+export function permissionsFor(roles: readonly string[] | null | undefined): Permission[] {
+  if (!roles?.length) return [];
+  if (roles.includes('Super Admin')) return ALL_PERMISSIONS;
+  return [...new Set(roles.flatMap((r) => (isAdminRole(r) && r !== 'Super Admin' ? ROLE_PERMISSIONS[r] : [])))];
+}
 
 export function isAdminRole(r: string): r is AdminRole {
   return (ADMIN_ROLES as readonly string[]).includes(r);

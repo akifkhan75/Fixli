@@ -41,18 +41,22 @@ export const JOB_TRANSITIONS: Record<JobStatus, Rule[]> = {
     { to: 'CANCELLED', actors: ['customer', 'admin'] },
   ],
   ACCEPTED: [
+    // Staff take it back from a worker who won't come, and look for someone else.
+    { to: 'MATCHES_FOUND', actors: ['admin'] },
     { to: 'EN_ROUTE', actors: ['worker'] },
     { to: 'ARRIVED', actors: ['worker'] }, // forgot to tap "on my way"
     { to: 'IN_PROGRESS', actors: ['worker'] }, // forgot both
     { to: 'CANCELLED', actors: ['customer', 'worker', 'admin'] },
   ],
   EN_ROUTE: [
+    { to: 'MATCHES_FOUND', actors: ['admin'] },
     { to: 'ARRIVED', actors: ['worker'] },
     { to: 'IN_PROGRESS', actors: ['worker'] },
     // A customer may still cancel; it is recorded as a late cancellation.
     { to: 'CANCELLED', actors: ['customer', 'worker', 'admin'] },
   ],
   ARRIVED: [
+    { to: 'MATCHES_FOUND', actors: ['admin'] },
     { to: 'IN_PROGRESS', actors: ['worker'] },
     { to: 'CANCELLED', actors: ['customer', 'worker', 'admin'] },
   ],
