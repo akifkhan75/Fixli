@@ -16,4 +16,4 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           extra_args: --only-verified
-# Maestro end-to-end runs on an emulator in F8 (doc 27); no placeholder job until then.
+# Phone and browser end-to-end tests live in e2e-admin.yml and e2e-mobile.yml; load tests in load.yml.

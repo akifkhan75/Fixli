@@ -225,6 +225,7 @@ export function ChatThreadScreen() {
           <Ionicons name={photo.busy ? 'hourglass-outline' : 'image-outline'} size={26} color={theme.colors.textSecondary} />
         </TouchableOpacity>
         <RNTextInput
+          testID="chat-input"
           value={text} onChangeText={onType} placeholder={t('chatThreadScreen.typeAMessage')} placeholderTextColor={theme.colors.textTertiary} multiline maxLength={4000}
           accessibilityLabel={t('chatThreadScreen.message')}
           style={{ flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, backgroundColor: theme.colors.surface, color: theme.colors.textPrimary, writingDirection: 'auto' as any }}

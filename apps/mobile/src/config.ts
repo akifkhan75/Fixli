@@ -23,6 +23,9 @@ function resolveApiUrl(): string {
   return envApiUrl;
 }
 
+/** The website that hosts the legal pages (privacy, terms, how to delete your account). */
+export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL ?? 'https://fixli.pk').replace(/\/+$/, '');
+
 export const API_URL = resolveApiUrl().replace(/\/+$/, '');
 // Socket.IO lives on the server origin, not under the /api prefix.
 export const SOCKET_URL = API_URL.replace(/\/api(\/v\d+)?$/, '');

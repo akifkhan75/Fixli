@@ -13,6 +13,7 @@ export class SosSweeper implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (this.config.get('RUN_BACKGROUND_JOBS') === true) {
+      this.lease.expect('sos', 15_000);
       this.timer = setInterval(() => void this.sweep().catch((e) => this.logger.error(e)), 15_000);
     }
   }

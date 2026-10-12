@@ -752,4 +752,7 @@ export const en: Record<string, string> = {
   "error.WORKER_BUSY": "This professional was just booked for that time. Please choose another price.",
   "error.WORKER_NOT_ACTIVE": "Your account must be approved first.",
   "error.WRONG_PASSWORD": "That password is not right.",
+  "legal.title": "Legal",
+  "legal.privacy": "Privacy policy",
+  "legal.terms": "Terms of service",
 };

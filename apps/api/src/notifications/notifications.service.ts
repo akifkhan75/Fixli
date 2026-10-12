@@ -44,19 +44,19 @@ export class NotificationService {
     if (!userIds.length) return 0;
     const users = await this.prisma.user.findMany({ where: { id: { in: userIds }, status: 'ACTIVE' }, select: { id: true, locale: true } });
 
-    const created: { id: string; userId: string; title: string; body: string; createdAt: Date }[] = [];
-    for (const u of users) {
+    const made = await Promise.all(users.map(async (u) => {
       const { title, body } = render(input.type, u.locale, input.params);
       try {
-        const n = await this.prisma.notification.create({
+        return await this.prisma.notification.create({
           data: { userId: u.id, type: input.type, title, body, data: input.data as Prisma.InputJsonValue, eventKey: input.eventKey },
           select: { id: true, userId: true, title: true, body: true, createdAt: true },
         });
-        created.push(n);
       } catch (e: any) {
         if (e?.code !== 'P2002') throw e; // P2002 = already told about this event: stay quiet
+        return null;
       }
-    }
+    }));
+    const created = made.filter((n): n is NonNullable<typeof n> => n !== null);
 
     for (const n of created) {
       this.realtime.emitToUsers([n.userId], 'notification.created', {

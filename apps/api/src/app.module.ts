@@ -30,6 +30,7 @@ import { TrackingModule } from './tracking/tracking.module';
 import { StorageModule } from './storage/storage.module';
 import { CommonModule } from './common/common.module';
 import { RedisThrottlerStorage } from './common/throttle/redis-throttler.storage';
+import { THROTTLE_STORAGE, ThrottleStorageModule } from './common/throttle/throttle-storage.module';
 import { validateEnv } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -48,11 +49,12 @@ import { SafetyModule } from './safety/safety.module';
       validate: validateEnv,
     }),
     ThrottlerModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (c: ConfigService) => ({
+      imports: [ThrottleStorageModule],
+      inject: [THROTTLE_STORAGE],
+      useFactory: (storage?: RedisThrottlerStorage) => ({
         throttlers: [{ ttl: 60000, limit: 100 }],
-        // Several API instances must share counters; one instance can keep them in memory.
-        storage: c.get<string>('REDIS_URL') ? new RedisThrottlerStorage(c.get<string>('REDIS_URL')!) : undefined,
+        // Several API instances must share counters (Redis); one instance can keep them in memory.
+        storage,
       }),
     }),
     DatabaseModule,

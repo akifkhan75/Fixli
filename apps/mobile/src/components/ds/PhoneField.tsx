@@ -60,6 +60,7 @@ export const PhoneField = ({
           autoCorrect={false}
           maxLength={22}
           accessibilityLabel={label}
+          testID="phone-input"
           style={[styles.input, { color: theme.colors.textPrimary, fontSize: 18, textAlign: 'left' }]}
         />
       </View>

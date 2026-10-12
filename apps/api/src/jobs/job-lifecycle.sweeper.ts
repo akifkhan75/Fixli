@@ -28,6 +28,7 @@ export class JobLifecycleSweeper implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (this.config.get('RUN_BACKGROUND_JOBS') === true) {
+      this.lease.expect('job-lifecycle', EVERY_MS);
       this.timer = setInterval(() => void this.sweep().catch((e) => this.logger.error(e)), EVERY_MS);
     }
   }

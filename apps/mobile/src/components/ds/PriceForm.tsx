@@ -33,7 +33,7 @@ export function PriceForm({ currency, usualMinor, initialMinor, initialEta, loca
 
   return (
     <View>
-      <TextInput label={t('priceForm.yourPrice', { currency })} keyboardType="number-pad" value={text} onChangeText={(v) => setText(v.replace(/[^\d,]/g, ''))}
+      <TextInput testID="price-input" label={t('priceForm.yourPrice', { currency })} keyboardType="number-pad" value={text} onChangeText={(v) => setText(v.replace(/[^\d,]/g, ''))}
         error={submitted && !minor ? t('priceForm.enterYourPriceFor') : undefined} style={{ fontSize: 24 }} />
       {minor ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>{t('priceForm.customerSees', { price: formatMoney(minor, currency, locale) })}</Text> : null}
       {quick.length ? (

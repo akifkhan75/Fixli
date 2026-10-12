@@ -4,11 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "node scripts/build-legal.mjs && vite",
+    "build": "node scripts/build-legal.mjs && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "legal": "node scripts/build-legal.mjs",
+    "test": "node --test scripts/build-legal.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.52.0",

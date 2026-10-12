@@ -121,10 +121,10 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
       <ChipChoice options={LABELS()} selectedIds={label} onChange={setLabel} />
 
       <View style={{ gap: 16, marginTop: 24 }}>
-        <TextInput label={t('sharedAddressEdit.houseStreet')} value={street} onChangeText={setStreet} autoComplete="street-address" error={streetError} />
+        <TextInput testID="street-input" label={t('sharedAddressEdit.houseStreet')} value={street} onChangeText={setStreet} autoComplete="street-address" error={streetError} />
         <TextInput label={t('sharedAddressEdit.flatFloorOrBuilding')} value={building} onChangeText={setBuilding} />
         <TextInput label={t('sharedAddressEdit.areaOrNeighbourhoodOptional')} value={area} onChangeText={setArea} />
-        <TextInput label={t('sharedAddressEdit.city')} value={city} onChangeText={setCity} autoCapitalize="words" error={cityError} />
+        <TextInput testID="city-input" label={t('sharedAddressEdit.city')} value={city} onChangeText={setCity} autoCapitalize="words" error={cityError} />
         <TextInput label={t('sharedAddressEdit.landmarkToHelpFind')} placeholder={t('sharedAddressEdit.eGOppositeThe')} value={landmark} onChangeText={setLandmark} />
       </View>
 

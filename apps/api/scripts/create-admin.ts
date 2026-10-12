@@ -8,7 +8,7 @@
  * first sign-in they must set up an authenticator app.
  */
 import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { ADMIN_ROLES, isAdminRole } from '../src/common/auth/permissions';
 

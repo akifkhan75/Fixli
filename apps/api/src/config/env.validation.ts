@@ -67,6 +67,12 @@ export interface AppEnv {
   /** Model id; configurable so a retired model never needs a code change. */
   GEMINI_MODEL?: string;
   LOG_LEVEL: string;
+  /** Where crashes are reported. Empty = not reported (fine in development). */
+  SENTRY_DSN?: string;
+  /** Shown on every report so a bug can be tied to a release (the git commit or version). */
+  APP_RELEASE?: string;
+  /** Lets monitoring read /health/ready details (socket count etc.). Min 24 characters. */
+  OPS_TOKEN?: string;
 }
 
 export function validateEnv(raw: Record<string, unknown>): AppEnv {
@@ -135,6 +141,8 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   if (sms !== 'none') errors.push('SMS_PROVIDER: only "none" is available until a provider is chosen (doc 25 D-F5)');
 
   if (str('REDIS_URL') && !/^rediss?:\/\//.test(str('REDIS_URL'))) errors.push('REDIS_URL must be a redis:// or rediss:// URL');
+  if (str('OPS_TOKEN') && str('OPS_TOKEN').length < 24) errors.push('OPS_TOKEN must be at least 24 characters');
+  if (str('SENTRY_DSN') && !/^https:\/\//.test(str('SENTRY_DSN'))) errors.push('SENTRY_DSN must be an https:// URL (leave empty to turn reporting off)');
 
   const totpKey = str('TOTP_ENCRYPTION_KEY');
   if (totpKey && Buffer.from(totpKey, 'base64').length !== 32) errors.push('TOTP_ENCRYPTION_KEY must be 32 bytes, base64 (openssl rand -base64 32)');
@@ -169,6 +177,9 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     REMATCH_AFTER_MINUTES: rematchAfter,
     REMATCH_RADIUS_FACTOR: rematchFactor,
     REDIS_URL: str('REDIS_URL') || undefined,
+    SENTRY_DSN: str('SENTRY_DSN') || undefined,
+    APP_RELEASE: str('APP_RELEASE') || undefined,
+    OPS_TOKEN: str('OPS_TOKEN') || undefined,
     EXPO_PUSH_URL: str('EXPO_PUSH_URL') || undefined,
     EXPO_ACCESS_TOKEN: str('EXPO_ACCESS_TOKEN') || undefined,
     RUN_BACKGROUND_JOBS: (str('RUN_BACKGROUND_JOBS') || (nodeEnv === 'test' ? 'false' : 'true')) === 'true',

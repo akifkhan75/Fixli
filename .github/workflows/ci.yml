@@ -84,6 +84,7 @@ jobs:
         run: |
           pnpm --filter @fixli/api build
           pnpm --filter admin build
+          pnpm --filter web test
           pnpm --filter web build
 
       - name: Mobile tests

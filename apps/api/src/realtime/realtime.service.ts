@@ -41,6 +41,11 @@ export class RealtimeService {
     this.server = server;
   }
 
+  /** Sockets connected to this API instance (for the ops health view). */
+  connectedSockets(): number {
+    return this.server?.sockets?.size ?? 0;
+  }
+
   /** Staff holding `permission` (rooms joined at connect from their roles; see ChatGateway). */
   emitToStaff<T>(permission: string, type: RealtimeEvent, data: T): Envelope<T> {
     const envelope: Envelope<T> = { id: randomUUID(), type, occurredAt: new Date().toISOString(), data };

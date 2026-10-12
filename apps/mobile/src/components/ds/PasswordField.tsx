@@ -11,6 +11,7 @@ export const PasswordField = ({ isNew, textContentType, autoComplete, ...props }
   const [visible, setVisible] = useState(false);
   return (
     <TextInput
+      testID="password-input"
       secureTextEntry={!visible}
       autoCapitalize="none"
       autoCorrect={false}

@@ -138,6 +138,17 @@ export class StorageService {
     return { bytes: await this.driver.read(upload.key), mime: upload.mime, key: upload.key, purpose: upload.purpose };
   }
 
+  /**
+   * Erase this person's stored files of the given kinds (account deletion: ID photos, selfie, avatar,
+   * portfolio). Returns how many were removed. A file that is already gone is not an error.
+   */
+  async deleteOwned(ownerId: string, purposes: UploadPurpose[]): Promise<number> {
+    const uploads = await this.prisma.upload.findMany({ where: { ownerId, purpose: { in: purposes } }, select: { id: true, key: true } });
+    for (const u of uploads) await this.driver.remove(u.key).catch(() => undefined);
+    await this.prisma.upload.deleteMany({ where: { id: { in: uploads.map((u) => u.id) } } });
+    return uploads.length;
+  }
+
   async signedUrlForKey(key: string, ttlSeconds = 300): Promise<string> {
     return this.driver.signedGetUrl(key, ttlSeconds);
   }

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -79,6 +79,8 @@ export class UsersService {
       if (user.type === 'worker') {
         await tx.portfolioItem.deleteMany({ where: { workerId: id } });
         await tx.worker.update({ where: { id }, data: { isOnline: false, bio: null } });
+        // The ID number and the file keys go; the decision history (approved, rejected) stays.
+        await tx.verificationCase.updateMany({ where: { workerId: id }, data: { documentKeys: [], reference: null } });
       }
       await tx.user.update({
         where: { id },
@@ -89,6 +91,8 @@ export class UsersService {
         },
       });
     });
+    // Identity documents, selfie, profile photo and portfolio photos are erased, not just hidden.
+    await this.storage.deleteOwned(id, ['VERIFICATION', 'AVATAR', 'PORTFOLIO']);
     // Signs out every device, drops live connections and forgets push tokens (Phase 6 path).
     await this.sessions.revokeAllExcept(id);
     await this.audit.record({ actorId: id, action: 'user.deleted', entityType: 'User', entityId: id });

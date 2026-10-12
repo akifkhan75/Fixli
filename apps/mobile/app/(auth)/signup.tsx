@@ -107,6 +107,7 @@ export default function SignupScreen() {
             ) : <View style={{ height: 12 }} />}
 
             <TextInput
+              testID="name-input"
               label={t('auth.fullName')}
               value={name}
               onChangeText={(v) => { clearError(); setName(v); }}

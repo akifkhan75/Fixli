@@ -18,12 +18,9 @@ import { OutboxBar } from '../src/components/ds/OutboxBar';
 import { NotificationsProvider } from '../src/hooks/useNotifications';
 import { useWorkerLocationTracker } from '../src/hooks/useWorkerLocationTracker';
 import * as Sentry from '@sentry/react-native';
+import { initSentry } from '../src/observability/sentry';
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN && process.env.EXPO_PUBLIC_SENTRY_DSN !== 'YOUR_SENTRY_DSN',
-  debug: false,
-});
+initSentry();
 
 registerOutboxHandlers();
 

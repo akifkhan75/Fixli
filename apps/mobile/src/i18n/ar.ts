@@ -751,4 +751,7 @@ export const ar: Record<string, string> = {
   "error.WORKER_BUSY": "تم حجز هذا المحترف للتو في ذلك الوقت. يرجى اختيار سعر آخر.",
   "error.WORKER_NOT_ACTIVE": "يجب الموافقة على حسابك أولًا.",
   "error.WRONG_PASSWORD": "كلمة المرور هذه غير صحيحة.",
+  "legal.title": "قانونية",
+  "legal.privacy": "سياسة الخصوصية",
+  "legal.terms": "شروط الخدمة",
 };

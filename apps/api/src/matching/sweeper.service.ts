@@ -31,6 +31,7 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (this.config.get('RUN_BACKGROUND_JOBS') === true || this.config.get('RUN_BACKGROUND_JOBS') === 'true') {
+      this.lease.expect(LEASE, EVERY_MS);
       this.timer = setInterval(() => void this.sweep().catch((e) => this.logger.error(e)), EVERY_MS);
     }
   }

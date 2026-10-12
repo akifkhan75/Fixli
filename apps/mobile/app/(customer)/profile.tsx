@@ -14,6 +14,7 @@ import { Avatar } from '../../src/components/ds/Avatar';
 import { GroupedList } from '../../src/components/ds/GroupedList';
 import * as api from '../../src/services/api';
 import { t } from '../../src/i18n';
+import { openLegal } from '../../src/utils/legal';
 
 const LANG_LABEL = { en: 'English', ur: 'اردو', ar: 'العربية' } as const;
 const APPEARANCE_LABEL = { system: 'Automatic', light: 'Light', dark: 'Dark' } as const;
@@ -54,6 +55,10 @@ export default function AccountScreen() {
         { id: 'blocked', label: t('customerProfile.blockedPeople'), icon: 'hand-left-outline', onPress: go('/blocked') },
         { id: 'trusted', label: t('customerProfile.trustedContactsSos'), icon: 'people-outline', onPress: go('/trusted-contacts') },
         { id: 'delete', label: t('customerProfile.deleteAccount'), icon: 'trash-outline', destructive: true, onPress: go('/delete-account') },
+      ]} />
+      <GroupedList title={t('legal.title')} items={[
+        { id: 'privacy', label: t('legal.privacy'), icon: 'shield-checkmark-outline', onPress: () => void openLegal('privacy') },
+        { id: 'terms', label: t('legal.terms'), icon: 'document-text-outline', onPress: () => void openLegal('terms') },
       ]} />
       <GroupedList items={[
         { id: 'logout', label: t('common.logout'), icon: 'log-out-outline', destructive: true, onPress: () => dispatch(logoutUser()) },

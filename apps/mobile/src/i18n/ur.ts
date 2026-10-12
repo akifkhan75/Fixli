@@ -751,4 +751,7 @@ export const ur: Record<string, string> = {
   "error.WORKER_BUSY": "اس ماہر کو ابھی اسی وقت کے لیے بک کر لیا گیا ہے۔ براہ کرم کوئی اور قیمت چنیں۔",
   "error.WORKER_NOT_ACTIVE": "پہلے آپ کے اکاؤنٹ کی منظوری ہونا ضروری ہے۔",
   "error.WRONG_PASSWORD": "یہ پاس ورڈ درست نہیں۔",
+  "legal.title": "قانونی",
+  "legal.privacy": "پرائیویسی پالیسی",
+  "legal.terms": "استعمال کی شرائط",
 };

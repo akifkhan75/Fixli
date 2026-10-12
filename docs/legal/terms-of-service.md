@@ -1,42 +1,62 @@
 # Fixli Terms of Service
 
-**Effective Date:** January 1, 2027
+**Effective date:** [date of launch]  ·  **Fixli is operated by:** [Company legal name], [registered address], Pakistan  ·  **Contact:** support@fixli.pk
 
-Welcome to Fixli. By downloading, accessing, or using the Fixli mobile application, you agree to be bound by these Terms of Service. If you do not agree to these terms, do not use the app.
+> DRAFT FOR LAWYER REVIEW. This text matches how Fixli works today (cash only, people check identity documents, no money held by Fixli). Items in [square brackets] need the company's details or a lawyer's decision. Urdu version: `terms-of-service.ur.md`. If the two differ, [counsel to decide which prevails].
 
-## 1. Description of Service
+By creating an account or using Fixli you agree to these terms. If you do not agree, do not use Fixli.
 
-Fixli is a digital marketplace that connects individuals seeking home maintenance and repair services ("Customers") with independent professionals offering those services ("Professionals" or "Workers"). Fixli does not provide the services itself and does not employ the Professionals. We simply facilitate the matching, booking, communication, and payment processes.
+## 1. What Fixli is
 
-## 2. User Accounts
+Fixli is an online marketplace. **Customers** ask for a repair; independent **professionals** nearby send a price; the customer chooses. Fixli introduces them and provides the app, chat, records and support. **Fixli does not do the repair, does not employ professionals, and is not a party to the agreement between customer and professional** (once a customer chooses a price, that agreement is between them). Fixli is **not an emergency service** (see section 8).
 
-- **Registration:** You must provide an accurate phone number and other required details to register. You are responsible for keeping your account credentials secure.
-- **Verification:** Professionals are subject to identity and qualification checks. However, Fixli cannot guarantee the quality, safety, or legality of the services provided.
-- **Suspension:** Fixli reserves the right to suspend or terminate accounts that violate these terms, behave inappropriately, or have high dispute rates.
+## 2. Accounts
 
-## 3. Booking and Payments
+- You must be 18 or older and give true details. Keep your password private; you are responsible for what happens under your account.
+- One person, one account. We may refuse or close accounts that break these terms.
+- **Professionals** must pass an identity check: we ask for your national ID number, photos of the ID and a selfie, and people on our team review them. A "verified" badge means those documents were reviewed. It is **not** a guarantee of skill, safety or quality, and not a licence or insurance.
 
-- **Offers and Acceptance:** When a Customer submits a request, Professionals may submit offers (price and ETA). A binding agreement is formed between the Customer and Professional when an offer is accepted.
-- **Payments:** Payments can be made via cash or supported digital methods. Fixli charges a commission to the Professional for each completed booking, which is deducted from their ledger or collected via subsequent settlements.
-- **Change Orders:** Any additional work not covered in the original offer must be submitted and approved as a "Change Order" through the app.
+## 3. Requests, prices and bookings
 
-## 4. User Conduct
+- A customer's request is shown to nearby professionals who do that kind of work. Prices are set by the professional for each job.
+- When the customer chooses a price, the job is booked. From then the customer's exact address and both phone numbers are shared for that job.
+- **Extra work.** If the job turns out to need more, the professional must ask through the app ("extra work") with a new total and reasons; the customer approves or refuses. Do not agree extra work outside the app.
+- **Cancelling.** A customer can cancel until work starts; a professional can cancel a booked job. Cancelling after the other person has set off may be noted on the account. Repeated no-shows or last-minute cancellations can lead to suspension.
 
-You agree **NOT** to:
-- Use the platform for any illegal purpose.
-- Harass, abuse, or threaten other users.
-- Bypass the platform to arrange payments or services outside of Fixli after initial contact.
-- Submit false or misleading information or evidence during a dispute.
+## 4. Money
 
-## 5. Disputes and Liability
+- **Payment is in cash, directly between customer and professional.** Fixli does not take, hold or refund your money. The professional marks that cash was received; the customer confirms it. If the customer does not answer, it is confirmed automatically after [2 days].
+- **Fixli's fee** is charged **to the professional** on each job paid in cash: [12%] of the agreed total, with a minimum of [Rs 100] and a maximum of [Rs 1,500] (the current figures are always shown in the professional's Earnings screen and may change with notice). The fee builds up as an amount the professional owes Fixli, to be paid through the payment methods shown in the app and confirmed by us. A professional who owes more than the limit shown in the app, or for too long, cannot receive new requests until it is paid.
+- If a customer says a cash payment was not made, or the amount is wrong, they can tell us in the app and Fixli will look into it (section 7).
 
-- **Disputes:** Fixli provides a resolution center for disputes between Customers and Professionals. Fixli will review evidence (photos, chat transcripts) and make a binding decision regarding refunds or payouts.
-- **Limitation of Liability:** Fixli is not liable for any damages, injuries, or losses resulting from the services performed by Professionals. Professionals act as independent contractors.
+## 5. How to behave
 
-## 6. Modifications
+You agree **not** to: use Fixli for anything illegal; harass, threaten or discriminate against anyone; give false details, photos or evidence; share contact details in chat to arrange work or payment outside Fixli before a booking (this is how Fixli is paid and how both sides are protected); misuse the SOS or report tools; copy or interfere with the app, or try to access other people's data.
 
-We may update these Terms from time to time. We will notify you of any material changes via an in-app notification or SMS. Continued use of the app constitutes acceptance of the new Terms.
+## 6. Reviews
 
-## 7. Contact Information
+Customers and professionals can rate each other after a job. Reviews must be honest and about the job. We may hide a review that is abusive, off-topic or reported and found to break these terms. Ratings count only reviews that are shown.
 
-For questions regarding these Terms, please contact us at support@fixli.pk.
+## 7. Problems and disputes
+
+Either side can report a problem or open a dispute from the job screen, with photos and a description. Fixli's team reads the evidence (including the job's chat and photos) and decides how the matter is recorded: for example whether a cash payment counts as paid, and any correction to the fee the professional owes. We will tell both sides what we decided and why. **We do not decide compensation for damage or poor work and we do not hold money to release**; those matters are between the customer and the professional and, if needed, the courts. [Counsel to confirm.]
+
+## 8. Safety and emergencies
+
+Fixli is **not an emergency service**. In danger, call the emergency numbers shown in the app. Fixli does not call the police or other emergency services for you. The emergency screen tells our safety team, and (once switched on) texts your trusted contacts. We do not send a professional into a dangerous situation. Safety reports are reviewed by our team during [hours].
+
+## 9. Suspending and closing accounts
+
+We may suspend or close an account that breaks these terms, is unsafe, or is under investigation, with a reason where we can. You can delete your account any time in the app (not during a job and not while you owe Fixli money). Section 5 of the Privacy Policy says what is kept.
+
+## 10. Liability
+
+Professionals are independent. To the fullest extent the law allows, Fixli is not responsible for the work, materials, damage, injury or loss caused by a professional or a customer, or for what people say or do in chat, and Fixli's total responsibility to you for any claim is limited to [amount / the fees you paid us in the last 12 months]. Nothing here limits liability that cannot be limited by law. [Counsel to review under Pakistani law.]
+
+## 11. Changes
+
+We may change these terms. For changes that matter we will tell you in the app before they apply; using Fixli after that means you accept them.
+
+## 12. Law
+
+These terms are governed by the laws of Pakistan. [Courts / dispute-resolution venue: counsel.]

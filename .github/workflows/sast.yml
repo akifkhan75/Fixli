@@ -17,3 +17,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 # The dependency audit is a blocking step in ci.yml.
+
+  # Static analysis of our own code (doc 27 F8.1). Blocks on error-level findings; warnings are listed in the log.
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep
+        run: >-
+          semgrep scan
+          --config p/typescript --config p/nodejs --config p/react --config p/owasp-top-ten
+          --severity ERROR --error --metrics=off
+          --exclude node_modules --exclude dist --exclude coverage --exclude venv --exclude ios
+          apps packages

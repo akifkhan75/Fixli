@@ -84,13 +84,13 @@ export class MatchingService {
     });
 
     // Minimal payload: no customer identity, no exact address (doc 05 §6).
-    for (const r of ranked) {
-      await this.notifications.notify({
-        type: 'job.request', userIds: [r.workerId], eventKey: `job.request:${job.id}`,
-        params: { title: job.title ?? 'Repair', area: job.area ?? job.city ?? undefined, distance: r.distanceKm ?? undefined },
-        data: { url: routes.workerJob(job.id), jobId: job.id, isEmergency: job.isEmergency },
-      });
-    }
+    // Each professional hears about it at once: sending them one after another put ~20 database
+    // round trips in front of the customer's "request sent" (load test, doc 27 F8.1).
+    await Promise.all(ranked.map((r) => this.notifications.notify({
+      type: 'job.request', userIds: [r.workerId], eventKey: `job.request:${job.id}`,
+      params: { title: job.title ?? 'Repair', area: job.area ?? job.city ?? undefined, distance: r.distanceKm ?? undefined },
+      data: { url: routes.workerJob(job.id), jobId: job.id, isEmergency: job.isEmergency },
+    })));
     if (ranked.length) this.realtime.emitToUsers(ranked.map((r) => r.workerId), 'feed.updated', { jobId: job.id });
     this.realtime.emitToUsers([job.customerId], 'job.updated', { jobId: job.id, status: job.status });
     if (!ranked.length && round === 2) {
