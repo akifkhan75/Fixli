@@ -8,6 +8,7 @@ import { ChipChoice } from './ChipChoice';
 import { TextInput } from './TextInput';
 import { Button } from './Button';
 import { Text } from './Text';
+import { t } from '../../i18n';
 
 /**
  * "I paid Fixli": the worker sends what they owe by JazzCash / Easypaisa / bank, then reports the
@@ -34,18 +35,18 @@ export function SettleUpForm({ owed, currency, rails, locale, onDone }: {
 
   return (
     <View style={{ gap: 12, marginTop: 12 }}>
-      <Text variant="body" weight="semibold" color={theme.colors.textPrimary}>How did you pay?</Text>
+      <Text variant="body" weight="semibold" color={theme.colors.textPrimary}>{t('settleUpForm.howDidYouPay')}</Text>
       <ChipChoice options={rails.map((r) => ({ id: r.id, label: r.label }))} selectedIds={rail} onChange={setRail} />
       {chosen ? (
         <Text variant="bodySmall" color={theme.colors.textSecondary}>
-          {chosen.account ? `Send to: ${chosen.account}` : 'Ask Fixli support for the account to pay into.'}
+          {chosen.account ? t('settleUpForm.sendTo', { account: chosen.account }) : t('settleUpForm.askFixliSupportFor')}
         </Text>
       ) : null}
-      <TextInput label={`Amount you paid (${currency})`} value={amount} onChangeText={setAmount} keyboardType="numeric" />
-      {minor != null && minor > owed ? <Text variant="bodySmall" color={theme.colors.error}>That is more than you owe ({formatMoney(owed, currency, locale)}).</Text> : null}
-      <TextInput label="Transaction ID / reference" value={reference} onChangeText={setReference} placeholder="e.g. JC-778812" autoCapitalize="characters" />
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert">{error}</Text> : null}
-      <Button title="Send for checking" variant="primary" loading={busy}
+      <TextInput label={t('settleUpForm.amountYouPaid', { currency })} value={amount} onChangeText={setAmount} keyboardType="numeric" />
+      {minor != null && minor > owed ? <Text variant="bodySmall" color={theme.colors.errorText}>{t('settleUp.moreThanOwed', { amount: formatMoney(owed, currency, locale) })}</Text> : null}
+      <TextInput label={t('settleUpForm.transactionIdReference')} value={reference} onChangeText={setReference} placeholder={t('settleUpForm.eGJc778812')} autoCapitalize="characters" />
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert">{error}</Text> : null}
+      <Button title={t('settleUpForm.sendForChecking')} variant="primary" loading={busy}
         disabled={busy || !rail[0] || !minor || minor > owed || reference.trim().length < 3} onPress={send} />
     </View>
   );

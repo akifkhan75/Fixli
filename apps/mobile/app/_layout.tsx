@@ -9,6 +9,12 @@ import { useAppSelector, useAppDispatch } from '../src/hooks/useRedux';
 import { selectCurrentUser, selectSessionRestored, restoreSession } from '../src/store/authSlice';
 import { realtime } from '../src/services/socket';
 import { chatOutbox } from '../src/services/chatOutbox';
+import { outbox } from '../src/services/outbox';
+import { registerOutboxHandlers } from '../src/services/outboxHandlers';
+import { connectivity } from '../src/services/connectivity';
+import { analytics } from '../src/services/analytics';
+import { clearCache } from '../src/services/cache';
+import { OutboxBar } from '../src/components/ds/OutboxBar';
 import { NotificationsProvider } from '../src/hooks/useNotifications';
 import { useWorkerLocationTracker } from '../src/hooks/useWorkerLocationTracker';
 import * as Sentry from '@sentry/react-native';
@@ -19,19 +25,30 @@ Sentry.init({
   debug: false,
 });
 
+registerOutboxHandlers();
+
 function SocketHandler() {
   const currentUser = useAppSelector(selectCurrentUser);
 
   useEffect(() => {
+    void analytics.init().then(() => analytics.track('app_open'));
+    return connectivity.start();
+  }, []);
+
+  useEffect(() => {
     if (!currentUser?.id) {
       realtime.disconnect();
-      // Signed out: this account's unsent messages don't stay on the phone.
+      // Signed out: this account's unsent messages and saved actions don't stay on the phone.
       void chatOutbox.clear();
+      void outbox.clear();
+      void clearCache();
       return undefined;
     }
     void realtime.connect();
-    const stopOutbox = chatOutbox.start(); // unsent chat messages go out when the connection is back
-    return () => { stopOutbox(); realtime.disconnect(); };
+    // Unsent chat messages and saved job steps / requests go out when the connection is back.
+    const stopChat = chatOutbox.start();
+    const stopOutbox = outbox.start();
+    return () => { stopChat(); stopOutbox(); realtime.disconnect(); };
   }, [currentUser?.id]);
 
   return null;
@@ -64,7 +81,7 @@ import * as SplashScreen from 'expo-splash-screen';
 SplashScreen.preventAutoHideAsync();
 
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { I18nProvider } from '../src/hooks/useI18n';
+import { I18nProvider, useI18n } from '../src/hooks/useI18n';
 import { CountryProvider } from '../src/hooks/useCountry';
 import { useTheme } from '../src/hooks/useTheme';
 
@@ -84,6 +101,10 @@ function SessionGate({ children }: { children: React.ReactNode }) {
     if (restored) SplashScreen.hideAsync();
   }, [restored]);
 
+  // Which screens are used (anonymous, and only if the person agreed): the route name, never ids or content.
+  const screen = segments.join('_').replace(/[^a-z0-9_]/gi, '').toLowerCase().replace(/^[^a-z]+/, '').slice(0, 40);
+  useEffect(() => { if (restored && screen) void analytics.screen(screen); }, [restored, screen]);
+
   // Signed-out users can only see (auth) screens; signed-in users never see them.
   useEffect(() => {
     if (!restored) return;
@@ -93,6 +114,12 @@ function SessionGate({ children }: { children: React.ReactNode }) {
   }, [restored, user, segments, router]);
 
   return restored ? <>{children}</> : null;
+}
+
+/** Redraws every screen when the language changes (text is looked up as each screen renders). */
+function LocaleBoundary({ children }: { children: React.ReactNode }) {
+  const { locale } = useI18n();
+  return <React.Fragment key={locale}>{children}</React.Fragment>;
 }
 
 function RootLayoutInner() {
@@ -106,8 +133,9 @@ function RootLayoutInner() {
           <SessionGate>
             <SocketHandler />
             <LocationTrackerHandler />
+            <OutboxBar />
             <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
-            <SignedIn>
+            <LocaleBoundary><SignedIn>
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -115,7 +143,7 @@ function RootLayoutInner() {
                   contentStyle: { backgroundColor: theme.colors.background },
                 }}
               />
-            </SignedIn>
+            </SignedIn></LocaleBoundary>
           </SessionGate>
         </View>
       </BottomSheetModalProvider>

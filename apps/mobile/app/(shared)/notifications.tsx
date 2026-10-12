@@ -11,6 +11,7 @@ import { Text } from '../../src/components/ds/Text';
 import { Button } from '../../src/components/ds/Button';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import * as api from '../../src/services/api';
+import { t } from '../../src/i18n';
 
 const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   'job.request': 'flash-outline', 'job.direct_request': 'person-add-outline', 'offer.received': 'pricetag-outline',
@@ -65,12 +66,12 @@ export default function NotificationsScreen() {
     await markRead();
   };
 
-  if (!items && loading) return <Screen title="Notifications" back><LoadingState /></Screen>;
-  if (!items && error) return <Screen title="Notifications" back><ErrorState message={error} onRetry={load} /></Screen>;
+  if (!items && loading) return <Screen title={t('sharedNotifications.notifications')} back><LoadingState /></Screen>;
+  if (!items && error) return <Screen title={t('sharedNotifications.notifications')} back><ErrorState message={error} onRetry={load} /></Screen>;
 
   return (
-    <Screen title="Notifications" back scroll={false}>
-      {unread > 0 ? <View style={{ alignSelf: 'flex-end', marginTop: -8, marginBottom: 8 }}><Button title="Mark all as read" variant="ghost" onPress={readAll} /></View> : null}
+    <Screen title={t('sharedNotifications.notifications')} back scroll={false}>
+      {unread > 0 ? <View style={{ alignSelf: 'flex-end', marginTop: -8, marginBottom: 8 }}><Button title={t('sharedNotifications.markAllAsRead')} variant="ghost" onPress={readAll} /></View> : null}
       <FlatList
         data={items ?? []}
         keyExtractor={(n) => n.id}
@@ -78,7 +79,7 @@ export default function NotificationsScreen() {
         refreshControl={<RefreshControl refreshing={loading && !!items} onRefresh={load} tintColor={theme.colors.primary} />}
         onEndReached={more}
         onEndReachedThreshold={0.4}
-        ListEmptyComponent={<EmptyState icon="notifications-off-outline" title="Nothing yet" message="Updates about your requests and jobs will show up here." />}
+        ListEmptyComponent={<EmptyState icon="notifications-off-outline" title={t('sharedNotifications.nothingYet')} message={t('sharedNotifications.updatesAboutYourRequests')} />}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         renderItem={({ item: n }) => (
           <TouchableOpacity

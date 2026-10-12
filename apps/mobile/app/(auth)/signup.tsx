@@ -15,6 +15,8 @@ import { PasswordField } from '../../src/components/ds/PasswordField';
 import { CountryPicker } from '../../src/components/ds/CountryPicker';
 import { useAppDispatch, useAppSelector } from '../../src/hooks/useRedux';
 import { signupUser, selectAuthError, selectIsAuthLoading, clearAuthError } from '../../src/store/authSlice';
+import { t } from '../../src/i18n';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 type Role = 'customer' | 'worker';
 
@@ -61,8 +63,8 @@ export default function SignupScreen() {
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: theme.colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingHorizontal: theme.spacing['2xl'] }]} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={styles.back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Ionicons name="arrow-back" size={28} color={theme.colors.textPrimary} />
+        <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel={t('authSignup.back')} style={styles.back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <DirIcon name="arrow-back" size={28} color={theme.colors.textPrimary} />
         </TouchableOpacity>
 
         {!role ? (
@@ -87,13 +89,13 @@ export default function SignupScreen() {
                   <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{r.title}</Text>
                   <Text variant="bodySmall" color={theme.colors.textSecondary}>{r.sub}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={22} color={theme.colors.textTertiary} />
+                <DirIcon name="chevron-forward" size={22} color={theme.colors.textTertiary} />
               </TouchableOpacity>
             ))}
             <View style={styles.footer}>
               <Text variant="body" color={theme.colors.textSecondary}>{t('auth.haveAccount')} </Text>
               <TouchableOpacity onPress={() => router.replace('/(auth)/login' as any)} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}>
-                <Text variant="body" weight="bold" color={theme.colors.primary}>{t('auth.signIn')}</Text>
+                <Text variant="body" weight="bold" color={theme.colors.primaryText}>{t('auth.signIn')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -137,7 +139,7 @@ export default function SignupScreen() {
             {!passwordError ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 6 }}>{t('auth.passwordHint')}</Text> : null}
 
             {error ? (
-              <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text>
+              <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text>
             ) : null}
 
             <View style={{ marginTop: 28 }}>

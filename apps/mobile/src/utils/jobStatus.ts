@@ -1,23 +1,25 @@
 import type { JobPhase } from '../components/ds/StatusTimeline';
+import { t, tn } from '../i18n';
 
 export type JobStatusName = 'CREATED' | 'MATCHES_FOUND' | 'AWAITING_WORKER' | 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'AWAITING_CONFIRMATION' | 'COMPLETED' | 'CANCELLED';
 export type Viewer = 'customer' | 'worker';
 
 /** One plain sentence per state and viewer (doc 22 §7.3). Raw enum names never reach the screen. */
 export function statusSentence(status: string, viewer: Viewer, other?: string | null): string {
-  const name = other ?? (viewer === 'customer' ? 'Your professional' : 'The customer');
+  const name = other ?? (viewer === 'customer' ? t('jobStatus.yourProfessional') : t('jobStatus.theCustomer'));
+  const c = viewer === 'customer';
   switch (status as JobStatusName) {
-    case 'CREATED': return viewer === 'customer' ? 'Sending your request…' : 'New request';
-    case 'MATCHES_FOUND': return viewer === 'customer' ? 'Waiting for prices from professionals near you' : 'New request near you';
-    case 'AWAITING_WORKER': return viewer === 'customer' ? `Waiting for ${name} to confirm` : 'A customer chose you. Please accept or decline.';
-    case 'ACCEPTED': return viewer === 'customer' ? `${name} is booked` : 'Booked. Get ready to go.';
-    case 'EN_ROUTE': return viewer === 'customer' ? `${name} is on the way` : 'On the way to the customer';
-    case 'ARRIVED': return viewer === 'customer' ? `${name} has arrived` : "You've arrived. Take a photo, then start.";
-    case 'IN_PROGRESS': return viewer === 'customer' ? `${name} is working on it` : 'Work in progress';
-    case 'AWAITING_CONFIRMATION': return viewer === 'customer' ? `${name} has finished. Please check the work and confirm.` : 'Finished. Waiting for the customer to confirm.';
-    case 'COMPLETED': return 'Done';
-    case 'CANCELLED': return 'Cancelled';
-    default: return 'Updating…';
+    case 'CREATED': return c ? t('jobStatus.created.customer') : t('jobStatus.created.worker');
+    case 'MATCHES_FOUND': return c ? t('jobStatus.matches.customer') : t('jobStatus.matches.worker');
+    case 'AWAITING_WORKER': return c ? t('jobStatus.awaiting.customer', { name }) : t('jobStatus.awaiting.worker');
+    case 'ACCEPTED': return c ? t('jobStatus.accepted.customer', { name }) : t('jobStatus.accepted.worker');
+    case 'EN_ROUTE': return c ? t('jobStatus.enRoute.customer', { name }) : t('jobStatus.enRoute.worker');
+    case 'ARRIVED': return c ? t('jobStatus.arrived.customer', { name }) : t('jobStatus.arrived.worker');
+    case 'IN_PROGRESS': return c ? t('jobStatus.inProgress.customer', { name }) : t('jobStatus.inProgress.worker');
+    case 'AWAITING_CONFIRMATION': return c ? t('jobStatus.finished.customer', { name }) : t('jobStatus.finished.worker');
+    case 'COMPLETED': return t('jobStatus.done');
+    case 'CANCELLED': return t('jobStatus.cancelled');
+    default: return t('jobStatus.updating');
   }
 }
 
@@ -54,58 +56,62 @@ export const isFinished = (s: string) => s === 'COMPLETED' || s === 'CANCELLED';
 
 /** One line per timeline event, written for the person reading it. */
 export function eventSentence(type: string, viewer: Viewer, payload?: Record<string, unknown> | null): string {
+  const c = viewer === 'customer';
+  const pick = (key: string) => t(`jobEvent.${key}.${c ? 'customer' : 'worker'}`);
   switch (type) {
-    case 'REQUEST_SENT': return viewer === 'customer' ? 'You sent your request' : 'Request sent';
-    case 'DETAILS_EDITED': return viewer === 'customer' ? 'You changed the details' : 'Details changed';
-    case 'WORKER_REQUESTED': return viewer === 'customer' ? 'You chose a professional' : 'The customer chose you';
-    case 'WORKER_ACCEPTED': return viewer === 'customer' ? 'The professional accepted' : 'You accepted';
-    case 'WORKER_DECLINED': return viewer === 'customer' ? 'The professional could not take it' : 'You declined';
-    case 'EN_ROUTE': return viewer === 'customer' ? 'The professional set off' : 'You set off';
-    case 'ARRIVED': return viewer === 'customer' ? 'The professional arrived' : 'You arrived';
-    case 'WORK_STARTED': return 'Work started';
-    case 'WORK_FINISHED': return viewer === 'customer' ? 'The professional finished' : 'You finished';
-    case 'WORK_COMPLETED': return viewer === 'customer' ? 'You confirmed the work is done' : 'The customer confirmed the work';
-    case 'AUTO_CONFIRMED': return 'Completed automatically (not confirmed in time)';
-    case 'CHANGE_ORDER_PROPOSED': return viewer === 'customer' ? 'Extra work was proposed' : 'You proposed extra work';
-    case 'CHANGE_ORDER_APPROVED': return 'Extra work approved; price updated';
-    case 'CHANGE_ORDER_DECLINED': return 'Extra work declined';
+    case 'REQUEST_SENT': return pick('requestSent');
+    case 'DETAILS_EDITED': return pick('detailsEdited');
+    case 'WORKER_REQUESTED': return pick('workerRequested');
+    case 'WORKER_ACCEPTED': return pick('workerAccepted');
+    case 'WORKER_DECLINED': return pick('workerDeclined');
+    case 'EN_ROUTE': return pick('enRoute');
+    case 'ARRIVED': return pick('arrived');
+    case 'WORK_STARTED': return t('jobEvent.workStarted');
+    case 'WORK_FINISHED': return pick('workFinished');
+    case 'WORK_COMPLETED': return pick('workCompleted');
+    case 'AUTO_CONFIRMED': return t('jobEvent.autoConfirmed');
+    case 'CHANGE_ORDER_PROPOSED': return pick('changeProposed');
+    case 'CHANGE_ORDER_APPROVED': return t('jobEvent.changeApproved');
+    case 'CHANGE_ORDER_DECLINED': return t('jobEvent.changeDeclined');
+    case 'REASSIGNED': return pick('reassigned');
     case 'PROFESSIONALS_NOTIFIED': {
       const n = Number(payload?.notified ?? 0);
-      return viewer === 'customer' ? `We told ${n} professional${n === 1 ? '' : 's'} near you` : 'Request sent to nearby professionals';
+      return c ? tn('jobEvent.notified', n) : t('jobEvent.notifiedWorker');
     }
-    case 'NO_ONE_NEARBY_YET': return viewer === 'customer' ? 'No one was free nearby yet. We keep looking.' : 'Looking for professionals';
-    case 'STILL_NO_ONE': return viewer === 'customer' ? 'We looked further away; still no one free' : 'Search widened';
-    case 'OFFER_RECEIVED': return viewer === 'customer' ? 'You got a price' : 'A price was sent';
-    case 'OFFER_REVISED': return viewer === 'customer' ? 'A professional changed their price' : 'A price was changed';
-    case 'OFFER_WITHDRAWN': return 'A price was withdrawn';
-    case 'OFFER_ACCEPTED': return viewer === 'customer' ? 'You chose a professional' : 'The customer chose your price';
+    case 'NO_ONE_NEARBY_YET': return pick('noOneYet');
+    case 'STILL_NO_ONE': return pick('stillNoOne');
+    case 'OFFER_RECEIVED': return pick('offerReceived');
+    case 'OFFER_REVISED': return pick('offerRevised');
+    case 'OFFER_WITHDRAWN': return t('jobEvent.offerWithdrawn');
+    case 'OFFER_ACCEPTED': return pick('offerAccepted');
     case 'CANCELLED': {
       const by = payload?.by;
-      const late = payload?.late ? ' (after the professional set off)' : '';
-      return (by === 'customer' ? (viewer === 'customer' ? 'You cancelled' : 'The customer cancelled') : by === 'worker' ? 'The professional cancelled' : 'Cancelled') + late;
+      const late = payload?.late ? ` ${t('jobEvent.lateCancel')}` : '';
+      return (by === 'customer' ? pick('cancelledBy') : by === 'worker' ? t('jobEvent.cancelledByProfessional') : t('jobStatus.cancelled')) + late;
     }
-    default: return 'Updated';
+    default: return t('jobEvent.updated');
   }
 }
 
+/** Reasons a customer can give for cancelling (getters: they follow the language as it changes). */
 export const CANCEL_REASON_LABEL: Record<string, string> = {
-  NO_LONGER_NEEDED: "I don't need it any more",
-  FOUND_SOMEONE_ELSE: 'I found someone else',
-  TOO_SLOW: 'It is taking too long',
-  WRONG_DETAILS: 'I entered the wrong details',
-  OTHER: 'Other reason',
+  get NO_LONGER_NEEDED() { return t('cancelReason.noLongerNeeded'); },
+  get FOUND_SOMEONE_ELSE() { return t('cancelReason.foundSomeoneElse'); },
+  get TOO_SLOW() { return t('cancelReason.tooSlow'); },
+  get WRONG_DETAILS() { return t('cancelReason.wrongDetails'); },
+  get OTHER() { return t('cancelReason.other'); },
 };
 
 /** "Today, 2–9 PM" / "Tue 14 Oct, 5–9 PM" in the device's language and timezone. */
 export function formatWindow(fromIso: string | null, toIso: string | null, when: string | null, locale = 'en'): string {
-  if (when === 'NOW') return 'As soon as possible';
+  if (when === 'NOW') return t('jobStatus.asap');
   if (!fromIso || !toIso) return '';
   const from = new Date(fromIso);
   const to = new Date(toIso);
   const today = new Date();
   const tomorrow = new Date(today.getTime() + 86_400_000);
   const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-  const day = sameDay(from, today) ? 'Today' : sameDay(from, tomorrow) ? 'Tomorrow'
+  const day = sameDay(from, today) ? t('jobStatus.today') : sameDay(from, tomorrow) ? t('jobStatus.tomorrow')
     : new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' }).format(from);
   const time = (d: Date) => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: d.getMinutes() ? '2-digit' : undefined }).format(d);
   return `${day}, ${time(from)} – ${time(to)}`;

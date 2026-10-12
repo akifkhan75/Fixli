@@ -543,6 +543,9 @@ export class JobsService {
     if (!job) throw new NotFoundException('Job not found');
 
     const from = job.status as JobStatus;
+    // The same person repeating the same action (a retry from the phone's outbox after a timeout, or a
+    // double tap) gets the job as it is: no second event, message or notification.
+    if (from === to && user.type !== 'admin') return this.findById(id, user);
     if (to === 'CANCELLED' && user.type === 'customer' && !canTransition(from, 'CANCELLED', 'customer')) {
       throw new ConflictException({ code: 'CANNOT_CANCEL_NOW', message: 'This job can no longer be cancelled here. Please contact support.' });
     }

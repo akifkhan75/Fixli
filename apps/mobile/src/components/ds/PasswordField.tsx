@@ -3,6 +3,7 @@ import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { TextInput, TextInputProps } from './TextInput';
+import { t } from '../../i18n';
 
 /** Password input with a show/hide toggle (people mistype on small keyboards). */
 export const PasswordField = ({ isNew, textContentType, autoComplete, ...props }: TextInputProps & { isNew?: boolean }) => {
@@ -19,7 +20,7 @@ export const PasswordField = ({ isNew, textContentType, autoComplete, ...props }
         <TouchableOpacity
           onPress={() => setVisible((v) => !v)}
           accessibilityRole="button"
-          accessibilityLabel={visible ? 'Hide password' : 'Show password'}
+          accessibilityLabel={visible ? t('passwordField.hidePassword') : t('passwordField.showPassword')}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={22} color={theme.colors.textSecondary} />

@@ -1,9 +1,11 @@
+import { analytics } from '../services/analytics';
 import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
 import type { IUser, AuthFlowState } from '@fixli/shared';
 import * as api from '../services/api';
 import { saveTokens, clearTokens, getAccessToken } from '../services/session';
 import type { CountryCode } from '@fixli/shared';
 import type { RootState } from './index';
+import { t } from '../i18n';
 
 interface AuthState {
   currentUser: IUser | null;
@@ -49,6 +51,7 @@ export const signupUser = createAsyncThunk<
 >('auth/signupUser', async (args, { rejectWithValue }) => {
   try {
     const res = await api.signup(args);
+    void analytics.track('sign_up_completed', { role: args.type });
     await saveTokens(res.token, res.refreshToken);
     return { user: res.user, token: res.token };
   } catch (error: any) {
@@ -89,11 +92,11 @@ export const logoutUser = createAsyncThunk<void, void>('auth/logoutUser', async 
 
 function friendlyAuthError(error: unknown): string {
   if (error instanceof api.ApiError) {
-    if (error.status === 401) return error.message || 'Phone number or password is wrong.';
-    if (error.status === 429) return 'Too many tries. Please wait a minute and try again.';
-    return error.message;
+    if (error.status === 401) return error.userMessage || t('auth.wrongCredentials');
+    if (error.status === 429) return t('auth.tooManyTries');
+    return error.userMessage;
   }
-  return "We couldn't reach the server. Check your connection and try again.";
+  return t('common.noServer');
 }
 
 const authSlice = createSlice({
@@ -132,7 +135,7 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload ?? 'Login failed';
+        state.error = action.payload ?? t('auth.loginFailed');
       })
       .addCase(signupUser.pending, (state) => {
         state.status = 'loading';
@@ -146,7 +149,7 @@ const authSlice = createSlice({
       })
       .addCase(signupUser.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload ?? 'Signup failed';
+        state.error = action.payload ?? t('auth.signupFailed');
       })
       .addCase(logoutUser.fulfilled, (state) => {
         state.currentUser = null;

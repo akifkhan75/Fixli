@@ -3,6 +3,7 @@ import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import * as api from '../../services/api';
+import { t } from '../../i18n';
 
 let cache: Set<string> | null = null;
 let loading: Promise<Set<string>> | null = null;
@@ -28,7 +29,7 @@ export function FavoriteHeart({ workerId, size = 26 }: { workerId: string; size?
     } catch { setOn(!next); } finally { setBusy(false); }
   };
   return (
-    <TouchableOpacity onPress={toggle} disabled={busy} accessibilityRole="button" accessibilityLabel={on ? 'Remove from favourites' : 'Save to favourites'} accessibilityState={{ selected: on }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+    <TouchableOpacity onPress={toggle} disabled={busy} accessibilityRole="button" accessibilityLabel={on ? t('favoriteHeart.removeFromFavourites') : t('favoriteHeart.saveToFavourites')} accessibilityState={{ selected: on }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
       <Ionicons name={on ? 'heart' : 'heart-outline'} size={size} color={on ? theme.colors.error : theme.colors.textTertiary} />
     </TouchableOpacity>
   );

@@ -7,6 +7,7 @@ import type {
   IUser, IWorker, IJobRequest, IChatThread, IChatMessage,
   IServicePackage, ISubscriptionPlan, IAuthResponse,
 } from '@fixli/shared';
+import { hasKey, t } from '../i18n';
 
 import { API_URL } from '../config';
 import { getAccessToken, getDeviceInfo, refreshAccessToken } from './session';
@@ -14,7 +15,15 @@ import type { CountryListItem, CountryCode } from '@fixli/shared';
 
 // ── HTTP Client ──────────────────────────────────────────────
 
+/** No answer from the server at all (as opposed to a server "no"): safe to retry later. */
+export const isOffline = (e: unknown) => e instanceof ApiError && e.code === 'OFFLINE';
+
 export class ApiError extends Error {
+  /** The sentence to show: translated when we know the error code, else the server's own words. */
+  get userMessage(): string {
+    return this.code && hasKey(`error.${this.code}`) ? t(`error.${this.code}`) : this.message;
+  }
+
   constructor(
     message: string,
     public readonly status: number,
@@ -32,7 +41,7 @@ async function toApiError(response: Response): Promise<ApiError> {
   const body = await response.json().catch(() => null);
   const err = body?.error;
   if (err) return new ApiError(err.message, response.status, err.code, err.details, err.requestId);
-  return new ApiError('Request failed', response.status);
+  return new ApiError(t('common.requestFailed'), response.status);
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -56,11 +65,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   try {
     response = await send(endpoint, options);
   } catch (err: any) {
-    if (err.message && err.message.includes('Network request failed')) {
-      if (options.method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method)) {
-        console.log(`[Offline] Enqueuing request: ${options.method} ${endpoint}`);
-        throw new ApiError('You are offline. Action saved.', 0, 'OFFLINE');
-      }
+    // fetch only throws when no response came back at all (no signal, DNS, timeout): that's "offline",
+    // whatever the method. Nothing is saved here; the outbox (services/outbox.ts) queues what may be queued.
+    if (err instanceof TypeError || /network request failed|timed out|aborted/i.test(String(err?.message))) {
+      throw new ApiError(t('common.offline'), 0, 'OFFLINE');
     }
     throw err;
   }

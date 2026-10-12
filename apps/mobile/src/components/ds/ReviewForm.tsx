@@ -1,3 +1,4 @@
+import { analytics } from '../../services/analytics';
 import React, { useState } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +9,7 @@ import { TextInput } from './TextInput';
 import { Button } from './Button';
 import { ChipChoice } from './ChipChoice';
 import * as api from '../../services/api';
+import { t, tn } from '../../i18n';
 
 const TAG_LABEL: Record<string, string> = {
   ON_TIME: 'On time', FRIENDLY: 'Friendly', CLEAN: 'Left it clean', FAIR_PRICE: 'Fair price', SKILLED: 'Skilled', EXPLAINED_WELL: 'Explained well',
@@ -39,6 +41,7 @@ export function ReviewForm({ jobId, targetName, reviewing, onSubmitted }: {
     setError(null);
     try {
       await api.submitReview({ jobRequestId: jobId, rating, comment: comment.trim() || undefined, tags: tags.length ? tags : undefined });
+      void analytics.track('review_submitted', { rating, side: reviewing === 'worker' ? 'customer' : 'worker' });
       onSubmitted?.();
     } catch (e) {
       setError(friendlyError(e));
@@ -50,14 +53,14 @@ export function ReviewForm({ jobId, targetName, reviewing, onSubmitted }: {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.surfaceElevated, borderRadius: theme.borderRadius.xl }]}>
       <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ textAlign: 'center' }}>
-        How was it with {targetName}?
+        {t('reviewForm.howWasIt', { name: targetName })}
       </Text>
       {reviewing === 'customer' ? (
-        <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ textAlign: 'center', marginTop: 4 }}>Only Fixli sees this.</Text>
+        <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ textAlign: 'center', marginTop: 4 }}>{t('reviewForm.onlyFixliSeesThis')}</Text>
       ) : null}
       <View style={styles.starsContainer}>
         {[1, 2, 3, 4, 5].map((star) => (
-          <TouchableOpacity key={star} onPress={() => setRating(star)} style={styles.star} accessibilityRole="button" accessibilityLabel={`${star} star${star === 1 ? '' : 's'}`} accessibilityState={{ selected: star <= rating }}>
+          <TouchableOpacity key={star} onPress={() => setRating(star)} style={styles.star} accessibilityRole="button" accessibilityLabel={tn('reviewForm.stars', star)} accessibilityState={{ selected: star <= rating }}>
             <Ionicons name={star <= rating ? 'star' : 'star-outline'} size={36} color={star <= rating ? theme.colors.warning : theme.colors.textTertiary} />
           </TouchableOpacity>
         ))}
@@ -68,11 +71,11 @@ export function ReviewForm({ jobId, targetName, reviewing, onSubmitted }: {
         </View>
       ) : null}
       <View style={{ marginTop: 16 }}>
-        <TextInput label="Anything else? (optional)" value={comment} onChangeText={setComment} multiline maxLength={1000} />
+        <TextInput label={t('customerJob.anythingElseOptional')} value={comment} onChangeText={setComment} multiline maxLength={1000} />
       </View>
-      {error ? <Text variant="caption" color={theme.colors.error} style={{ marginTop: 8 }} accessibilityRole="alert">{error}</Text> : null}
+      {error ? <Text variant="caption" color={theme.colors.errorText} style={{ marginTop: 8 }} accessibilityRole="alert">{error}</Text> : null}
       <View style={{ marginTop: 16 }}>
-        <Button title="Send review" variant="primary" disabled={rating === 0 || busy} loading={busy} onPress={handleSubmit} />
+        <Button title={t('reviewForm.sendReview')} variant="primary" disabled={rating === 0 || busy} loading={busy} onPress={handleSubmit} />
       </View>
     </View>
   );

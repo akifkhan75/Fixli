@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { analytics } from '../../../src/services/analytics';
+import { StaleNote } from '../../../src/components/ds/StaleNote';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -29,13 +31,14 @@ import { CANCEL_REASON_LABEL, formatWindow, statusSentence, toPhase } from '../.
 import { humanize, localizedName } from '../../../src/utils/catalog';
 import * as api from '../../../src/services/api';
 import { useLiveReload } from '../../../src/hooks/useRealtime';
+import { t, tn } from '../../../src/i18n';
 
 // Job status, prices, extra-work requests and the professional's position update live.
 export default function CustomerJobScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const { locale } = useI18n();
-  const { data: job, loading, error, reload, setData } = useApi(() => api.getJobView(id), [id]);
+  const { data: job, loading, error, reload, setData, staleAt } = useApi(() => api.getJobView(id), [id], { cacheKey: `job:${id}` });
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState<string[]>([]);
   const [note, setNote] = useState('');
@@ -44,6 +47,8 @@ export default function CustomerJobScreen() {
   const open = job?.status === 'MATCHES_FOUND';
   const offers = useApi(() => (open ? api.listOffers(id) : Promise.resolve([])), [id, open]);
   const [confirming, setConfirming] = useState<api.OfferCard | null>(null);
+  const viewedOffers = useRef(false);
+  useEffect(() => { if (offers.data?.length && !viewedOffers.current) { viewedOffers.current = true; void analytics.track('offer_viewed'); } }, [offers.data]);
 
   const mine = (e: { data?: { jobId?: string } }) => e.data?.jobId === id;
   useLiveReload(reload, ['job.updated'], mine);
@@ -53,8 +58,8 @@ export default function CustomerJobScreen() {
   const currentUser = useAppSelector(state => state.auth.currentUser);
   const live = useWorkerLiveLocation(id, job?.status === 'EN_ROUTE');
 
-  if (loading && !job) return <Screen title="Your request" back><LoadingState /></Screen>;
-  if (error && !job) return <Screen title="Your request" back><ErrorState message={error} onRetry={reload} /></Screen>;
+  if (loading && !job) return <Screen title={t('customerJob.yourRequest')} back><LoadingState /></Screen>;
+  if (error && !job) return <Screen title={t('customerJob.yourRequest')} back><ErrorState message={error} onRetry={reload} /></Screen>;
   if (!job) return null;
 
   const worker = job.assignedWorker;
@@ -66,6 +71,7 @@ export default function CustomerJobScreen() {
     setActionError(undefined);
     try {
       await api.acceptOffer(offer.id);
+      void analytics.track('offer_chosen');
       setConfirming(null);
       await reload();
     } catch (e) {
@@ -75,7 +81,7 @@ export default function CustomerJobScreen() {
   };
 
   const confirmCancel = async () => {
-    if (!reason[0]) { setActionError('Please choose a reason.'); return; }
+    if (!reason[0]) { setActionError(t('customerJob.pleaseChooseAReason')); return; }
     setBusy(true);
     setActionError(undefined);
     try {
@@ -85,45 +91,47 @@ export default function CustomerJobScreen() {
   };
 
   const payment = job.payments?.[0] as api.PaymentView | undefined;
-  const bookAgain = () => router.push({
+  const bookAgain = () => { void analytics.track('rebook_started'); router.push({
     pathname: '/(customer)/request-service',
     params: { categoryId: job.category?.id, issue: job.issueCodes?.[0], ...(worker ? { workerId: worker.id } : {}) },
-  } as any);
+  } as any); };
 
   const footer = !cancellable && job.status !== 'AWAITING_CONFIRMATION' ? undefined : job.status === 'AWAITING_CONFIRMATION' ? (
-    <Button title="Confirm Work is Done" variant="primary" size="lg" loading={busy} disabled={busy} onPress={async () => {
+    <Button title={t('customerJob.confirmWorkIsDone')} variant="primary" size="lg" loading={busy} disabled={busy} onPress={async () => {
       setBusy(true);
       try {
         setData(await api.confirmJob(job.id));
+        void analytics.track('job_status_changed', { status: 'COMPLETED', side: 'customer' });
       } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
     }} />
   ) : cancelling ? (
     <View style={{ flexDirection: 'row', gap: 12 }}>
-      <View style={{ flex: 1 }}><Button title="Keep request" variant="secondary" size="lg" disabled={busy} onPress={() => setCancelling(false)} /></View>
-      <View style={{ flex: 1 }}><Button title="Cancel it" variant="danger" size="lg" loading={busy} disabled={busy} onPress={confirmCancel} /></View>
+      <View style={{ flex: 1 }}><Button title={t('customerJob.keepRequest')} variant="secondary" size="lg" disabled={busy} onPress={() => setCancelling(false)} /></View>
+      <View style={{ flex: 1 }}><Button title={t('customerJob.cancelIt')} variant="danger" size="lg" loading={busy} disabled={busy} onPress={confirmCancel} /></View>
     </View>
-  ) : <Button title="Cancel this request" variant="secondary" size="lg" onPress={() => { setCancelling(true); setActionError(undefined); }} />;
+  ) : <Button title={t('customerJob.cancelThisRequest')} variant="secondary" size="lg" onPress={() => { setCancelling(true); setActionError(undefined); }} />;
 
   return (
-    <Screen title="Your request" back onRefresh={reload} refreshing={loading} footer={footer}>
+    <Screen title={t('customerJob.yourRequest')} back onRefresh={reload} refreshing={loading} footer={footer}>
+      <StaleNote at={staleAt} />
       <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>{statusSentence(job.status, 'customer', worker?.user.name)}</Text>
       {job.status === 'MATCHES_FOUND' ? (
         <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
           {job.notifiedCount
-            ? `We told ${job.notifiedCount} professional${job.notifiedCount === 1 ? '' : 's'} near you. Prices usually arrive within a few minutes.`
+            ? tn('customerJob.toldProfessionals', job.notifiedCount)
             : job.matchRound && job.matchRound >= 2
-              ? 'No professionals are free near you right now. Your request stays open and we will tell new professionals as they come online.'
-              : 'Looking for professionals near you…'}
+              ? t('customerJob.noProfessionalsAreFree')
+              : t('customerJob.lookingForProfessionalsNear')}
         </Text>
       ) : null}
       
       {job.agreedAmount && job.agreedCurrency && job.status !== 'CANCELLED' ? (
         <View style={{ marginTop: 6 }}>
-          <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>Agreed price: {formatMoney(job.agreedAmount, job.agreedCurrency, locale)}</Text>
+          <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{t('customerJob.agreedPrice', { price: formatMoney(job.agreedAmount, job.agreedCurrency, locale) })}</Text>
           {payment?.status === 'MARKED_BY_WORKER' ? <CashConfirmCard payment={payment} locale={locale} onDone={reload} /> : null}
           {payment && payment.status !== 'MARKED_BY_WORKER' ? (
-            <Text variant="bodySmall" weight="bold" color={payment.status === 'CONFIRMED' ? theme.colors.success : theme.colors.warning} style={{ marginTop: 8 }}>
-              {payment.status === 'CONFIRMED' ? `Paid in cash: ${formatMoney(payment.amount, payment.currency, locale)}` : payment.status === 'DISPUTED' ? 'You questioned this payment. Fixli support will contact you.' : 'Payment closed by support'}
+            <Text variant="bodySmall" weight="bold" color={payment.status === 'CONFIRMED' ? theme.colors.successText : theme.colors.warningText} style={{ marginTop: 8 }}>
+              {payment.status === 'CONFIRMED' ? t('customerJob.paidInCash', { amount: formatMoney(payment.amount, payment.currency, locale) }) : payment.status === 'DISPUTED' ? t('customerJob.youQuestionedThisPayment') : t('customerJob.paymentClosedBySupport')}
             </Text>
           ) : null}
         </View>
@@ -131,23 +139,23 @@ export default function CustomerJobScreen() {
 
       {open ? (
         <View style={{ marginTop: 20 }}>
-          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>Prices from professionals</Text>
+          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{t('customerJob.pricesFromProfessionals')}</Text>
           {confirming ? (
             <View style={{ backgroundColor: theme.colors.primary + '12', borderRadius: theme.borderRadius.xl, padding: 16, marginBottom: 14 }} accessibilityRole="alert">
               <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>
-                Book {confirming.worker.name} for {formatMoney(confirming.amount, confirming.currency, locale)}?
+                {t('customerJob.bookFor', { name: confirming.worker.name, price: formatMoney(confirming.amount, confirming.currency, locale) })}
               </Text>
-              <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>They will get your full address. If extra work is needed, they must ask you first.</Text>
+              <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>{t('customerJob.theyWillGetYour')}</Text>
               <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
-                <View style={{ flex: 1 }}><Button title="Back" variant="secondary" disabled={busy} onPress={() => setConfirming(null)} /></View>
-                <View style={{ flex: 1 }}><Button title="Book" variant="primary" loading={busy} disabled={busy} onPress={() => book(confirming)} /></View>
+                <View style={{ flex: 1 }}><Button title={t('authSignup.back')} variant="secondary" disabled={busy} onPress={() => setConfirming(null)} /></View>
+                <View style={{ flex: 1 }}><Button title={t('customerJob.book')} variant="primary" loading={busy} disabled={busy} onPress={() => book(confirming)} /></View>
               </View>
             </View>
           ) : null}
           {offers.data?.length ? offers.data.map((o) => (
             <OfferCard key={o.id} offer={o} locale={locale} onChoose={() => setConfirming(o)} disabled={busy || !!confirming} />
-          )) : offers.loading && !offers.data ? <LoadingState message="Checking for prices…" /> : (
-            <Text variant="body" color={theme.colors.textSecondary}>No prices yet. This page updates by itself.</Text>
+          )) : offers.loading && !offers.data ? <LoadingState message={t('customerJob.checkingForPrices')} /> : (
+            <Text variant="body" color={theme.colors.textSecondary}>{t('customerJob.noPricesYetThis')}</Text>
           )}
         </View>
       ) : null}
@@ -162,7 +170,7 @@ export default function CustomerJobScreen() {
       {job.status === 'EN_ROUTE' ? (
         <View style={{ marginTop: 20 }}>
           <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>
-            {live?.etaMinutes != null ? `About ${live.etaMinutes} min away` : 'On the way'}
+            {live?.etaMinutes != null ? t('customerJob.aboutMinAway', { etaMinutes: live.etaMinutes }) : t('customerJob.onTheWay')}
           </Text>
           {live || (job.latitude != null && job.longitude != null) ? (
             <View style={{ marginTop: 10, height: 200, borderRadius: theme.borderRadius.xl, overflow: 'hidden' }}>
@@ -175,25 +183,25 @@ export default function CustomerJobScreen() {
                   longitudeDelta: 0.05,
                 }}
               >
-                {job.latitude != null && job.longitude != null ? <Marker coordinate={{ latitude: job.latitude, longitude: job.longitude }} title="Your address" pinColor="blue" /> : null}
-                {live ? <Marker coordinate={{ latitude: live.latitude, longitude: live.longitude }} title="Professional" pinColor="red" /> : null}
+                {job.latitude != null && job.longitude != null ? <Marker coordinate={{ latitude: job.latitude, longitude: job.longitude }} title={t('customerJob.yourAddress')} pinColor="blue" /> : null}
+                {live ? <Marker coordinate={{ latitude: live.latitude, longitude: live.longitude }} title={t('customerJob.professional')} pinColor="red" /> : null}
               </MapView>
             </View>
           ) : null}
-          {!live ? <Text variant="bodySmall" color={theme.colors.textTertiary} style={{ marginTop: 6 }}>Waiting for their location…</Text> : null}
+          {!live ? <Text variant="bodySmall" color={theme.colors.textTertiary} style={{ marginTop: 6 }}>{t('customerJob.waitingForTheirLocation')}</Text> : null}
         </View>
       ) : null}
-      {worker && ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? <MessageButton jobId={job.id} label="Message the professional" /> : null}
-      {worker && ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? <CallButton jobId={job.id} label="Call the professional" /> : null}
+      {worker && ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? <MessageButton jobId={job.id} label={t('customerJob.messageTheProfessional')} /> : null}
+      {worker && ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? <CallButton jobId={job.id} label={t('customerJob.callTheProfessional')} /> : null}
 
       {cancelling ? (
         <View style={{ marginTop: 20 }}>
-          <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} style={{ marginBottom: 10 }}>Why are you cancelling?</Text>
+          <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} style={{ marginBottom: 10 }}>{t('customerJob.whyAreYouCancelling')}</Text>
           <ChipChoice options={Object.entries(CANCEL_REASON_LABEL).map(([id, label]) => ({ id, label }))} selectedIds={reason} onChange={setReason} />
-          <View style={{ marginTop: 12 }}><TextInput label="Anything else? (optional)" value={note} onChangeText={setNote} maxLength={300} /></View>
+          <View style={{ marginTop: 12 }}><TextInput label={t('customerJob.anythingElseOptional')} value={note} onChangeText={setNote} maxLength={300} /></View>
         </View>
       ) : null}
-      {actionError ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 12 }}>{actionError}</Text> : null}
+      {actionError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 12 }}>{actionError}</Text> : null}
 
       <View style={{ marginTop: 24 }}>
         <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{catName.toUpperCase()}</Text>
@@ -207,18 +215,18 @@ export default function CustomerJobScreen() {
       )}
 
       <View style={{ marginTop: 20, gap: 4 }}>
-        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>WHEN AND WHERE</Text>
+        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('customerJob.whenAndWhere')}</Text>
         <Text variant="body" color={theme.colors.textPrimary}>{formatWindow(job.scheduledFrom, job.scheduledTo, job.whenOption, locale)}</Text>
         {job.location ? <Text variant="body" color={theme.colors.textPrimary}>{job.location}</Text> : null}
       </View>
 
       {worker ? (
-        <TouchableOpacity onPress={() => router.push(`/worker/${worker.id}` as any)} accessibilityRole="button" accessibilityLabel={`View ${worker.user.name}'s profile`} activeOpacity={0.8}
+        <TouchableOpacity onPress={() => router.push(`/worker/${worker.id}` as any)} accessibilityRole="button" accessibilityLabel={t('customerJob.viewSProfile', { name: worker.user.name })} activeOpacity={0.8}
           style={{ marginTop: 24, backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16, flexDirection: 'row', alignItems: 'center' }}>
           <Avatar name={worker.user.name} imageUrl={worker.user.profileImageUrl} size="lg" />
           <View style={{ marginStart: 14, flex: 1 }}>
             <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{worker.user.name}</Text>
-            <Text variant="bodySmall" color={theme.colors.textSecondary}>{worker.isVerified ? 'ID checked' : 'Professional'}{worker.rating ? `  ·  ${worker.rating.toFixed(1)} ★` : ''}</Text>
+            <Text variant="bodySmall" color={theme.colors.textSecondary}>{worker.isVerified ? t('customerJob.idChecked') : t('customerJob.professional')}{worker.rating ? `  ·  ${worker.rating.toFixed(1)} ★` : ''}</Text>
           </View>
           <FavoriteHeart workerId={worker.id} />
         </TouchableOpacity>
@@ -226,7 +234,7 @@ export default function CustomerJobScreen() {
 
       {['AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? <ReportProblem jobId={job.id} onDone={reload} /> : null}
       {job.status === 'COMPLETED' ? (
-        <View style={{ marginTop: 12 }}><Button title={worker ? `Book ${worker.user.name.split(' ')[0]} again` : 'Book again'} variant="secondary" onPress={bookAgain} /></View>
+        <View style={{ marginTop: 12 }}><Button title={worker ? t('customerJob.bookAgain', { name: worker.user.name.split(' ')[0] }) : t('customerJob.bookAgain2')} variant="secondary" onPress={bookAgain} /></View>
       ) : null}
       {job.status === 'COMPLETED' && job.assignedWorker && currentUser && !job.reviews?.some(r => r.reviewerId === currentUser.id) && (
         <ReviewForm 
@@ -238,7 +246,7 @@ export default function CustomerJobScreen() {
       )}
 
       {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? (
-        <View style={{ marginTop: 16 }}><Button title="Emergency / I feel unsafe" variant="ghost" onPress={() => router.push({ pathname: '/sos', params: { jobId: job.id } } as any)} /></View>
+        <View style={{ marginTop: 16 }}><Button title={t('customerJob.emergencyIFeelUnsafe')} variant="ghost" onPress={() => router.push({ pathname: '/sos', params: { jobId: job.id } } as any)} /></View>
       ) : null}
       <JobHistory events={job.events ?? []} viewer="customer" locale={locale} />
     </Screen>

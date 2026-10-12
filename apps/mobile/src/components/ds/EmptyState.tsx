@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
 import { Button } from './Button';
+import { t } from '../../i18n';
 
 interface EmptyStateProps {
   title: string;
@@ -44,9 +45,9 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
   return (
     <View style={styles.container} accessibilityRole="alert">
       <Ionicons name="cloud-offline-outline" size={44} color={theme.colors.textTertiary} />
-      <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} align="center" style={{ marginTop: 16 }}>{t('error.general')}</Text>
+      <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} align="center" style={{ marginTop: 16 }}>{t('errorState.somethingWentWrong')}</Text>
       <Text variant="body" color={theme.colors.textSecondary} align="center" style={{ marginTop: 6 }}>{message}</Text>
-      <View style={{ marginTop: 20, alignSelf: 'stretch' }}><Button title="Try again" onPress={onRetry} variant="primary" size="lg" /></View>
+      <View style={{ marginTop: 20, alignSelf: 'stretch' }}><Button title={t('sharedSos.tryAgain')} onPress={onRetry} variant="primary" size="lg" /></View>
     </View>
   );
 }

@@ -93,12 +93,17 @@ export class ChatOutbox {
   flush(): Promise<void> {
     if (this.running) { this.again = true; return this.running; }
     this.running = (async () => {
-      await this.load();
-      do {
-        this.again = false;
-        await this.runOnce();
-      } while (this.again);
-    })().finally(() => { this.running = null; });
+      try {
+        await this.load();
+        do {
+          this.again = false;
+          await this.runOnce();
+        } while (this.again);
+      } finally {
+        // Cleared in the same tick as the last check: a flush() can't slip in between and be lost.
+        this.running = null;
+      }
+    })();
     return this.running;
   }
 

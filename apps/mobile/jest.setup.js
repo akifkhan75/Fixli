@@ -9,3 +9,6 @@ jest.mock('@expo/vector-icons', () => {
     FontAwesome: (props: any) => <View {...props} />,
   };
 });
+
+// Native storage isn't available under Jest: use the library's in-memory mock everywhere.
+jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));

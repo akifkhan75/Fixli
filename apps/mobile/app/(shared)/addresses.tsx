@@ -9,6 +9,8 @@ import { Text } from '../../src/components/ds/Text';
 import { Button } from '../../src/components/ds/Button';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import * as api from '../../src/services/api';
+import { t } from '../../src/i18n';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 export default function AddressesScreen() {
   const theme = useTheme();
@@ -17,12 +19,12 @@ export default function AddressesScreen() {
 
   return (
     <Screen
-      title="Saved addresses"
+      title={t('customerProfile.savedAddresses')}
       back
-      footer={<Button title="Add an address" size="lg" variant="primary" onPress={() => router.push('/address-edit' as any)} />}
+      footer={<Button title={t('sharedAddresses.addAnAddress')} size="lg" variant="primary" onPress={() => router.push('/address-edit' as any)} />}
     >
       {loading && !data ? <LoadingState /> : error && !data ? <ErrorState message={error} onRetry={reload} /> : !data?.length ? (
-        <EmptyState icon="location-outline" title="No saved addresses yet" message="Save your home or work so you never type it again when you ask for help." />
+        <EmptyState icon="location-outline" title={t('sharedAddresses.noSavedAddressesYet')} message={t('sharedAddresses.saveYourHomeOr')} />
       ) : (
         data.map((a) => (
           <TouchableOpacity
@@ -34,11 +36,11 @@ export default function AddressesScreen() {
           >
             <Ionicons name={a.label === 'Work' ? 'briefcase-outline' : 'home-outline'} size={24} color={theme.colors.primary} />
             <View style={{ flex: 1, marginHorizontal: 14 }}>
-              <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{a.label ?? 'Address'}{a.isDefault ? '  ·  Default' : ''}</Text>
+              <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{a.label ?? t('customerRequestService.address')}{a.isDefault ? t('sharedAddresses.default') : ''}</Text>
               <Text variant="bodySmall" color={theme.colors.textSecondary}>{[a.buildingDetail, a.streetAddress, a.area, a.city].filter(Boolean).join(', ')}</Text>
               {a.landmark ? <Text variant="caption" color={theme.colors.textTertiary}>{a.landmark}</Text> : null}
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
+            <DirIcon name="chevron-forward" size={20} color={theme.colors.textTertiary} />
           </TouchableOpacity>
         ))
       )}

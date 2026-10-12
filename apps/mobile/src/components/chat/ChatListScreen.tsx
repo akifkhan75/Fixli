@@ -11,6 +11,7 @@ import { Screen } from '../ds/Screen';
 import { Avatar } from '../ds/Avatar';
 import { EmptyState, ErrorState, LoadingState } from '../ds/EmptyState';
 import * as api from '../../services/api';
+import { t } from '../../i18n';
 
 /** Your chats, newest first, updating live (new messages, reads, blocks). */
 export function ChatListScreen() {
@@ -39,7 +40,7 @@ export function ChatListScreen() {
         <Avatar name={item.counterpart?.name} imageUrl={item.counterpart?.profileImageUrl} size="md" />
         <View style={{ flex: 1, marginStart: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary} style={{ flex: 1 }} numberOfLines={1}>{item.counterpart?.name ?? 'Chat'}</Text>
+            <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary} style={{ flex: 1 }} numberOfLines={1}>{item.counterpart?.name ?? t('chatListScreen.chat')}</Text>
             {item.lastMessageAt ? <Text variant="caption" color={theme.colors.textTertiary}>{when(item.lastMessageAt)}</Text> : null}
           </View>
           {item.job?.title ? <Text variant="caption" color={theme.colors.textSecondary} numberOfLines={1}>{item.job.title}{status ? ` · ${status}` : ''}</Text> : status ? <Text variant="caption" color={theme.colors.textSecondary}>{status}</Text> : null}
@@ -57,7 +58,7 @@ export function ChatListScreen() {
   };
 
   return (
-    <Screen title="Messages" scroll={false}>
+    <Screen title={t('worker.messages')} scroll={false}>
       {loading && !data ? <LoadingState /> : error && !data ? <ErrorState message={error} onRetry={reload} /> : (
         <FlatList
           data={data ?? []}
@@ -66,7 +67,7 @@ export function ChatListScreen() {
           onRefresh={reload}
           refreshing={loading && !!data}
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
-          ListEmptyComponent={<EmptyState icon="chatbubbles-outline" title="No messages" message="Once a job is booked, you can chat with the other person here." />}
+          ListEmptyComponent={<EmptyState icon="chatbubbles-outline" title={t('chatListScreen.noMessages')} message={t('chatListScreen.onceAJobIs')} />}
         />
       )}
     </Screen>

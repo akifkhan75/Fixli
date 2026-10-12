@@ -6,6 +6,7 @@ import { friendlyError } from '../../hooks/useApi';
 import { Button } from './Button';
 import { Text } from './Text';
 import * as api from '../../services/api';
+import { t } from '../../i18n';
 
 /**
  * "Call" while the job is booked (O7 default). The number is fetched only when tapped (each
@@ -20,14 +21,14 @@ export function CallButton({ jobId, label }: { jobId: string; label: string }) {
     setError(undefined);
     try {
       const c = await api.getJobContact(jobId);
-      if (!c.phone) setError('No phone number on file. Use the chat instead.');
+      if (!c.phone) setError(t('callButton.noPhoneNumberOn'));
       else await Linking.openURL(`tel:${c.phone}`);
     } catch (e) { setError(friendlyError(e)); } finally { setBusy(false); }
   };
   return (
     <View style={{ marginTop: 12 }}>
       <Button title={label} variant="secondary" loading={busy} disabled={busy} onPress={call} leftIcon={<Ionicons name="call" size={20} color={theme.colors.textPrimary} />} />
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 6 }}>{error}</Text> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 6 }}>{error}</Text> : null}
     </View>
   );
 }

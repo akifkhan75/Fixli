@@ -23,7 +23,7 @@ export function MessageButton({ jobId, label }: { jobId: string; label: string }
   return (
     <View style={{ marginTop: 12 }}>
       <Button title={label} variant="secondary" loading={busy} disabled={busy} onPress={open} leftIcon={<Ionicons name="chatbubbles-outline" size={20} color={theme.colors.textPrimary} />} />
-      {error ? <Text variant="bodySmall" color={theme.colors.error} style={{ marginTop: 6 }}>{error}</Text> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} style={{ marginTop: 6 }}>{error}</Text> : null}
     </View>
   );
 }

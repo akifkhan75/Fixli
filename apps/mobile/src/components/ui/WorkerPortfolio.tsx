@@ -36,6 +36,8 @@ export default function WorkerPortfolio({ portfolio }: WorkerPortfolioProps) {
         {portfolio.map((item) => (
           <TouchableOpacity
             key={item.id}
+            accessibilityRole="button"
+            accessibilityLabel={item.title}
             style={styles.card}
             activeOpacity={0.8}
             onPress={() => setSelectedItem(item)}
@@ -52,7 +54,7 @@ export default function WorkerPortfolio({ portfolio }: WorkerPortfolioProps) {
         {selectedItem && (
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <TouchableOpacity style={styles.closeButton} onPress={() => setSelectedItem(null)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('common.close')} style={styles.closeButton} onPress={() => setSelectedItem(null)}>
                 <Ionicons name="close" size={24} color="#FFF" />
               </TouchableOpacity>
               

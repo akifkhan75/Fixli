@@ -10,3 +10,4 @@ export * from './phone';
 export * from './password';
 export * from './money';
 export * from './routes';
+export * from './analytics';

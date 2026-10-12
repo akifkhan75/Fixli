@@ -8,6 +8,7 @@ import { Text } from '../../src/components/ds/Text';
 import { Button } from '../../src/components/ds/Button';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import * as api from '../../src/services/api';
+import { t } from '../../src/i18n';
 
 export default function DevicesScreen() {
   const theme = useTheme();
@@ -22,23 +23,23 @@ export default function DevicesScreen() {
   };
 
   return (
-    <Screen title="Your devices" back onRefresh={reload} refreshing={loading && !!data}>
-      <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 16 }}>These devices are signed in to your account. Sign out any you don't recognise.</Text>
+    <Screen title={t('customerProfile.yourDevices')} back onRefresh={reload} refreshing={loading && !!data}>
+      <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 16 }}>{t('sharedDevices.theseDevicesAreSigned')}</Text>
       {loading && !data ? <LoadingState /> : error && !data ? <ErrorState message={error} onRetry={reload} /> : !data?.length ? (
-        <EmptyState title="No devices" />
+        <EmptyState title={t('sharedDevices.noDevices')} />
       ) : data.map((s) => (
         <View key={s.id} style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16, marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name={s.platform === 'ios' || s.platform === 'android' ? 'phone-portrait-outline' : 'desktop-outline'} size={26} color={theme.colors.primary} />
             <View style={{ flex: 1, marginHorizontal: 14 }}>
-              <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{s.deviceName ?? 'Unknown device'}{s.current ? '  ·  This device' : ''}</Text>
-              <Text variant="bodySmall" color={theme.colors.textSecondary}>Last active {new Date(s.lastUsedAt).toLocaleDateString()}</Text>
+              <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{s.deviceName ?? t('sharedDevices.unknownDevice')}{s.current ? t('sharedDevices.thisDevice') : ''}</Text>
+              <Text variant="bodySmall" color={theme.colors.textSecondary}>{t('sharedDevices.lastActive', { date: new Date(s.lastUsedAt).toLocaleDateString() })}</Text>
             </View>
           </View>
-          {!s.current ? <View style={{ marginTop: 12 }}><Button title="Sign out this device" variant="secondary" loading={busyId === s.id} disabled={!!busyId} onPress={() => signOut(s.id)} /></View> : null}
+          {!s.current ? <View style={{ marginTop: 12 }}><Button title={t('sharedDevices.signOutThisDevice')} variant="secondary" loading={busyId === s.id} disabled={!!busyId} onPress={() => signOut(s.id)} /></View> : null}
         </View>
       ))}
-      {actionError ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert">{actionError}</Text> : null}
+      {actionError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert">{actionError}</Text> : null}
     </Screen>
   );
 }

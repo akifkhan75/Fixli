@@ -13,6 +13,7 @@ import { uploadAudio } from '../../services/upload';
 import { transcribeVoice } from '../../services/api';
 import { openSettings } from '../../services/pickPhoto';
 import { useI18n } from '../../hooks/useI18n';
+import { t } from '../../i18n';
 
 const MAX_MS = 60_000;
 const MIN_MS = 800;
@@ -59,7 +60,7 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
     const perm = await AudioModule.requestRecordingPermissionsAsync();
     if (!perm.granted) {
       setDenied(true);
-      setError('Microphone access is off. You can turn it on in Settings, or write instead.');
+      setError(t('voiceField.microphoneAccessIsOff'));
       return;
     }
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -76,7 +77,7 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     const uri = recorder.uri;
     if (!uri || Date.now() - startedAt.current < MIN_MS) {
-      setError('Keep holding the button while you speak.');
+      setError(t('voiceField.keepHoldingTheButton'));
       return;
     }
     setBusy('upload');
@@ -86,10 +87,10 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
       try {
         const { text } = await transcribeVoice(id, locale);
         onChange({ audioUploadId: id, audioUri: uri, transcript: text || value.transcript });
-        if (!text) setError("We couldn't hear any words. Your recording is still attached; you can also write below.");
+        if (!text) setError(t('voiceField.weCouldntHearAny'));
       } catch (e) {
         // The recording still goes to the professional; only the text is missing.
-        setError(`${friendlyError(e)} Your recording is still attached.`);
+        setError(t('voiceField.yourRecordingIsStill', { error: friendlyError(e) }));
       }
     } catch (e) {
       setError(friendlyError(e));
@@ -111,26 +112,26 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
           onPressOut={stop}
           disabled={!!busy}
           accessibilityRole="button"
-          accessibilityLabel="Hold to record a voice note"
-          accessibilityHint="Press and hold, speak, then let go"
+          accessibilityLabel={t('voiceField.holdToRecordA')}
+          accessibilityHint={t('voiceField.pressAndHoldSpeak')}
           style={[styles.hold, { backgroundColor: rec.isRecording ? theme.colors.error + '18' : theme.colors.surface, borderColor: rec.isRecording ? theme.colors.error : theme.colors.border }]}
         >
           {busy ? <ActivityIndicator color={theme.colors.primary} /> : (
             <Ionicons name={rec.isRecording ? 'radio-button-on' : 'mic'} size={34} color={rec.isRecording ? theme.colors.error : theme.colors.primary} />
           )}
           <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} style={{ marginTop: 8 }}>
-            {busy ? 'Listening to your note…' : rec.isRecording ? `Recording… ${seconds}s  (let go to finish)` : 'Hold to talk'}
+            {busy ? t('voiceField.listeningToYourNote') : rec.isRecording ? t('voiceField.recordingSLetGo', { seconds }) : t('voiceField.holdToTalk')}
           </Text>
           {!rec.isRecording && !busy ? <Text variant="caption" color={theme.colors.textTertiary}>{t('voice.hint')}</Text> : null}
         </Pressable>
       ) : (
         <View style={[styles.done, { backgroundColor: theme.colors.surface }]}>
-          <TouchableOpacity onPress={() => { player.seekTo(0); player.play(); }} accessibilityRole="button" accessibilityLabel="Play your voice note" style={styles.row}>
+          <TouchableOpacity onPress={() => { player.seekTo(0); player.play(); }} accessibilityRole="button" accessibilityLabel={t('voiceField.playYourVoiceNote')} style={styles.row}>
             <Ionicons name="play-circle" size={30} color={theme.colors.primary} />
             <Text variant="body" weight="medium" color={theme.colors.textPrimary} style={{ marginStart: 8, flex: 1 }}>{t('voice.yourNote')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={clear} accessibilityRole="button" accessibilityLabel="Delete voice note and record again" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text variant="bodySmall" weight="semibold" color={theme.colors.error}>{t('voice.rerecord')}</Text>
+          <TouchableOpacity onPress={clear} accessibilityRole="button" accessibilityLabel={t('voiceField.deleteVoiceNoteAnd')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Text variant="bodySmall" weight="semibold" color={theme.colors.errorText}>{t('voice.rerecord')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -138,7 +139,7 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
       {value.audioUploadId ? (
         <View style={{ marginTop: 12 }}>
           <TextInput
-            label="What we heard (you can fix it)"
+            label={t('voiceField.whatWeHeardYou')}
             value={value.transcript}
             onChangeText={(t) => onChange({ ...value, transcript: t })}
             multiline
@@ -147,8 +148,8 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
         </View>
       ) : null}
 
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 8 }}>{error}</Text> : null}
-      {denied ? <TouchableOpacity onPress={openSettings} accessibilityRole="button" style={{ marginTop: 6 }}><Text variant="bodySmall" weight="semibold" color={theme.colors.primary}>{t('voice.openSettings')}</Text></TouchableOpacity> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{error}</Text> : null}
+      {denied ? <TouchableOpacity onPress={openSettings} accessibilityRole="button" style={{ marginTop: 6 }}><Text variant="bodySmall" weight="semibold" color={theme.colors.primaryText}>{t('voice.openSettings')}</Text></TouchableOpacity> : null}
     </View>
   );
 }

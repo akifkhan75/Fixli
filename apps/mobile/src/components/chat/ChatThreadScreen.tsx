@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
+import { Image as CachedImage } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { routes } from '@fixli/shared';
@@ -18,19 +19,20 @@ import { Text } from '../ds/Text';
 import { Button } from '../ds/Button';
 import { ChipChoice } from '../ds/ChipChoice';
 import { ErrorState, LoadingState } from '../ds/EmptyState';
+import { t } from '../../i18n';
 
 type Row =
   | { kind: 'day'; key: string; label: string }
   | { kind: 'msg'; key: string; m: api.ChatMessage }
   | { kind: 'out'; key: string; o: OutboxItem };
 
-const REPORT_REASONS: { id: api.ReportReason; label: string }[] = [
-  { id: 'HARASSMENT', label: 'Harassment' },
-  { id: 'SCAM', label: 'Scam or asking for money' },
-  { id: 'UNSAFE', label: 'I feel unsafe' },
-  { id: 'INAPPROPRIATE', label: 'Inappropriate messages' },
-  { id: 'OTHER', label: 'Something else' },
-];
+const REPORT_REASONS = (): { id: api.ReportReason; label: string }[] => ([
+  { id: 'HARASSMENT', label: t('chatThreadScreen.harassment') },
+  { id: 'SCAM', label: t('chatThreadScreen.scamOrAskingFor') },
+  { id: 'UNSAFE', label: t('chatThreadScreen.iFeelUnsafe') },
+  { id: 'INAPPROPRIATE', label: t('chatThreadScreen.inappropriateMessages') },
+  { id: 'OTHER', label: t('customerHomeCategories.somethingElse') },
+]);
 
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
@@ -161,14 +163,14 @@ export function ChatThreadScreen() {
       const d = new Date(x.at);
       const nextOlder = all[i + 1] ? new Date(all[i + 1].at) : null;
       if (!nextOlder || !sameDay(d, nextOlder)) {
-        res.push({ kind: 'day', key: `day-${d.toDateString()}`, label: sameDay(d, new Date()) ? 'Today' : d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' }) });
+        res.push({ kind: 'day', key: `day-${d.toDateString()}`, label: sameDay(d, new Date()) ? t('customerRequestService.today') : d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' }) });
       }
     });
     return res;
   }, [messages, outbox, locale]);
 
-  if (loading && !messages.length) return <Screen title="Chat" back><LoadingState /></Screen>;
-  if (error && !messages.length) return <Screen title="Chat" back><ErrorState message={error} onRetry={load} /></Screen>;
+  if (loading && !messages.length) return <Screen title={t('chatListScreen.chat')} back><LoadingState /></Screen>;
+  if (error && !messages.length) return <Screen title={t('chatListScreen.chat')} back><ErrorState message={error} onRetry={load} /></Screen>;
 
   const other = meta?.counterpart;
   const closed = meta?.isReadOnly;
@@ -191,13 +193,13 @@ export function ChatThreadScreen() {
       const failed = o.status === 'failed';
       return (
         <TouchableOpacity disabled={!failed} onPress={() => void chatOutbox.retry(o.clientId)} onLongPress={() => void chatOutbox.discard(o.clientId)}
-          accessibilityRole={failed ? 'button' : undefined} accessibilityLabel={failed ? 'Not sent. Tap to retry, hold to delete.' : 'Sending'}>
+          accessibilityRole={failed ? 'button' : undefined} accessibilityLabel={failed ? t('chatThreadScreen.notSentTapTo') : t('chatThreadScreen.sending')}>
           {bubble(true, <>
             {o.localImageUri ? <Image source={{ uri: o.localImageUri }} style={{ width: 200, height: 200, borderRadius: 10, opacity: 0.7 }} /> : null}
             {o.text ? <Text variant="bodyLarge" color={theme.colors.onPrimary}>{o.text}</Text> : null}
           </>, failed
-            ? <><Ionicons name="alert-circle" size={14} color="#FFFFFF" /><Text variant="caption" color="#FFFFFF">Not sent · Tap to retry</Text></>
-            : <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.75)" accessibilityLabel="Sending" />)}
+            ? <><Ionicons name="alert-circle" size={14} color="#FFFFFF" /><Text variant="caption" color="#FFFFFF">{t('chatThreadScreen.notSentTapTo2')}</Text></>
+            : <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.75)" accessibilityLabel={t('chatThreadScreen.sending')} />)}
         </TouchableOpacity>
       );
     }
@@ -205,29 +207,29 @@ export function ChatThreadScreen() {
     if (m.isSystem) return <Text variant="caption" color={theme.colors.textTertiary} style={{ textAlign: 'center', marginVertical: 8, paddingHorizontal: 24 }}>{m.text}</Text>;
     const mine = m.sender?.id === me?.id;
     return bubble(mine, <>
-      {m.imageUrl ? <Image source={{ uri: m.imageUrl }} accessibilityLabel="Photo" style={{ width: 200, height: 200, borderRadius: 10 }} /> : null}
+      {m.imageUrl ? <CachedImage source={{ uri: m.imageUrl }} accessibilityLabel={t('chatThreadScreen.photo')} style={{ width: 200, height: 200, borderRadius: 10 }} /> : null}
       {m.text ? <Text variant="bodyLarge" color={mine ? theme.colors.onPrimary : theme.colors.textPrimary}>{m.text}</Text> : null}
-    </>, <>{time(m.createdAt, mine)}{mine ? <Ionicons name={tick(m)} size={14} color="rgba(255,255,255,0.85)" accessibilityLabel={tick(m) === 'checkmark-done' ? 'Read' : 'Sent'} /> : null}</>);
+    </>, <>{time(m.createdAt, mine)}{mine ? <Ionicons name={tick(m)} size={14} color="rgba(255,255,255,0.85)" accessibilityLabel={tick(m) === 'checkmark-done' ? t('chatThreadScreen.read') : t('chatThreadScreen.sent')} /> : null}</>);
   };
 
   const composer = canSend ? (
     <View>
       {hint ? (
         <TouchableOpacity onPress={() => setHint(false)} accessibilityRole="button" style={{ backgroundColor: theme.colors.warning + '22', borderRadius: 10, padding: 10, marginBottom: 8 }}>
-          <Text variant="bodySmall" color={theme.colors.textPrimary}>Tip: keep chatting and paying through Fixli. If something goes wrong, we can only help with what happened here.</Text>
+          <Text variant="bodySmall" color={theme.colors.textPrimary}>{t('chatThreadScreen.tipKeepChattingAnd')}</Text>
         </TouchableOpacity>
       ) : null}
-      {photo.error ? <Text variant="bodySmall" color={theme.colors.error} style={{ marginBottom: 6 }}>{photo.error}</Text> : null}
+      {photo.error ? <Text variant="bodySmall" color={theme.colors.errorText} style={{ marginBottom: 6 }}>{photo.error}</Text> : null}
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-        <TouchableOpacity onPress={() => void sendPhoto('library')} onLongPress={() => void sendPhoto('camera')} disabled={photo.busy} accessibilityRole="button" accessibilityLabel="Send a photo (hold for camera)" style={{ padding: 8 }}>
+        <TouchableOpacity onPress={() => void sendPhoto('library')} onLongPress={() => void sendPhoto('camera')} disabled={photo.busy} accessibilityRole="button" accessibilityLabel={t('chatThreadScreen.sendAPhotoHold')} style={{ padding: 8 }}>
           <Ionicons name={photo.busy ? 'hourglass-outline' : 'image-outline'} size={26} color={theme.colors.textSecondary} />
         </TouchableOpacity>
         <RNTextInput
-          value={text} onChangeText={onType} placeholder="Type a message" placeholderTextColor={theme.colors.textTertiary} multiline maxLength={4000}
-          accessibilityLabel="Message"
+          value={text} onChangeText={onType} placeholder={t('chatThreadScreen.typeAMessage')} placeholderTextColor={theme.colors.textTertiary} multiline maxLength={4000}
+          accessibilityLabel={t('chatThreadScreen.message')}
           style={{ flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, backgroundColor: theme.colors.surface, color: theme.colors.textPrimary, writingDirection: 'auto' as any }}
         />
-        <TouchableOpacity onPress={sendText} disabled={!text.trim()} accessibilityRole="button" accessibilityLabel="Send"
+        <TouchableOpacity onPress={sendText} disabled={!text.trim()} accessibilityRole="button" accessibilityLabel={t('chatThreadScreen.send')}
           style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: text.trim() ? theme.colors.primary : theme.colors.surfaceElevated }}>
           <Ionicons name="send" size={20} color={text.trim() ? theme.colors.onPrimary : theme.colors.textSecondary} />
         </TouchableOpacity>
@@ -235,32 +237,32 @@ export function ChatThreadScreen() {
     </View>
   ) : (
     <Text variant="body" color={theme.colors.textSecondary} style={{ textAlign: 'center' }}>
-      {blocked ? "You can't message each other." : closed ? `This chat closed${meta?.closedAt ? ` on ${new Date(meta.closedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short' })}` : ''}. Report a problem on the job if you need help.` : ''}
+      {blocked ? t('chatThreadScreen.youCantMessageEach') : closed ? (meta?.closedAt ? t('chatThreadScreen.closedOn', { date: new Date(meta.closedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short' }) }) : t('chatThreadScreen.closed')) : ''}
     </Text>
   );
 
   return (
-    <Screen title={other?.name ?? 'Chat'} back scroll={false} footer={composer}>
+    <Screen title={other?.name ?? t('chatListScreen.chat')} back scroll={false} footer={composer}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 6 }}>
         {meta?.job ? (
           <TouchableOpacity style={{ flex: 1 }} accessibilityRole="button" onPress={() => router.push(routes.jobFor(meta.job!.id, me?.type === 'worker' ? 'worker' : 'customer') as any)}>
-            <Text variant="bodySmall" color={theme.colors.primary} numberOfLines={1}>{meta.job.title ?? 'View job'} ›</Text>
+            <Text variant="bodySmall" color={theme.colors.primaryText} numberOfLines={1}>{meta.job.title ?? t('chatThread.viewJob')} ›</Text>
           </TouchableOpacity>
         ) : <View style={{ flex: 1 }} />}
-        {typingUntil ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginEnd: 8 }}>typing…</Text> : null}
-        <TouchableOpacity onPress={() => setMenu(menu ? null : 'menu')} accessibilityRole="button" accessibilityLabel="More options" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        {typingUntil ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginEnd: 8 }}>{t('chatThreadScreen.typing')}</Text> : null}
+        <TouchableOpacity onPress={() => setMenu(menu ? null : 'menu')} accessibilityRole="button" accessibilityLabel={t('chatThreadScreen.moreOptions')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.textSecondary} />
         </TouchableOpacity>
       </View>
       {menu === 'menu' ? (
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
-          {!blocked ? <View style={{ flex: 1 }}><Button title="Block" variant="secondary" onPress={block} /></View> : null}
-          <View style={{ flex: 1 }}><Button title="Report" variant="danger" onPress={() => setMenu('report')} /></View>
+          {!blocked ? <View style={{ flex: 1 }}><Button title={t('chatThreadScreen.block')} variant="secondary" onPress={block} /></View> : null}
+          <View style={{ flex: 1 }}><Button title={t('chatThreadScreen.report')} variant="danger" onPress={() => setMenu('report')} /></View>
         </View>
       ) : menu === 'report' ? (
         <View style={{ gap: 8, marginBottom: 8 }}>
-          <ChipChoice options={REPORT_REASONS} selectedIds={reportReason} onChange={setReportReason} />
-          <Button title="Send report" variant="danger" disabled={!reportReason[0]} onPress={report} />
+          <ChipChoice options={REPORT_REASONS()} selectedIds={reportReason} onChange={setReportReason} />
+          <Button title={t('chatThreadScreen.sendReport')} variant="danger" disabled={!reportReason[0]} onPress={report} />
         </View>
       ) : null}
       {actionMsg ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginBottom: 6 }}>{actionMsg}</Text> : null}

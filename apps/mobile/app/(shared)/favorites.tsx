@@ -10,16 +10,17 @@ import { FavoriteHeart } from '../../src/components/ds/FavoriteHeart';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import { humanize } from '../../src/utils/catalog';
 import * as api from '../../src/services/api';
+import { t } from '../../src/i18n';
 
 /** Professionals you saved, to look at or book again. */
 export default function FavoritesScreen() {
   const theme = useTheme();
   const { data, loading, error, reload } = useApi(api.getFavorites);
-  if (loading && !data) return <Screen title="Favourites" back><LoadingState /></Screen>;
-  if (error && !data) return <Screen title="Favourites" back><ErrorState message={error} onRetry={reload} /></Screen>;
+  if (loading && !data) return <Screen title={t('sharedFavorites.favourites')} back><LoadingState /></Screen>;
+  if (error && !data) return <Screen title={t('sharedFavorites.favourites')} back><ErrorState message={error} onRetry={reload} /></Screen>;
   return (
-    <Screen title="Favourites" back onRefresh={reload} refreshing={loading}>
-      {!data?.length ? <EmptyState icon="heart-outline" title="No favourites yet" message="Tap the heart on a professional's profile or a finished job to save them here." /> : null}
+    <Screen title={t('sharedFavorites.favourites')} back onRefresh={reload} refreshing={loading}>
+      {!data?.length ? <EmptyState icon="heart-outline" title={t('sharedFavorites.noFavouritesYet')} message={t('sharedFavorites.tapTheHeartOn')} /> : null}
       {data?.map((f) => (
         <TouchableOpacity key={f.id} onPress={() => router.push(`/worker/${f.worker.id}` as any)} activeOpacity={0.8} accessibilityRole="button"
           style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center' }}>

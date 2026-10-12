@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
 import { Avatar } from './Avatar';
+import { t, tn } from '../../i18n';
 
 export interface WorkerCardProps {
   name: string;
@@ -34,6 +35,7 @@ export const WorkerCard = ({
 
   return (
     <TouchableOpacity
+      accessibilityRole={onPress ? 'button' : 'summary'}
       activeOpacity={onPress ? 0.7 : 1}
       onPress={onPress}
       style={[
@@ -60,7 +62,7 @@ export const WorkerCard = ({
               {rating.toFixed(1)}
             </Text>
             <Text variant="bodySmall" color={theme.colors.textTertiary} style={{ marginLeft: 4 }}>
-              ({jobsDone} jobs)
+              ({tn('common.jobs', jobsDone)})
             </Text>
             {distance && (
               <>
@@ -82,6 +84,7 @@ export const WorkerCard = ({
 
       {primaryActionLabel && onPrimaryAction && (
         <TouchableOpacity
+          accessibilityRole="button"
           activeOpacity={0.8}
           onPress={onPrimaryAction}
           style={[styles.primaryButton, { backgroundColor: theme.colors.primary, borderRadius: theme.borderRadius.full }]}

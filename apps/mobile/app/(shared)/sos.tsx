@@ -1,3 +1,4 @@
+import { analytics } from '../../src/services/analytics';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -15,6 +16,7 @@ import { SOS_COPY as C } from '../../src/safety/copy';
 import { loadEmergencyNumbers, type EmergencyNumber } from '../../src/services/emergencyNumbers';
 import { newClientId } from '../../src/services/chatOutbox';
 import * as api from '../../src/services/api';
+import { t } from '../../src/i18n';
 
 type Step = 'countdown' | 'choose' | 'life' | 'steps' | 'inJob';
 type Property = 'WATER' | 'ELECTRIC' | 'GAS';
@@ -52,6 +54,7 @@ export default function SosScreen() {
     setBusy(true);
     setError(undefined);
     try {
+      if (k !== 'IN_JOB') void analytics.track('emergency_opened', { kind: k.toLowerCase() as 'life_threatening' | 'water' | 'electric' | 'gas' });
       const r = await api.raiseSos({ kind: k, idempotencyKey: key, ...(k === 'IN_JOB' ? { jobRequestId: jobId } : {}) });
       setResult(r);
       if (r.emergencyNumbers?.length) setNumbers(r.emergencyNumbers);
@@ -64,7 +67,7 @@ export default function SosScreen() {
   const callButtons = useMemo(() => (
     <View style={{ gap: 10, marginTop: 16 }}>
       {numbers.map((n) => (
-        <TouchableOpacity key={n.number} onPress={() => void Linking.openURL(`tel:${n.number}`)} accessibilityRole="button" accessibilityLabel={`${C.callNow}: ${n.label} ${n.number}`}
+        <TouchableOpacity key={n.number} onPress={() => { void analytics.track('emergency_call_initiated'); void Linking.openURL(`tel:${n.number}`); }} accessibilityRole="button" accessibilityLabel={`${C.callNow}: ${n.label} ${n.number}`}
           style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.error, borderRadius: theme.borderRadius.xl, padding: 18, gap: 14 }}>
           <Ionicons name="call" size={26} color="#FFFFFF" />
           <View style={{ flex: 1 }}>
@@ -86,7 +89,7 @@ export default function SosScreen() {
           </View>
           <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginTop: 24 }}>{C.countdown(left)}</Text>
           <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 6 }}>{C.countdownHint}</Text>
-          <View style={{ width: '100%', marginTop: 32 }}><Button title={C.cancel} variant="secondary" size="lg" onPress={() => router.back()} /></View>
+          <View style={{ width: '100%', marginTop: 32 }}><Button title={C.cancel} variant="secondary" size="lg" onPress={() => { void analytics.track('safety_cancel'); router.back(); }} /></View>
         </View>
       </Screen>
     );
@@ -118,11 +121,11 @@ export default function SosScreen() {
         {step === 'inJob' && !sent ? <View style={{ marginTop: 20 }}><Button title={C.inJobSend} variant="danger" size="lg" loading={busy} disabled={busy} onPress={() => void send('IN_JOB')} /></View> : null}
         {step === 'inJob' && sent ? <Text variant="body" weight="semibold" color={theme.colors.textPrimary} style={{ marginTop: 16 }}>{C.inJobSent}</Text> : null}
         {result?.contacts ? (
-          <Text variant="body" color={result.contacts.status === 'SENT' ? theme.colors.textPrimary : theme.colors.warning} style={{ marginTop: 12 }} accessibilityRole="alert">{result.contacts.message}</Text>
+          <Text variant="body" color={result.contacts.status === 'SENT' ? theme.colors.textPrimary : theme.colors.warningText} style={{ marginTop: 12 }} accessibilityRole="alert">{result.contacts.message}</Text>
         ) : null}
-        {error ? <Text variant="body" color={theme.colors.error} style={{ marginTop: 12 }} accessibilityRole="alert">{`${error} ${C.offline}`}</Text> : null}
-        {step === 'life' && error ? <View style={{ marginTop: 12 }}><Button title="Try again" variant="secondary" onPress={() => void send('LIFE_THREATENING')} /></View> : null}
-        <View style={{ marginTop: 16 }}><Button title="Trusted contacts" variant="ghost" onPress={() => router.push('/trusted-contacts' as any)} /></View>
+        {error ? <Text variant="body" color={theme.colors.errorText} style={{ marginTop: 12 }} accessibilityRole="alert">{`${error} ${C.offline}`}</Text> : null}
+        {step === 'life' && error ? <View style={{ marginTop: 12 }}><Button title={t('sharedSos.tryAgain')} variant="secondary" onPress={() => void send('LIFE_THREATENING')} /></View> : null}
+        <View style={{ marginTop: 16 }}><Button title={t('sharedSos.trustedContacts')} variant="ghost" onPress={() => router.push('/trusted-contacts' as any)} /></View>
       </Screen>
     );
   }
@@ -131,19 +134,19 @@ export default function SosScreen() {
   const k = kind!;
   return (
     <Screen title={C.kinds[k].label} back footer={<Button title={busy ? C.sendingRequest : C.sendRequest} variant="danger" size="lg" loading={busy} disabled={busy} onPress={() => void send(k)} />}>
-      <Text variant="h3" weight="bold" color={theme.colors.textPrimary}>Do this first</Text>
+      <Text variant="h3" weight="bold" color={theme.colors.textPrimary}>{t('sharedSos.doThisFirst')}</Text>
       <View style={{ gap: 10, marginTop: 10 }}>
         {C.steps[k].map((s, i) => (
           <View key={s} style={{ flexDirection: 'row', gap: 10 }}>
-            <Text variant="bodyLarge" weight="bold" color={theme.colors.error}>{i + 1}.</Text>
+            <Text variant="bodyLarge" weight="bold" color={theme.colors.errorText}>{i + 1}.</Text>
             <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ flex: 1 }}>{s}</Text>
           </View>
         ))}
       </View>
-      <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 16 }}>If anyone is hurt or there is a fire, call now:</Text>
+      <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 16 }}>{t('sharedSos.ifAnyoneIsHurt')}</Text>
       {callButtons}
-      {error ? <Text variant="body" color={theme.colors.error} style={{ marginTop: 12 }} accessibilityRole="alert">{error}</Text> : null}
-      {error && /address/i.test(error) ? <View style={{ marginTop: 8 }}><Button title="Add address" variant="secondary" onPress={() => router.push('/address-edit' as any)} /></View> : null}
+      {error ? <Text variant="body" color={theme.colors.errorText} style={{ marginTop: 12 }} accessibilityRole="alert">{error}</Text> : null}
+      {error && /address/i.test(error) ? <View style={{ marginTop: 8 }}><Button title={t('sharedSos.addAddress')} variant="secondary" onPress={() => router.push('/address-edit' as any)} /></View> : null}
     </Screen>
   );
 }

@@ -116,6 +116,10 @@ describe('Job lifecycle on site (doc 27 F2, e2e)', () => {
     expect(cust.got.filter((e) => e.type === 'locationUpdate')).toHaveLength(0);
 
     await http().post(`/api/job-requests/${jobId}/en-route`).set(as('pro')).expect(201);
+    // The phone's outbox may repeat a request it never heard back from: the job is returned, nothing is done twice.
+    const replay = await http().post(`/api/job-requests/${jobId}/en-route`).set(as('pro')).expect(201);
+    expect(replay.body.status).toBe('EN_ROUTE');
+    expect(await prisma.jobEvent.count({ where: { jobRequestId: jobId, type: 'EN_ROUTE' } })).toBe(1);
     pro.s.emit('locationUpdate', { jobId, latitude: 24.95, longitude: 67.09 });
     await settle();
     pro.s.emit('locationUpdate', { jobId, latitude: 24.949, longitude: 67.09 }); // within 5 s: dropped

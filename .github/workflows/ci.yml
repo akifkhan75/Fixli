@@ -92,3 +92,7 @@ jobs:
       - name: Mobile bundle (Android)
         working-directory: apps/mobile
         run: pnpm exec expo export --platform android --output-dir /tmp/mobile-bundle
+
+      - name: Mobile bundle size (budget 9 MB)
+        working-directory: apps/mobile
+        run: node scripts/bundle-size.js /tmp/mobile-bundle

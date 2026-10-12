@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, View } from 'react-native';
+import { View } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '../../hooks/useTheme';
 import { friendlyError } from '../../hooks/useApi';
 import { useLiveReload } from '../../hooks/useRealtime';
@@ -8,6 +9,7 @@ import { Button } from './Button';
 import { formatMoney } from '../../utils/money';
 import * as api from '../../services/api';
 import { useI18n } from '../../hooks/useI18n';
+import { t } from '../../i18n';
 
 const STATUS_LABEL: Record<api.ChangeOrder['status'], string> = {
   PENDING: 'Waiting for the customer',
@@ -50,7 +52,7 @@ export function ChangeOrdersList({ jobId, viewer, currentMinor, onReloadRequeste
   return (
     <View style={{ marginTop: 24 }}>
       <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('job.changeOrders')}</Text>
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 8 }}>{error}</Text> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{error}</Text> : null}
       {orders.map((o) => {
         const from = o.status === 'APPROVED' ? o.previousPrice : currentMinor;
         return (
@@ -60,19 +62,19 @@ export function ChangeOrdersList({ jobId, viewer, currentMinor, onReloadRequeste
             <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>{o.addedScope}</Text>
             {o.photos?.length ? (
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                {o.photos.map((u) => <Image key={u} source={{ uri: u }} accessibilityLabel="Photo of the extra work" style={{ width: 64, height: 64, borderRadius: 8 }} />)}
+                {o.photos.map((u) => <Image key={u} source={{ uri: u }} accessibilityLabel={t('changeOrdersList.photoOfTheExtra')} style={{ width: 64, height: 64, borderRadius: 8 }} />)}
               </View>
             ) : null}
-            <Text variant="bodyLarge" weight="bold" color={theme.colors.primary} style={{ marginTop: 8 }}>
-              {from != null && o.status !== 'REJECTED' ? `${formatMoney(from, o.currency, locale)} → ` : 'New total: '}{formatMoney(o.revisedPrice, o.currency, locale)}
+            <Text variant="bodyLarge" weight="bold" color={theme.colors.primaryText} style={{ marginTop: 8 }}>
+              {from != null && o.status !== 'REJECTED' ? `${formatMoney(from, o.currency, locale)} → ` : t('changeOrdersList.newTotal')}{formatMoney(o.revisedPrice, o.currency, locale)}
             </Text>
-            <Text variant="bodySmall" weight="semibold" color={o.status === 'APPROVED' ? theme.colors.success : o.status === 'REJECTED' ? theme.colors.textSecondary : theme.colors.warning} style={{ marginTop: 6 }}>
+            <Text variant="bodySmall" weight="semibold" color={o.status === 'APPROVED' ? theme.colors.successText : o.status === 'REJECTED' ? theme.colors.textSecondary : theme.colors.warning} style={{ marginTop: 6 }}>
               {STATUS_LABEL[o.status]}
             </Text>
             {viewer === 'customer' && o.status === 'PENDING' ? (
               <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
-                <View style={{ flex: 1 }}><Button title="Keep old price" variant="secondary" disabled={!!busyId} onPress={() => decide(o.id, 'REJECTED')} /></View>
-                <View style={{ flex: 1 }}><Button title="Approve" variant="primary" disabled={!!busyId} loading={busyId === o.id} onPress={() => decide(o.id, 'APPROVED')} /></View>
+                <View style={{ flex: 1 }}><Button title={t('changeOrdersList.keepOldPrice')} variant="secondary" disabled={!!busyId} onPress={() => decide(o.id, 'REJECTED')} /></View>
+                <View style={{ flex: 1 }}><Button title={t('changeOrdersList.approve')} variant="primary" disabled={!!busyId} loading={busyId === o.id} onPress={() => decide(o.id, 'APPROVED')} /></View>
               </View>
             ) : null}
           </View>
