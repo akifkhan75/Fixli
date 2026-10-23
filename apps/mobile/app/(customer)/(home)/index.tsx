@@ -12,6 +12,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../../src/components/ds
 import { useTheme } from '../../../src/hooks/useTheme';
 import { useI18n } from '../../../src/hooks/useI18n';
 import LiveTrackerMap from '../../../src/components/ui/LiveTrackerMap';
+import { t } from '../../../src/i18n';
 
 import { Text } from '../../../src/components/ds/Text';
 import { Button } from '../../../src/components/ds/Button';
@@ -26,10 +27,10 @@ export default function CustomerHomeScreen() {
   const trackingState = useAppSelector(selectTrackingState);
   const theme = useTheme();
   const { t, locale } = useI18n();
-  const catalog = useApi(getCatalog);
+  const catalog = useApi(getCatalog, [], { cacheKey: 'catalog' });
 
   const handleSOS = () => {
-    router.push('/(customer)/request-service?isEmergency=true' as any);
+    router.push('/sos' as any);
   };
 
   return (
@@ -42,7 +43,7 @@ export default function CustomerHomeScreen() {
             <Logo variant="mark" height={40} />
             <View>
               <Text variant="body" color={theme.colors.textSecondary}>{t('home.greeting')}</Text>
-              <Text variant="h2" color={theme.colors.textPrimary}>{currentUser?.name ?? 'Guest'} 👋</Text>
+              <Text variant="h2" color={theme.colors.textPrimary}>{t('customerHome.greeting', { name: currentUser?.name ?? t('customerHome.guest') })}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
@@ -53,7 +54,7 @@ export default function CustomerHomeScreen() {
         {/* Tracking Map if Job Active */}
         {trackingState.isTracking && (
           <View style={{ marginBottom: theme.spacing['2xl'] }}>
-            <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: theme.spacing.lg }}>Live Tracking</Text>
+            <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: theme.spacing.lg }}>{t('customerHome.liveTracking')}</Text>
             <LiveTrackerMap
               customerLocation={trackingState.customerLocation || undefined}
               workerLocation={trackingState.workerLocation || undefined}
@@ -64,7 +65,7 @@ export default function CustomerHomeScreen() {
 
         {/* What needs fixing? */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.lg }}>
-          <Text variant="h3" weight="bold" color={theme.colors.textPrimary}>{t('home.categories') || 'What needs fixing?'}</Text>
+          <Text variant="h3" weight="bold" color={theme.colors.textPrimary}>{t('home.categories')}</Text>
         </View>
 
         {/* Categories Grid: real catalog from the server */}
@@ -73,7 +74,7 @@ export default function CustomerHomeScreen() {
         ) : catalog.error && !catalog.data ? (
           <View style={{ height: 260 }}><ErrorState message={catalog.error} onRetry={catalog.reload} /></View>
         ) : !catalog.data?.length ? (
-          <EmptyState icon="construct-outline" title="No services available yet" message="Please check back soon." />
+          <EmptyState icon="construct-outline" title={t('customerHome.noServicesAvailableYet')} message={t('customerHome.pleaseCheckBackSoon')} />
         ) : (
           <View style={[styles.categoriesGrid, { gap: 16 }]}>
             {catalog.data.map((cat) => (
@@ -91,7 +92,7 @@ export default function CustomerHomeScreen() {
         {/* Quick Capture Buttons */}
         <View style={[styles.quickActions, { marginTop: theme.spacing.xl, gap: theme.spacing.md }]}>
           <Button 
-            title={`📷 ${t('home.category.other') || 'Show us'}`} 
+            title={`📷 ${t('home.category.other')}`} 
             variant="secondary" 
             size="lg" 
             style={{ flex: 1 }}
@@ -100,13 +101,13 @@ export default function CustomerHomeScreen() {
             accessibilityLabel={t('home.category.other')}
           />
           <Button 
-            title="🎤 Tell us" 
+            title={t('customerHome.tellUs')} 
             variant="secondary" 
             size="lg" 
             style={{ flex: 1 }}
             onPress={() => router.push('/(customer)/request-service' as any)}
             accessibilityRole="button"
-            accessibilityLabel="Tell us using voice"
+            accessibilityLabel={t('customerHome.tellUsUsingVoice')}
           />
         </View>
 

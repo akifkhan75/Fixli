@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { SessionService } from '../auth/session.service';
+import { AuditService } from '../common/audit/audit.service';
+import { BUSY_STATUSES } from '../jobs/job-state-machine';
 import { UpdateMeDto } from './dto/update-me.dto';
 
 const SELECT = {
@@ -13,6 +18,8 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly sessions: SessionService,
+    private readonly audit: AuditService,
   ) {}
 
   findAll() {
@@ -40,15 +47,58 @@ export class UsersService {
     return this.findById(id);
   }
 
-  async deleteMe(id: string) {
-    // In a real system, we'd probably soft-delete or anonymize data to preserve ledger integrity.
-    // Here we'll do a soft delete by changing status to DELETED.
-    await this.prisma.user.update({
-      where: { id },
-      data: { status: 'DELETED', phone: `deleted-${id}`, email: null },
+  /**
+   * Delete my account (store requirement; doc 27 F3.7, D-F4). Refused while a job is under way or
+   * commission is owed. Signs out everywhere, cancels open requests and prices, and anonymises the
+   * profile; payments, ledger and audit history are kept (anonymised) for the legal period.
+   */
+  async deleteMe(id: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true, password: true, type: true, status: true, worker: { select: { ledgerBalance: true } } } });
+    if (!user || user.status === 'DELETED') throw new NotFoundException('User not found');
+    if (!(await bcrypt.compare(password, user.password))) {
+      throw new UnauthorizedException({ code: 'WRONG_PASSWORD', message: 'That password is not right.' });
+    }
+    const active = await this.prisma.jobRequest.count({
+      where: { status: { in: BUSY_STATUSES }, OR: [{ customerId: id }, { assignedWorkerId: id }] },
     });
+    if (active) throw new ConflictException({ code: 'ACTIVE_JOB', message: 'Finish or cancel your current job first.' });
+    if ((user.worker?.ledgerBalance ?? 0) > 0) {
+      throw new ConflictException({ code: 'BALANCE_OWED', message: 'Please settle what you owe Fixli first (see Earnings).' });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const open = await tx.jobRequest.findMany({ where: { customerId: id, status: { in: ['CREATED', 'MATCHES_FOUND', 'AWAITING_WORKER'] } }, select: { id: true, status: true } });
+      for (const j of open) {
+        await tx.jobRequest.update({ where: { id: j.id }, data: { status: 'CANCELLED', cancelReason: 'OTHER', cancelledById: id } });
+        await tx.jobEvent.create({ data: { jobRequestId: j.id, actorId: id, type: 'CANCELLED', fromStatus: j.status, toStatus: 'CANCELLED', payload: { by: 'customer', reason: 'ACCOUNT_DELETED' } } });
+      }
+      await tx.offer.updateMany({ where: { workerId: id, status: 'PENDING' }, data: { status: 'WITHDRAWN' } });
+      await tx.address.deleteMany({ where: { userId: id } });
+      await tx.trustedContact.deleteMany({ where: { userId: id } });
+      await tx.favoriteWorker.deleteMany({ where: { OR: [{ customerId: id }, { workerId: id }] } });
+      if (user.type === 'worker') {
+        await tx.portfolioItem.deleteMany({ where: { workerId: id } });
+        await tx.worker.update({ where: { id }, data: { isOnline: false, bio: null } });
+        // The ID number and the file keys go; the decision history (approved, rejected) stays.
+        await tx.verificationCase.updateMany({ where: { workerId: id }, data: { documentKeys: [], reference: null } });
+      }
+      await tx.user.update({
+        where: { id },
+        data: {
+          status: 'DELETED', name: 'Deleted user', phone: null, email: null, profileImageUrl: null,
+          // Nobody can sign in to it again; the phone number is free to register afresh.
+          password: await bcrypt.hash(randomBytes(32).toString('hex'), 4),
+        },
+      });
+    });
+    // Identity documents, selfie, profile photo and portfolio photos are erased, not just hidden.
+    await this.storage.deleteOwned(id, ['VERIFICATION', 'AVATAR', 'PORTFOLIO']);
+    // Signs out every device, drops live connections and forgets push tokens (Phase 6 path).
+    await this.sessions.revokeAllExcept(id);
+    await this.audit.record({ actorId: id, action: 'user.deleted', entityType: 'User', entityId: id });
     return { success: true };
   }
+
 
   async getFavorites(customerId: string) {
     return this.prisma.favoriteWorker.findMany({
@@ -68,6 +118,8 @@ export class UsersService {
   }
 
   async addFavorite(customerId: string, workerId: string) {
+    const worker = await this.prisma.worker.findFirst({ where: { id: workerId, activationStatus: 'ACTIVE', user: { status: 'ACTIVE' } }, select: { id: true } });
+    if (!worker) throw new NotFoundException('Professional not found');
     await this.prisma.favoriteWorker.upsert({
       where: { customerId_workerId: { customerId, workerId } },
       create: { customerId, workerId },

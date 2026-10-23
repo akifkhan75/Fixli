@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import {
   BadRequestException,
   ConflictException,
@@ -10,13 +11,22 @@ import { COUNTRIES, isCountryCode } from '@fixli/shared';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { JobStepPhotosDto } from './dto/job-step.dto';
+import { ConfigService } from '@nestjs/config';
+import { AuditService } from '../common/audit/audit.service';
+import { LiveLocationService } from '../tracking/live-location.service';
+import { BlocksService } from '../blocks/blocks.service';
+import { DomainEvents } from '../common/events/domain-events';
+import { FeatureFlagsService } from '../common/flags/feature-flags.service';
+import { systemMessage, SystemMessageKey } from '../chat/system-messages';
+import { StaffAccessService } from '../common/access/staff-access.service';
 import { NotificationType } from '../notifications/templates';
 import { StorageService } from '../storage/storage.service';
 import { CreateJobDto } from './dto/create-job.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
 import { JobQueryDto } from './dto/job-query.dto';
 import { CancelJobDto } from './dto/cancel-job.dto';
-import { assertTransition, JobActor, JobStatus } from './job-state-machine';
+import { assertTransition, BUSY_STATUSES, canTransition, CONTACT_STATUSES, JobActor, JobStatus, LATE_CANCEL_STATUSES } from './job-state-machine';
 import { computeWindow, ScheduleError } from './schedule';
 import { MatchingService } from '../matching/matching.service';
 import { Logger } from '@nestjs/common';
@@ -49,7 +59,16 @@ const DETAIL_INCLUDE = {
 type JobRow = Prisma.JobRequestGetPayload<{ include: typeof BASE_INCLUDE }> & Partial<Prisma.JobRequestGetPayload<{ include: typeof DETAIL_INCLUDE }>>;
 
 const BOOKED = ['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'];
-const CANCELLABLE_BY_CUSTOMER = ['CREATED', 'MATCHES_FOUND', 'AWAITING_WORKER', 'ACCEPTED'];
+
+/** Job steps that also appear as a line in the job's chat. */
+const SYSTEM_MESSAGE_FOR: Record<string, SystemMessageKey> = {
+  EN_ROUTE: 'job.en_route',
+  ARRIVED: 'job.arrived',
+  WORK_STARTED: 'job.started',
+  WORK_FINISHED: 'job.finished',
+  WORK_COMPLETED: 'job.confirmed',
+  AUTO_CONFIRMED: 'job.auto_confirmed',
+};
 
 @Injectable()
 export class JobsService {
@@ -57,8 +76,15 @@ export class JobsService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
     private readonly notifications: NotificationService,
+    private readonly staff: StaffAccessService,
     private readonly storage: StorageService,
     private readonly matching: MatchingService,
+    private readonly config: ConfigService,
+    private readonly audit: AuditService,
+    private readonly location: LiveLocationService,
+    private readonly blocks: BlocksService,
+    private readonly events: DomainEvents,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   private readonly logger = new Logger(JobsService.name);
@@ -123,7 +149,8 @@ export class JobsService {
 
   // ── create ────────────────────────────────────────────────
 
-  async create(user: AuthUser, dto: CreateJobDto) {
+  /** `skipMatching`: SOS dispatch offers the job to the nearest worker itself, then falls back to matching. */
+  async create(user: AuthUser, dto: CreateJobDto, opts: { skipMatching?: boolean } = {}) {
     if (user.type !== 'customer') throw new ForbiddenException('Only customers can request a service');
 
     // Same request sent twice (retry, double tap, flaky network) -> the same job.
@@ -228,7 +255,7 @@ export class JobsService {
 
     // Tell nearby eligible professionals. A failure here never loses the request: the
     // background sweeper retries unmatched requests every minute.
-    await this.matching.matchJob(jobId, 1).catch((e) => this.logger.error(`Matching failed for ${jobId}: ${(e as Error).message}`));
+    if (!opts.skipMatching) await this.matching.matchJob(jobId, 1).catch((e) => this.logger.error(`Matching failed for ${jobId}: ${(e as Error).message}`));
     void urgency;
     return this.findById(jobId, user);
   }
@@ -236,8 +263,11 @@ export class JobsService {
   // ── read ──────────────────────────────────────────────────
 
   async findAll(user: AuthUser, filters?: JobQueryDto) {
+    await this.staff.assert(user, 'jobs.read');
     const and: Prisma.JobRequestWhereInput[] = [this.visibleTo(user)];
     if (filters?.status) and.push({ status: filters.status });
+    if (filters?.group === 'active') and.push({ status: { in: BUSY_STATUSES } });
+    if (filters?.group === 'past') and.push({ status: { in: ['COMPLETED', 'CANCELLED'] } });
     if (filters?.serviceId) and.push({ serviceId: filters.serviceId });
 
     const limit = filters?.limit ?? 20;
@@ -255,6 +285,7 @@ export class JobsService {
   }
 
   async findById(id: string, user: AuthUser) {
+    await this.staff.assert(user, 'jobs.read', 'disputes.read', 'safety.read');
     const job = await this.prisma.jobRequest.findFirst({
       where: { AND: [{ id }, this.visibleTo(user)] },
       include: DETAIL_INCLUDE,
@@ -280,8 +311,8 @@ export class JobsService {
 
   async requestWorker(id: string, workerId: string, user: AuthUser) {
     if (user.type !== 'customer') throw new ForbiddenException('Only the customer can choose a worker');
-    const worker = await this.prisma.worker.findFirst({ where: { id: workerId, activationStatus: 'ACTIVE' }, select: { id: true } });
-    if (!worker) throw new BadRequestException('That worker is not available');
+    const worker = await this.prisma.worker.findFirst({ where: { id: workerId, activationStatus: 'ACTIVE', balanceBlocked: false }, select: { id: true } });
+    if (!worker || (await this.blocks.between(user.id, workerId))) throw new BadRequestException('That worker is not available');
     return this.transition(id, user, 'AWAITING_WORKER', {
       onlyIf: { customerId: user.id },
       data: { assignedWorkerId: workerId },
@@ -290,7 +321,9 @@ export class JobsService {
   }
 
   async accept(id: string, user: AuthUser) {
-    return this.workerTransition(id, user, 'ACCEPTED', 'WORKER_ACCEPTED');
+    const out = await this.workerTransition(id, user, 'ACCEPTED', 'WORKER_ACCEPTED');
+    this.events.emit('job.direct_answered', { jobId: id, workerId: user.id, accepted: true });
+    return out;
   }
 
   async enRoute(id: string, user: AuthUser) {
@@ -301,47 +334,129 @@ export class JobsService {
     return this.workerTransition(id, user, 'ARRIVED', 'ARRIVED');
   }
 
-  async start(id: string, user: AuthUser, dto?: { beforePhotoKey?: string }) {
+  async start(id: string, user: AuthUser, dto: JobStepPhotosDto = {}) {
     if (user.type !== 'worker') throw new ForbiddenException('Only the assigned worker can do this');
-    const result = await this.transition(id, user, 'IN_PROGRESS', { onlyIf: { assignedWorkerId: user.id }, event: { type: 'WORK_STARTED' } });
-    if (dto?.beforePhotoKey) {
-      await this.prisma.jobMedia.create({ data: { jobRequestId: id, kind: 'PHOTO', phase: 'BEFORE', storageKey: dto.beforePhotoKey, mime: 'image/jpeg', createdById: user.id } });
-    }
-    return result;
+    await this.requirePhotoOrReason(dto, 'before');
+    return this.transition(id, user, 'IN_PROGRESS', {
+      onlyIf: { assignedWorkerId: user.id },
+      event: { type: 'WORK_STARTED', payload: dto.photoSkipReason ? { photoSkipped: dto.photoSkipReason } : undefined },
+      inTx: (tx) => this.attachPhotos(tx, id, user.id, dto.photoUploadIds, 'BEFORE'),
+    });
   }
 
-  async finish(id: string, user: AuthUser, dto?: { afterPhotoKey?: string }) {
+  async finish(id: string, user: AuthUser, dto: JobStepPhotosDto = {}) {
     if (user.type !== 'worker') throw new ForbiddenException('Only the assigned worker can do this');
-    const result = await this.transition(id, user, 'AWAITING_CONFIRMATION', { onlyIf: { assignedWorkerId: user.id }, event: { type: 'WORK_FINISHED' } });
-    if (dto?.afterPhotoKey) {
-      await this.prisma.jobMedia.create({ data: { jobRequestId: id, kind: 'PHOTO', phase: 'AFTER', storageKey: dto.afterPhotoKey, mime: 'image/jpeg', createdById: user.id } });
-    }
-    return result;
+    await this.requirePhotoOrReason(dto, 'after');
+    return this.transition(id, user, 'AWAITING_CONFIRMATION', {
+      onlyIf: { assignedWorkerId: user.id },
+      data: { finishedAt: new Date() },
+      event: { type: 'WORK_FINISHED', payload: dto.photoSkipReason ? { photoSkipped: dto.photoSkipReason } : undefined },
+      inTx: (tx) => this.attachPhotos(tx, id, user.id, dto.photoUploadIds, 'AFTER'),
+    });
+  }
+
+  /** Evidence protects both sides (doc 22): a photo, or a stated reason why there isn't one. */
+  private async requirePhotoOrReason(dto: JobStepPhotosDto, which: 'before' | 'after') {
+    if ((await this.flags.get<boolean>('REQUIRE_JOB_PHOTOS')) === false) return;
+    if (dto.photoUploadIds?.length || dto.photoSkipReason) return;
+    throw new BadRequestException({
+      code: 'PHOTO_REQUIRED',
+      message: which === 'before' ? 'Take a photo of the problem before you start.' : 'Take a photo of the finished work.',
+    });
+  }
+
+  /** Worker's own JOB_PHOTO uploads become the job's before/after evidence (real MIME, used once). */
+  private async attachPhotos(tx: Prisma.TransactionClient, jobId: string, workerId: string, uploadIds: string[] | undefined, phase: 'BEFORE' | 'AFTER') {
+    if (!uploadIds?.length) return;
+    const files = await this.storage.consumeFiles(workerId, uploadIds, 'JOB_PHOTO', tx);
+    await tx.jobMedia.createMany({ data: files.map((f) => ({ jobRequestId: jobId, kind: 'PHOTO' as const, phase, storageKey: f.key, mime: f.mime, createdById: workerId })) });
   }
 
   async confirm(id: string, user: AuthUser) {
     if (user.type !== 'customer') throw new ForbiddenException('Only a customer can confirm completion');
     return this.transition(id, user, 'COMPLETED', {
       onlyIf: { customerId: user.id },
+      data: { completedAt: new Date() },
       event: { type: 'WORK_COMPLETED' },
     });
   }
 
-  async complete(id: string, user: AuthUser) {
-    // Keep complete for backward compatibility or admin/worker force completion
-    return this.workerTransition(id, user, 'COMPLETED', 'WORK_COMPLETED');
+  /**
+   * The customer didn't confirm within AUTO_CONFIRM_HOURS of the worker finishing, and hasn't
+   * opened a dispute: the job completes by itself (flagged, so ops can see it wasn't confirmed).
+   */
+  async autoConfirmDue(now = new Date()): Promise<number> {
+    const hours = Number(this.config.get('AUTO_CONFIRM_HOURS') ?? 24);
+    const due = await this.prisma.jobRequest.findMany({
+      where: {
+        status: 'AWAITING_CONFIRMATION',
+        finishedAt: { lte: new Date(now.getTime() - hours * 3600_000) },
+        disputes: { none: { status: { in: ['OPEN', 'IN_REVIEW'] } } },
+      },
+      select: { id: true, title: true, customerId: true, assignedWorkerId: true },
+      take: 100,
+    });
+    let done = 0;
+    for (const job of due) {
+      const eventId = await this.prisma.$transaction(async (tx) => {
+        const r = await tx.jobRequest.updateMany({
+          where: { id: job.id, status: 'AWAITING_CONFIRMATION' },
+          data: { status: 'COMPLETED', completedAt: now, autoConfirmed: true },
+        });
+        if (r.count === 0) return null;
+        const ev = await tx.jobEvent.create({
+          data: { jobRequestId: job.id, type: 'AUTO_CONFIRMED', fromStatus: 'AWAITING_CONFIRMATION', toStatus: 'COMPLETED', payload: { afterHours: hours } },
+          select: { id: true },
+        });
+        await this.postSystemMessage(tx, job.id, job.customerId, job.assignedWorkerId, 'AUTO_CONFIRMED');
+        return ev.id;
+      });
+      if (!eventId) continue;
+      done++;
+      await this.announce({ id: job.id, title: job.title, customerId: job.customerId, workerId: job.assignedWorkerId, previousWorkerId: job.assignedWorkerId }, 'COMPLETED', 'AUTO_CONFIRMED', eventId, { id: 'system', type: 'admin' });
+    }
+    return done;
+  }
+
+  /**
+   * The other party's phone number, only while booked (O7 default: reveal after booking, hide
+   * after). Every reveal is audited.
+   */
+  async contact(id: string, user: AuthUser) {
+    const job = await this.prisma.jobRequest.findFirst({
+      where: { id, OR: [{ customerId: user.id }, { assignedWorkerId: user.id }] },
+      select: { status: true, customerId: true, assignedWorkerId: true, customer: { select: { name: true, phone: true } }, assignedWorker: { select: { user: { select: { name: true, phone: true } } } } },
+    });
+    if (!job || !job.assignedWorkerId) throw new NotFoundException('Job not found');
+    if (!CONTACT_STATUSES.includes(job.status as JobStatus)) {
+      throw new ConflictException({ code: 'CONTACT_UNAVAILABLE', message: 'Phone numbers are shown only while the job is booked. Use the chat instead.' });
+    }
+    const other = user.id === job.customerId ? job.assignedWorker?.user : job.customer;
+    await this.audit.record({ actorId: user.id, action: 'job.contact_revealed', entityType: 'JobRequest', entityId: id });
+    return { name: other?.name ?? null, phone: other?.phone ?? null };
+  }
+
+  /** Last known position of the professional on the way (customer only). */
+  async liveLocation(id: string, user: AuthUser) {
+    const job = await this.prisma.jobRequest.findFirst({ where: { id, customerId: user.id }, select: { id: true } });
+    if (!job) throw new NotFoundException('Job not found');
+    return { location: await this.location.latest(id) };
   }
 
   async decline(id: string, user: AuthUser) {
     if (user.type !== 'worker') throw new ForbiddenException('Only a worker can decline');
-    return this.transition(id, user, 'MATCHES_FOUND', {
+    const out = await this.transition(id, user, 'MATCHES_FOUND', {
       onlyIf: { assignedWorkerId: user.id },
       data: { assignedWorkerId: null },
       event: { type: 'WORKER_DECLINED' },
     });
+    // SOS dispatch moves on to the next nearest worker at once.
+    this.events.emit('job.direct_answered', { jobId: id, workerId: user.id, accepted: false });
+    return out;
   }
 
   async cancel(id: string, user: AuthUser, dto: CancelJobDto = {}) {
+    await this.staff.assert(user, 'jobs.cancel');
     const scope: Prisma.JobRequestWhereInput =
       user.type === 'customer' ? { customerId: user.id }
       : user.type === 'worker' ? { assignedWorkerId: user.id }
@@ -351,6 +466,53 @@ export class JobsService {
       data: { cancelReason: dto.reason ?? 'OTHER', cancelledById: user.id },
       event: { type: 'CANCELLED', payload: { reason: dto.reason ?? 'OTHER', note: dto.note?.trim() || undefined, by: user.type } },
     });
+  }
+
+  /**
+   * Staff: the booked worker can't or won't come. The job goes back to open, the worker is told,
+   * and matching runs again (the previous worker isn't asked again).
+   */
+  async reassign(id: string, admin: AuthUser, reason: string) {
+    await this.staff.assert(admin, 'jobs.manage');
+    const out = await this.transition(id, admin, 'MATCHES_FOUND', {
+      onlyIf: {},
+      data: { assignedWorkerId: null, acceptedOfferId: null, bookedAt: null, agreedAmount: null, agreedCurrency: null },
+      event: { type: 'REASSIGNED', payload: { reason, by: 'admin' } },
+    });
+    await this.prisma.offer.updateMany({ where: { jobRequestId: id, status: 'ACCEPTED' }, data: { status: 'WITHDRAWN' } });
+    await this.matching.matchJob(id, 1).catch((e) => this.logger.error(`Re-matching ${id} failed: ${(e as Error).message}`));
+    return out;
+  }
+
+  /**
+   * After an account is suspended: its open requests are cancelled and its pending prices
+   * withdrawn. Live bookings are not touched (a worker may be at someone's home) but get a
+   * timeline note and are returned so Ops can call both sides.
+   */
+  async releaseSuspended(userId: string, staff: AuthUser) {
+    const open = await this.prisma.jobRequest.findMany({ where: { customerId: userId, status: { in: ['CREATED', 'MATCHES_FOUND', 'AWAITING_WORKER'] } }, select: { id: true } });
+    const cancelled: string[] = [];
+    for (const j of open) {
+      try {
+        await this.transition(j.id, staff, 'CANCELLED', {
+          onlyIf: {},
+          data: { cancelReason: 'OTHER', cancelledById: staff.id },
+          event: { type: 'CANCELLED', payload: { reason: 'OTHER', note: 'Account suspended', by: 'admin' } },
+        });
+        cancelled.push(j.id);
+      } catch (e) {
+        this.logger.warn(`Could not cancel ${j.id} after suspension: ${(e as Error).message}`);
+      }
+    }
+    const withdrawn = await this.prisma.offer.updateMany({ where: { workerId: userId, status: 'PENDING' }, data: { status: 'WITHDRAWN' } });
+    const activeBookings = await this.prisma.jobRequest.findMany({
+      where: { status: { in: BUSY_STATUSES }, OR: [{ customerId: userId }, { assignedWorkerId: userId }] },
+      select: { id: true, status: true, title: true },
+    });
+    if (activeBookings.length) {
+      await this.prisma.jobEvent.createMany({ data: activeBookings.map((j) => ({ jobRequestId: j.id, type: 'PARTY_SUSPENDED', payload: { userId, by: staff.id } })) });
+    }
+    return { cancelled, offersWithdrawn: withdrawn.count, activeBookings };
   }
 
   private async workerTransition(id: string, user: AuthUser, to: JobStatus, eventType: string) {
@@ -370,6 +532,8 @@ export class JobsService {
       onlyIf: Prisma.JobRequestWhereInput;
       data?: Prisma.JobRequestUncheckedUpdateManyInput;
       event: { type: string; payload?: Record<string, unknown> };
+      /** Extra writes that must commit with the status change (e.g. before/after photos). */
+      inTx?: (tx: Prisma.TransactionClient) => Promise<void>;
     },
   ) {
     const job = await this.prisma.jobRequest.findFirst({
@@ -379,10 +543,17 @@ export class JobsService {
     if (!job) throw new NotFoundException('Job not found');
 
     const from = job.status as JobStatus;
-    assertTransition(from, to, user.type as JobActor);
-    if (to === 'CANCELLED' && user.type === 'customer' && !CANCELLABLE_BY_CUSTOMER.includes(from)) {
-      throw new ConflictException('This job can no longer be cancelled here. Please contact support.');
+    // The same person repeating the same action (a retry from the phone's outbox after a timeout, or a
+    // double tap) gets the job as it is: no second event, message or notification.
+    if (from === to && user.type !== 'admin') return this.findById(id, user);
+    if (to === 'CANCELLED' && user.type === 'customer' && !canTransition(from, 'CANCELLED', 'customer')) {
+      throw new ConflictException({ code: 'CANNOT_CANCEL_NOW', message: 'This job can no longer be cancelled here. Please contact support.' });
     }
+    assertTransition(from, to, user.type as JobActor);
+    // Cancelling after the worker set off is recorded as late (for fees later; none today).
+    const payload = to === 'CANCELLED' && user.type === 'customer' && LATE_CANCEL_STATUSES.includes(from)
+      ? { ...(opts.event.payload ?? {}), late: true }
+      : opts.event.payload;
 
     const eventId = await this.prisma.$transaction(async (tx) => {
       const result = await tx.jobRequest.updateMany({
@@ -393,50 +564,32 @@ export class JobsService {
       const ev = await tx.jobEvent.create({
         data: {
           jobRequestId: id, actorId: user.id, type: opts.event.type, fromStatus: from, toStatus: to,
-          payload: opts.event.payload as Prisma.InputJsonValue | undefined,
+          payload: payload as Prisma.InputJsonValue | undefined,
         },
         select: { id: true },
       });
-
-      if (to === 'ACCEPTED' || to === 'IN_PROGRESS' || to === 'COMPLETED') {
-        const actualWorkerId = opts.data && 'assignedWorkerId' in opts.data ? (opts.data.assignedWorkerId as string | null) : job.assignedWorkerId;
-        if (job.customerId && actualWorkerId) {
-          let conv = await tx.conversation.findFirst({ where: { jobRequestId: id } });
-          if (!conv) {
-            conv = await tx.conversation.create({
-              data: {
-                jobRequestId: id,
-                participants: { connect: [{ id: job.customerId }, { id: actualWorkerId }] }
-              }
-            });
-          }
-          
-          let sysMsg = '';
-          if (opts.event.type === 'WORK_STARTED') sysMsg = 'The professional has started the work.';
-          if (opts.event.type === 'WORK_COMPLETED') sysMsg = 'The professional has marked the work as completed.';
-          if (opts.event.type === 'EN_ROUTE') sysMsg = 'The professional is on the way.';
-
-          if (sysMsg) {
-            await tx.message.create({
-              data: {
-                conversationId: conv.id,
-                isSystem: true,
-                text: sysMsg
-              }
-            });
-            await tx.conversation.update({
-              where: { id: conv.id },
-              data: { lastMessageAt: new Date() }
-            });
-          }
-        }
-      }
+      if (opts.inTx) await opts.inTx(tx);
+      const workerAfter = opts.data && 'assignedWorkerId' in opts.data ? (opts.data.assignedWorkerId as string | null) : job.assignedWorkerId;
+      await this.postSystemMessage(tx, id, job.customerId, workerAfter, opts.event.type);
 
       return ev.id;
     });
     const workerId = opts.data && 'assignedWorkerId' in opts.data ? (opts.data.assignedWorkerId as string | null) : job.assignedWorkerId;
     await this.announce({ id, title: job.title, customerId: job.customerId, workerId, previousWorkerId: job.assignedWorkerId }, to, opts.event.type, eventId, user);
     return this.findById(id, user);
+  }
+
+  /**
+   * The job's chat gets a line for each step both people should see. The conversation exists
+   * from booking (created here if an older job has none).
+   */
+  private async postSystemMessage(tx: Prisma.TransactionClient, jobId: string, customerId: string, workerId: string | null, eventType: string) {
+    const key = SYSTEM_MESSAGE_FOR[eventType];
+    if (!key || !workerId) return;
+    const conv = (await tx.conversation.findFirst({ where: { jobRequestId: jobId }, select: { id: true } }))
+      ?? (await tx.conversation.create({ data: { jobRequestId: jobId, participants: { connect: [{ id: customerId }, { id: workerId }] } }, select: { id: true } }));
+    await tx.message.create({ data: systemMessage(conv.id, key) });
+    await tx.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: new Date() } });
   }
 
   /** Tell the other side what just happened, live and (if they're away) by push. */
@@ -450,29 +603,50 @@ export class JobsService {
       id ? (await this.prisma.user.findUnique({ where: { id }, select: { name: true } }))?.name ?? 'Your professional' : 'Your professional';
     const toCustomer = (type: NotificationType, worker: string) => this.notifications.notify({
       type, userIds: [job.customerId], eventKey: `${type}:${eventId}`,
-      params: { title, worker }, data: { url: `/(customer)/job/${job.id}`, jobId: job.id },
+      params: { title, worker }, data: { url: routes.customerJob(job.id), jobId: job.id },
     });
+    const toWorker = (type: NotificationType) => job.workerId ? this.notifications.notify({
+      type, userIds: [job.workerId], eventKey: `${type}:${eventId}`,
+      params: { title }, data: { url: routes.workerJob(job.id), jobId: job.id },
+    }) : Promise.resolve(0);
 
     switch (eventType) {
       case 'WORKER_REQUESTED':
         if (job.workerId) {
           await this.notifications.notify({
             type: 'job.direct_request', userIds: [job.workerId], eventKey: `job.direct_request:${eventId}`,
-            params: { title }, data: { url: `/(worker)/job/${job.id}`, jobId: job.id },
+            params: { title }, data: { url: routes.workerJob(job.id), jobId: job.id },
           });
         }
         return;
       case 'WORKER_ACCEPTED': return void (await toCustomer('job.accepted', await workerName(job.workerId)));
+      case 'EN_ROUTE': return void (await toCustomer('job.en_route', await workerName(job.workerId)));
+      case 'ARRIVED': return void (await toCustomer('job.arrived', await workerName(job.workerId)));
       case 'WORK_STARTED': return void (await toCustomer('job.started', await workerName(job.workerId)));
-      case 'WORK_COMPLETED': return void (await toCustomer('job.completed', await workerName(job.workerId)));
+      case 'WORK_FINISHED': return void (await toCustomer('job.awaiting_confirmation', await workerName(job.workerId)));
+      // The customer confirmed: the worker is the one to tell.
+      case 'WORK_COMPLETED': return void (await toWorker('job.confirmed'));
+      case 'AUTO_CONFIRMED':
+        await toWorker('job.auto_confirmed');
+        await toCustomer('job.auto_confirmed', await workerName(job.workerId));
+        return;
       case 'WORKER_DECLINED': return void (await toCustomer('job.declined', await workerName(job.previousWorkerId)));
+      case 'REASSIGNED':
+        await toCustomer('job.reassigned', await workerName(job.previousWorkerId));
+        if (job.previousWorkerId) {
+          await this.notifications.notify({
+            type: 'job.cancelled', userIds: [job.previousWorkerId], eventKey: `job.cancelled:${eventId}`, params: { title },
+            data: { url: routes.workerJobs(), jobId: job.id },
+          });
+        }
+        return;
       case 'CANCELLED': {
         // Whoever didn't cancel hears about it.
         const others = [job.customerId, job.workerId].filter((u): u is string => !!u && u !== actor.id);
         for (const u of others) {
           await this.notifications.notify({
             type: 'job.cancelled', userIds: [u], eventKey: `job.cancelled:${eventId}`, params: { title },
-            data: { url: u === job.customerId ? `/(customer)/job/${job.id}` : `/(worker)/job/${job.id}`, jobId: job.id },
+            data: { url: routes.jobFor(job.id, u === job.customerId ? 'customer' : 'worker'), jobId: job.id },
           });
         }
         return;

@@ -1,17 +1,20 @@
 import { io, Socket } from 'socket.io-client';
-import { IChatMessage } from '@fixli/shared';
 import { SOCKET_URL } from '../config';
 import { getAccessToken, refreshAccessToken } from './session';
 
 /** What the server sends. Every event arrives wrapped: { id, type, occurredAt, data }. */
-export type RealtimeType = 'notification.created' | 'job.updated' | 'offers.updated' | 'feed.updated';
+export type RealtimeType =
+  | 'notification.created' | 'job.updated' | 'offers.updated' | 'feed.updated'
+  | 'message.created' | 'message.read' | 'conversation.updated' | 'chat.typing';
 export interface Envelope<T = any> { id: string; type: RealtimeType; occurredAt: string; data: T }
 /** Local signals: 'resync' = we were offline and may have missed events, so reload. */
 type LocalType = 'resync' | 'status';
 type Listener = (e: Envelope) => void;
+/** Sent by the server to the job's customer while the professional is on the way. */
+export interface LocationUpdate { jobId: string; workerId: string; latitude: number; longitude: number; heading?: number; etaMinutes: number | null; at: string }
 export type ConnectionStatus = 'offline' | 'connecting' | 'online';
 
-const EVENTS: RealtimeType[] = ['notification.created', 'job.updated', 'offers.updated', 'feed.updated'];
+const EVENTS: RealtimeType[] = ['notification.created', 'job.updated', 'offers.updated', 'feed.updated', 'message.created', 'message.read', 'conversation.updated', 'chat.typing'];
 
 /**
  * One live connection per device (namespace /rt) for jobs, offers, notifications and, later, chat.
@@ -28,8 +31,7 @@ class RealtimeClient {
   private refreshedForThisAttempt = false;
   status: ConnectionStatus = 'offline';
 
-  private messageListeners: ((msg: IChatMessage) => void)[] = [];
-  private locationListeners: ((data: { workerId: string; latitude: number; longitude: number; heading?: number }) => void)[] = [];
+  private locationListeners: ((data: LocationUpdate) => void)[] = [];
 
   async connect() {
     this.disconnect();
@@ -71,7 +73,6 @@ class RealtimeClient {
       });
     }
 
-    socket.on('newMessage', (message: IChatMessage) => this.messageListeners.forEach((l) => l(message)));
     socket.on('locationUpdate', (data: any) => this.locationListeners.forEach((l) => l(data)));
   }
 
@@ -112,32 +113,18 @@ class RealtimeClient {
     this.fire('status', { id: `status-${Date.now()}`, type: 'status' as any, occurredAt: new Date().toISOString(), data: s });
   }
 
-  // ── chat & live location (used by Phase 7/8 screens) ─────────
+  // ── typing & live location ─────────
 
-  sendMessage(threadId: string, text: string) {
-    if (this.socket?.connected) {
-      this.socket.emit('sendMessage', { threadId, text });
-    } else {
-      // Offline enqueue
-      import('./offline').then(({ OfflineQueueService }) => {
-        OfflineQueueService.enqueue({
-          type: 'SEND_MESSAGE',
-          payload: { threadId, text }
-        }).catch(console.error);
-      });
-    }
+  /** "I'm typing" (the server throttles and forwards it). Messages themselves go over REST + the outbox. */
+  typing(threadId: string) {
+    if (this.socket?.connected) this.socket.emit('typing', { threadId });
   }
 
   sendLocation(jobId: string, latitude: number, longitude: number, heading?: number) {
     if (this.socket?.connected) this.socket.emit('locationUpdate', { jobId, latitude, longitude, heading });
   }
 
-  onNewMessage(callback: (msg: IChatMessage) => void) {
-    this.messageListeners.push(callback);
-    return () => { this.messageListeners = this.messageListeners.filter((l) => l !== callback); };
-  }
-
-  onLocationUpdate(callback: (data: { workerId: string; latitude: number; longitude: number; heading?: number }) => void) {
+  onLocationUpdate(callback: (data: LocationUpdate) => void) {
     this.locationListeners.push(callback);
     return () => { this.locationListeners = this.locationListeners.filter((l) => l !== callback); };
   }

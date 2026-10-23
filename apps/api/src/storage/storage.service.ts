@@ -1,3 +1,4 @@
+import { StaffAccessService } from '../common/access/staff-access.service';
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Prisma, UploadPurpose } from '@prisma/client';
@@ -17,6 +18,7 @@ export class StorageService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(STORAGE_DRIVER) private readonly driver: StorageDriver,
+    private readonly staff: StaffAccessService,
   ) {}
 
   /** Public URL for a stored key. Used to expose avatars/portfolio photos. */
@@ -87,6 +89,15 @@ export class StorageService {
    * Pass `tx` so attaching and creating the parent happen atomically.
    */
   async consume(ownerId: string, uploadIds: string[], purpose: UploadPurpose, tx?: Prisma.TransactionClient): Promise<string[]> {
+    return (await this.consumeFiles(ownerId, uploadIds, purpose, tx)).map((f) => f.key);
+  }
+
+  /**
+   * The one way to attach a file to anything: the caller's own, finished (type-checked) upload of
+   * the right purpose, used once. Returns the private key and the verified MIME type. Clients
+   * never send storage keys (doc 27 F1.3).
+   */
+  async consumeFiles(ownerId: string, uploadIds: string[], purpose: UploadPurpose, tx?: Prisma.TransactionClient): Promise<{ key: string; mime: string }[]> {
     const db = tx ?? this.prisma;
     const ids = [...new Set(uploadIds)];
     const rows = await db.upload.findMany({ where: { id: { in: ids }, ownerId, purpose, status: 'READY', usedAt: null } });
@@ -100,7 +111,7 @@ export class StorageService {
     if (claimed.count !== ids.length) {
       throw new ConflictException({ code: 'UPLOAD_IN_USE', message: 'That photo was just used elsewhere.' });
     }
-    const byId = new Map(rows.map((r) => [r.id, r.key]));
+    const byId = new Map(rows.map((r) => [r.id, { key: r.key, mime: r.mime }]));
     return ids.map((id) => byId.get(id)!);
   }
 
@@ -109,6 +120,11 @@ export class StorageService {
     const upload = await this.prisma.upload.findUnique({ where: { id: uploadId } });
     if (!upload || upload.status !== 'READY' || (upload.ownerId !== user.id && user.type !== 'admin')) {
       throw new NotFoundException('Upload not found');
+    }
+    // Staff: identity documents need documents.view; other private files a case-handling permission.
+    if (upload.ownerId !== user.id) {
+      if (upload.purpose === 'VERIFICATION') await this.staff.assert(user, 'documents.view');
+      else await this.staff.assert(user, 'jobs.read', 'disputes.read', 'safety.read');
     }
     return { url: await this.driver.signedGetUrl(upload.key, 300), expiresInSeconds: 300 };
   }
@@ -120,6 +136,17 @@ export class StorageService {
     });
     if (!upload) throw new BadRequestException({ code: 'INVALID_UPLOAD', message: 'That photo or recording was not found. Please add it again.' });
     return { bytes: await this.driver.read(upload.key), mime: upload.mime, key: upload.key, purpose: upload.purpose };
+  }
+
+  /**
+   * Erase this person's stored files of the given kinds (account deletion: ID photos, selfie, avatar,
+   * portfolio). Returns how many were removed. A file that is already gone is not an error.
+   */
+  async deleteOwned(ownerId: string, purposes: UploadPurpose[]): Promise<number> {
+    const uploads = await this.prisma.upload.findMany({ where: { ownerId, purpose: { in: purposes } }, select: { id: true, key: true } });
+    for (const u of uploads) await this.driver.remove(u.key).catch(() => undefined);
+    await this.prisma.upload.deleteMany({ where: { id: { in: uploads.map((u) => u.id) } } });
+    return uploads.length;
   }
 
   async signedUrlForKey(key: string, ttlSeconds = 300): Promise<string> {

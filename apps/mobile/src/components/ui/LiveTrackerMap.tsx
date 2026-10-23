@@ -3,6 +3,7 @@ import { StyleSheet, View, Text } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useI18n } from '../../hooks/useI18n';
+import { t } from '../../i18n';
 
 interface Coordinates {
   latitude: number;
@@ -33,7 +34,7 @@ export default function LiveTrackerMap({ customerLocation, workerLocation, etaSt
         showsUserLocation={false}
       >
         {customerLocation && (
-          <Marker coordinate={customerLocation} title="Your Location">
+          <Marker coordinate={customerLocation} title={t('liveTrackerMap.yourLocation')}>
             <View style={styles.customerMarker}>
               <MaterialCommunityIcons name="home-map-marker" size={24} color="#FFF" />
             </View>
@@ -41,7 +42,7 @@ export default function LiveTrackerMap({ customerLocation, workerLocation, etaSt
         )}
 
         {workerLocation && (
-          <Marker coordinate={workerLocation} title="Worker Location">
+          <Marker coordinate={workerLocation} title={t('liveTrackerMap.workerLocation')}>
             <View style={styles.workerMarker}>
               <MaterialCommunityIcons name="car" size={20} color="#FFF" />
             </View>

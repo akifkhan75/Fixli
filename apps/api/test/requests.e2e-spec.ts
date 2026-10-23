@@ -250,14 +250,16 @@ describe('Request a service (e2e)', () => {
     });
 
     it('every step lands on the timeline in order', async () => {
-      await http().post(`/api/job-requests/${jobId}/start`).set(as('work')).expect(201);
+      await http().post(`/api/job-requests/${jobId}/start`).set(as('work')).expect(400); // needs a before photo or a reason
+      await http().post(`/api/job-requests/${jobId}/start`).set(as('work')).send({ photoSkipReason: 'CAMERA_UNAVAILABLE' }).expect(201);
       const job = await http().get(`/api/job-requests/${jobId}`).set(as('cust')).expect(200);
       expect(job.body.events.map((e: any) => e.type)).toEqual(['REQUEST_SENT', 'PROFESSIONALS_NOTIFIED', 'WORKER_REQUESTED', 'WORKER_ACCEPTED', 'WORK_STARTED']);
       expect(job.body.events[3]).toMatchObject({ fromStatus: 'AWAITING_WORKER', toStatus: 'ACCEPTED', actorId: ids.work });
     });
 
     it('cancelling records the reason; a started job cannot be cancelled by the customer', async () => {
-      await http().post(`/api/job-requests/${jobId}/cancel`).set(as('cust')).send({ reason: 'NO_LONGER_NEEDED' }).expect(403);
+      const late = await http().post(`/api/job-requests/${jobId}/cancel`).set(as('cust')).send({ reason: 'NO_LONGER_NEEDED' }).expect(409);
+      expect(late.body.error.code).toBe('CANNOT_CANCEL_NOW');
       const fresh = await http().post('/api/job-requests').set(as('cust')).send({ categoryId: plumbing.id, issueCodes: ['blocked_drain'], addressId, when: 'NOW', idempotencyKey: key() }).expect(201);
       expect(fresh.body.urgency).toBe('urgent');
       await http().post(`/api/job-requests/${fresh.body.id}/cancel`).set(as('cust')).send({ reason: 'not-a-reason' }).expect(400);

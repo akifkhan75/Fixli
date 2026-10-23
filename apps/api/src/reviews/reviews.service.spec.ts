@@ -49,3 +49,14 @@ describe('ReviewsService', () => {
     await expect(svc.create({ id: 'a', type: 'admin' }, { jobRequestId: 'j1', rating: 5 })).rejects.toThrow(ForbiddenException);
   });
 });
+
+import { needsLook } from './reviews.service';
+describe('review auto-moderation', () => {
+  it('flags a bare 1-star or abusive words; leaves real reviews alone', () => {
+    expect(needsLook(1, '')).toBe(true);
+    expect(needsLook(1, 'bad')).toBe(true);
+    expect(needsLook(1, 'Came two hours late and the leak is still there.')).toBe(false);
+    expect(needsLook(5, 'what an idiot')).toBe(true);
+    expect(needsLook(4, 'Good work, a bit slow')).toBe(false);
+  });
+});

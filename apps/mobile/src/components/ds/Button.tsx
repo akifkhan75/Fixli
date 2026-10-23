@@ -63,7 +63,7 @@ export const Button = ({
       break;
     case 'ghost':
       backgroundColor = 'transparent';
-      textColor = theme.colors.primary;
+      textColor = theme.colors.primaryText;
       break;
     case 'danger':
       backgroundColor = theme.colors.error;
@@ -75,15 +75,19 @@ export const Button = ({
   let paddingVertical = theme.spacing.md;
   let paddingHorizontal = theme.spacing.xl;
   let textVariant: 'bodySmall' | 'body' | 'bodyLarge' = 'body';
+  // Touch targets: at least 48 pt, 56 pt for the big primary buttons (doc 27 F7.5).
+  let minHeight = 52;
 
   if (size === 'sm') {
     paddingVertical = theme.spacing.sm;
     paddingHorizontal = theme.spacing.lg;
     textVariant = 'bodySmall';
+    minHeight = 48;
   } else if (size === 'lg') {
     paddingVertical = theme.spacing.lg;
     paddingHorizontal = theme.spacing['2xl'];
     textVariant = 'bodyLarge';
+    minHeight = 56;
   }
 
   const containerStyle: ViewStyle = {
@@ -91,6 +95,7 @@ export const Button = ({
     borderColor: disabled ? 'transparent' : borderColor,
     borderWidth: variant === 'outline' ? 1.5 : 0,
     borderRadius: theme.borderRadius.lg,
+    minHeight,
     paddingVertical,
     paddingHorizontal,
     flexDirection: 'row',

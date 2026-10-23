@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useStaff } from '../staff';
 import { ApiError, decideCase, getCase, listCases, type CaseDetail } from '../api';
 import { useLoad } from '../hooks';
 import './Pages.css';
@@ -6,7 +7,9 @@ import './Pages.css';
 const TYPE_LABEL: Record<string, string> = { ID: 'ID card', SELFIE: 'Selfie', TRADE_LICENSE: 'Trade licence', INSURANCE: 'Insurance' };
 
 export default function Verifications() {
-  const queue = useLoad(() => listCases('SUBMITTED'));
+  const { clearBadge, resync } = useStaff();
+  const queue = useLoad(() => listCases('SUBMITTED'), [resync]);
+  useEffect(() => { clearBadge('verification'); }, [clearBadge]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [detailError, setDetailError] = useState<string | undefined>();

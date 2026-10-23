@@ -1,48 +1,19 @@
-name: Security Audit & E2E Tests
+name: Secret scan
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
 
 jobs:
-  security:
+  trufflehog:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          
-      - name: Install dependencies
-        run: npm install -g pnpm && pnpm install
-
-      - name: Run dependency scan
-        run: pnpm audit --audit-level high || true
-        
-      - name: Run Secret Scan
+          fetch-depth: 0
+      - name: TruffleHog (verified secrets only)
         uses: trufflesecurity/trufflehog@main
         with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --debug --only-verified
-
-  e2e-tests:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Maestro
-        run: curl -Ls "https://get.maestro.mobile.dev" | bash
-        
-      - name: Run Maestro Tests
-        run: |
-          export PATH="$PATH:$HOME/.maestro/bin"
-          # Typically you would build the app or download the APK/app artifact first
-          # maestro test apps/mobile/.maestro/customer_flow.yaml
-          # maestro test apps/mobile/.maestro/worker_flow.yaml
-          echo "Maestro E2E ready for CI execution once build artifacts are available"
+          extra_args: --only-verified
+# Phone and browser end-to-end tests live in e2e-admin.yml and e2e-mobile.yml; load tests in load.yml.

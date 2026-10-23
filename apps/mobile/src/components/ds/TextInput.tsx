@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import {
   TextInput as RNTextInput,
   TextInputProps as RNTextInputProps,
@@ -9,6 +10,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
+import { t } from '../../i18n';
 
 export interface TextInputProps extends RNTextInputProps {
   label?: string;
@@ -31,14 +33,15 @@ export const TextInput = ({
   const theme = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const focusAnim = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     Animated.timing(focusAnim, {
       toValue: isFocused ? 1 : 0,
-      duration: 200,
+      duration: reduceMotion ? 0 : 200,
       useNativeDriver: false,
     }).start();
-  }, [isFocused]);
+  }, [isFocused, reduceMotion]);
 
   const handleFocus = (e: any) => {
     setIsFocused(true);
@@ -97,7 +100,7 @@ export const TextInput = ({
           placeholderTextColor={theme.colors.textTertiary}
           accessible
           accessibilityLabel={props.accessibilityLabel || label || props.placeholder}
-          accessibilityHint={error ? `Error: ${error}` : props.accessibilityHint}
+          accessibilityHint={error ? t('textInput.error', { error }) : props.accessibilityHint}
           {...props}
         />
         
@@ -105,7 +108,7 @@ export const TextInput = ({
       </Animated.View>
 
       {error && (
-        <Text variant="caption" style={{ color: theme.colors.error, marginTop: theme.spacing.xs }}>
+        <Text variant="caption" style={{ color: theme.colors.errorText, marginTop: theme.spacing.xs }}>
           {error}
         </Text>
       )}

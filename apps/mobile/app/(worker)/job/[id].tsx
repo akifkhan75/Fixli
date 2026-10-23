@@ -1,3 +1,4 @@
+import { StaleNote } from '../../../src/components/ds/StaleNote';
 import React, { useState, useEffect } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
@@ -12,7 +13,11 @@ import { formatWindow, statusSentence, toPhase } from '../../../src/utils/jobSta
 import { JobHistory, JobMedia } from '../../../src/components/ds/JobParts';
 import { ChangeOrdersList } from '../../../src/components/ds/ChangeOrdersList';
 import { ReviewForm } from '../../../src/components/ds/ReviewForm';
-import { TextInput } from '../../../src/components/ds/TextInput';
+import { JobStepPhoto } from '../../../src/components/ds/JobStepPhoto';
+import { ChangeOrderForm } from '../../../src/components/ds/ChangeOrderForm';
+import { CallButton } from '../../../src/components/ds/CallButton';
+import { SOS_COPY } from '../../../src/safety/copy';
+import { MessageButton } from '../../../src/components/ds/MessageButton';
 import { PriceForm } from '../../../src/components/ds/PriceForm';
 import { useAppDispatch, useAppSelector } from '../../../src/hooks/useRedux';
 import { startTracking, stopTracking } from '../../../src/store/trackingSlice';
@@ -21,43 +26,66 @@ import { router } from 'expo-router';
 import { useI18n } from '../../../src/hooks/useI18n';
 import * as api from '../../../src/services/api';
 import { useLiveReload } from '../../../src/hooks/useRealtime';
+import { useOutbox } from '../../../src/hooks/useOutbox';
+import { submitJobAction, type JobActionName } from '../../../src/services/outboxHandlers';
+import { analytics } from '../../../src/services/analytics';
+import { outbox } from '../../../src/services/outbox';
+import { t } from '../../../src/i18n';
+
+const PAYMENT_LABEL_WORKER: Record<string, string> = {
+  MARKED_BY_WORKER: 'Cash marked. Waiting for the customer to confirm.',
+  CONFIRMED: 'Cash payment confirmed',
+  DISPUTED: 'The customer questioned this payment. Fixli support will look into it.',
+  VOIDED: 'Payment not counted (resolved by support)',
+};
 
 export default function WorkerJobScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { locale } = useI18n();
-  const { data: job, loading, error, reload, setData } = useApi(() => api.getJobView(id), [id]);
+  const { locale, t } = useI18n();
+  const { data: job, loading, error, reload, setData, staleAt } = useApi(() => api.getJobView(id), [id], { cacheKey: `job:${id}` });
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
   const me = useApi(api.getWorkerMe);
   const [editingPrice, setEditingPrice] = useState(false);
   const [creatingChangeOrder, setCreatingChangeOrder] = useState(false);
-  const [coReason, setCoReason] = useState('');
-  const [coScope, setCoScope] = useState('');
-  const [coPriceStr, setCoPriceStr] = useState('');
+  const [photoStep, setPhotoStep] = useState<'before' | 'after' | null>(null);
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector(state => state.auth.currentUser);
+  const { items: saved } = useOutbox(currentUser?.id, id);
   
   // Booked by the customer, chosen someone else, cancelled: the screen follows along.
   useLiveReload(reload, ['job.updated', 'feed.updated'], (e) => e.data?.jobId === id);
+  // A step saved while offline has now gone out: show the new state.
+  useEffect(() => outbox.subscribe((e) => { if (e.type === 'sent' && e.item.group === id) void reload(); }), [id, reload]);
 
   useEffect(() => {
     if (job?.status === 'EN_ROUTE' && me.data) {
-      dispatch(startTracking({ workerId: me.data.id, jobId: job.id, customerLocation: { latitude: job.latitude || 0, longitude: job.longitude || 0 } }));
+      dispatch(startTracking({ workerId: me.data.id, jobId: job.id, customerLocation: job.latitude != null && job.longitude != null ? { latitude: job.latitude, longitude: job.longitude } : null }));
     } else {
       dispatch(stopTracking());
     }
   }, [job?.status, me.data?.id, job?.id, job?.latitude, job?.longitude, dispatch]);
 
-  if (loading && !job) return <Screen title="Job" back><LoadingState /></Screen>;
-  if (error && !job) return <Screen title="Job" back><ErrorState message={error} onRetry={reload} /></Screen>;
+  if (loading && !job) return <Screen title={t('customer.job')} back><LoadingState /></Screen>;
+  if (error && !job) return <Screen title={t('customer.job')} back><ErrorState message={error} onRetry={reload} /></Screen>;
   if (!job) return null;
 
-  const run = (fn: (id: string) => Promise<api.JobView>) => async () => {
+  // Steps happen now when there's signal; with none they're saved on the phone and sent when it's back.
+  const step = async (action: JobActionName, label: string, evidence?: api.JobStepEvidence & { localPhotoUris?: string[] }) => {
     setBusy(true);
     setActionError(undefined);
-    try { setData(await fn(job.id)); } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
+    try {
+      const r = await submitJobAction(currentUser?.id ?? '', { jobId: job.id, action, label, evidence });
+      if (!r.queued) setData(r.result);
+      const status = { accept: 'ACCEPTED', 'en-route': 'EN_ROUTE', arrive: 'ARRIVED', start: 'IN_PROGRESS', finish: 'AWAITING_CONFIRMATION' } as const;
+      if (action === 'accept') void analytics.track('job_accepted');
+      else if (action === 'decline') void analytics.track('job_declined');
+      else void analytics.track('job_status_changed', { status: status[action], side: 'worker' });
+      return true;
+    } catch (e) { setActionError(friendlyError(e)); return false; } finally { setBusy(false); }
   };
+  const run = (action: JobActionName, label: string) => () => void step(action, label);
 
   const sendPrice = async (amount: number, eta?: number, note?: string) => {
     setBusy(true);
@@ -73,20 +101,12 @@ export default function WorkerJobScreen() {
     try { await api.notInterested(job.id); router.back(); } catch (e) { setActionError(friendlyError(e)); setBusy(false); }
   };
   
-  const submitChangeOrder = async () => {
+  const submitChangeOrder = async (v: { reason: string; addedScope: string; revisedPrice: number }) => {
     setBusy(true);
     setActionError(undefined);
     try {
-      await api.createChangeOrder({
-        jobRequestId: job.id,
-        reason: coReason,
-        addedScope: coScope,
-        revisedPrice: parseInt(coPriceStr, 10),
-      });
+      await api.createChangeOrder({ jobRequestId: job.id, ...v });
       setCreatingChangeOrder(false);
-      setCoReason('');
-      setCoScope('');
-      setCoPriceStr('');
       await reload();
     } catch (e) {
       setActionError(friendlyError(e));
@@ -95,26 +115,34 @@ export default function WorkerJobScreen() {
     }
   };
 
+  const submitStep = async (evidence: api.JobStepEvidence & { localPhotoUris?: string[] }) => {
+    const ok = await step(photoStep === 'before' ? 'start' : 'finish', photoStep === 'before' ? 'Start work' : 'Finish work', evidence);
+    if (ok) setPhotoStep(null);
+  };
+
   const offer = job.myOffer && job.myOffer.status === 'PENDING' ? job.myOffer : null;
 
   // One primary action per state; the server enforces the order.
-  const action =
+  const waitingStep = saved.find((i) => i.kind === 'job_action');
+  const action = photoStep || creatingChangeOrder || waitingStep ? undefined :
     job.status === 'AWAITING_WORKER' ? (
       <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ flex: 1 }}><Button title="Decline" variant="secondary" size="lg" disabled={busy} onPress={run(api.declineJob)} /></View>
-        <View style={{ flex: 1 }}><Button title="Accept job" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.acceptJob)} /></View>
+        <View style={{ flex: 1 }}><Button title={t('workerJob.decline')} variant="secondary" size="lg" disabled={busy} onPress={run('decline', 'Decline')} /></View>
+        <View style={{ flex: 1 }}><Button title={t('workerJob.acceptJob')} variant="primary" size="lg" loading={busy} disabled={busy} onPress={run('accept', 'Accept job')} /></View>
       </View>
     ) : job.status === 'ACCEPTED' ? (
-      <Button title="I'm on my way" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.enRouteJob)} />
+      <Button title={t('workerJob.imOnMyWay')} variant="primary" size="lg" loading={busy} disabled={busy} onPress={run('en-route', "I'm on my way")} />
     ) : job.status === 'EN_ROUTE' ? (
-      <Button title="I've arrived" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.arriveJob)} />
+      <Button title={t('workerJob.iveArrived')} variant="primary" size="lg" loading={busy} disabled={busy} onPress={run('arrive', "I've arrived")} />
     ) : job.status === 'ARRIVED' ? (
-      <Button title="Start work" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.startJob)} />
+      <Button title={t('workerJob.startWork')} variant="primary" size="lg" disabled={busy} onPress={() => setPhotoStep('before')} />
     ) : job.status === 'IN_PROGRESS' ? (
       <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ flex: 1 }}><Button title="Change Order" variant="secondary" size="lg" disabled={busy} onPress={() => setCreatingChangeOrder(true)} /></View>
-        <View style={{ flex: 1 }}><Button title="Finish work" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.finishJob)} /></View>
+        <View style={{ flex: 1 }}><Button title={t('workerJob.extraWork')} variant="secondary" size="lg" disabled={busy} onPress={() => setCreatingChangeOrder(true)} /></View>
+        <View style={{ flex: 1 }}><Button title={t('workerJob.finishWork')} variant="primary" size="lg" disabled={busy} onPress={() => setPhotoStep('after')} /></View>
       </View>
+    ) : job.status === 'AWAITING_CONFIRMATION' ? (
+      <Text variant="body" color={theme.colors.textSecondary}>{t('workerJob.waitingForTheCustomer')}</Text>
     ) : undefined;
 
   const payment = job.payments?.[0];
@@ -125,71 +153,84 @@ export default function WorkerJobScreen() {
     setBusy(true);
     setActionError(undefined);
     try {
-      await api.markCashReceived(job.id, job.agreedAmount, job.agreedCurrency || 'USD');
+      await api.markCashReceived(job.id);
       await reload();
     } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
   };
 
   return (
-    <Screen title="Job" back footer={action} onRefresh={reload} refreshing={loading}>
+    <Screen title={t('customer.job')} back footer={action} onRefresh={reload} refreshing={loading}>
+      <StaleNote at={staleAt} />
+      {job.isEmergency && job.status === 'AWAITING_WORKER' ? (
+        <View style={{ backgroundColor: theme.colors.error, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 12 }} accessibilityRole="alert">
+          <Text variant="bodyLarge" weight="bold" color="#FFFFFF">{SOS_COPY.workerSosBanner(3)}</Text>
+        </View>
+      ) : null}
       <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>{statusSentence(job.status, 'worker', job.customer?.name)}</Text>
       <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, marginTop: 16, paddingVertical: 8 }}>
         <StatusTimeline currentPhase={toPhase(job.status)} />
       </View>
       <View style={{ marginTop: 24 }}>
-        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>WHAT NEEDS FIXING</Text>
+        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('workerJob.whatNeedsFixing')}</Text>
         {job.title ? <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{job.title}</Text> : null}
         <Text variant="body" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{job.description}</Text>
       </View>
       <JobMedia media={job.media ?? []} />
       
-      {creatingChangeOrder && (
-        <View style={{ marginTop: 20, backgroundColor: theme.colors.surfaceElevated, padding: 16, borderRadius: theme.borderRadius.lg }}>
-          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>New Change Order</Text>
-          <View style={{ gap: 12 }}>
-            <TextInput label="Reason for change" value={coReason} onChangeText={setCoReason} placeholder="e.g. Found water damage" />
-            <TextInput label="Added scope" value={coScope} onChangeText={setCoScope} placeholder="e.g. Replace drywall" />
-            <TextInput label="New Total Price (Minor units)" value={coPriceStr} onChangeText={setCoPriceStr} keyboardType="numeric" />
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
-              <View style={{ flex: 1 }}><Button title="Cancel" variant="secondary" disabled={busy} onPress={() => setCreatingChangeOrder(false)} /></View>
-              <View style={{ flex: 1 }}><Button title="Submit" variant="primary" loading={busy} disabled={busy || !coReason || !coScope || !coPriceStr} onPress={submitChangeOrder} /></View>
-            </View>
-          </View>
-        </View>
-      )}
+      {photoStep ? <JobStepPhoto kind={photoStep} busy={busy} onSubmit={submitStep} onCancel={() => setPhotoStep(null)} /> : null}
+      {creatingChangeOrder ? (
+        <ChangeOrderForm currentMinor={job.agreedAmount ?? null} currency={job.agreedCurrency ?? me.data?.currency ?? 'PKR'} locale={locale} busy={busy}
+          onSubmit={submitChangeOrder} onCancel={() => setCreatingChangeOrder(false)} />
+      ) : null}
+      {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? <MessageButton jobId={job.id} label={t('workerJob.messageTheCustomer')} /> : null}
+      {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? <CallButton jobId={job.id} label={t('workerJob.callTheCustomer')} /> : null}
 
       {job.status !== 'CANCELLED' && (
-        <ChangeOrdersList jobId={job.id} viewer="worker" />
+        <ChangeOrdersList jobId={job.id} viewer="worker" currentMinor={job.agreedAmount} />
       )}
 
       <View style={{ marginTop: 20 }}>
-        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>WHEN</Text>
+        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('workerJob.when')}</Text>
         <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{formatWindow(job.scheduledFrom, job.scheduledTo, job.whenOption, locale)}</Text>
       </View>
       <View style={{ marginTop: 20 }}>
-        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>WHERE</Text>
+        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('workerJob.where')}</Text>
         {/* The exact address is only sent once you are booked on the job. */}
         <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{job.location ?? [job.area, job.city].filter(Boolean).join(', ')}</Text>
-        {!job.location ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>You'll see the full address once you accept the job.</Text> : null}
+        {!job.location ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{t('workerJob.youllSeeTheFull')}</Text> : null}
       </View>
       {job.customer ? (
         <View style={{ marginTop: 20 }}>
-          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>CUSTOMER</Text>
+          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('workerJob.customer')}</Text>
           <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{job.customer.name}</Text>
         </View>
       ) : null}
-      {job.isEmergency ? <Text variant="body" weight="bold" color={theme.colors.error} style={{ marginTop: 20 }}>Emergency</Text> : null}
-      {actionError ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{actionError}</Text> : null}
+      {job.isEmergency ? <Text variant="body" weight="bold" color={theme.colors.errorText} style={{ marginTop: 20 }}>{t('workerJob.emergency')}</Text> : null}
+      {waitingStep ? (
+        <View accessibilityRole="alert" style={{ marginTop: 16, padding: 12, borderRadius: theme.borderRadius.md, backgroundColor: theme.colors.surfaceElevated }}>
+          <Text variant="body" weight="semibold" color={theme.colors.textPrimary}>{outbox.describe(waitingStep)}</Text>
+          <Text variant="bodySmall" color={waitingStep.status === 'failed' ? theme.colors.errorText : theme.colors.textSecondary}>
+            {waitingStep.status === 'failed' ? (waitingStep.error ?? t('offline.refused')) : t('offline.saved')}
+          </Text>
+          {waitingStep.status === 'failed' ? (
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+              <View style={{ flex: 1 }}><Button title={t('offline.retry')} variant="secondary" onPress={() => void outbox.retry(waitingStep.id)} /></View>
+              <View style={{ flex: 1 }}><Button title={t('offline.drop')} variant="ghost" onPress={() => void outbox.discard(waitingStep.id)} /></View>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {actionError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{actionError}</Text> : null}
       {job.status === 'MATCHES_FOUND' ? (
         <View style={{ marginTop: 28 }}>
-          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>Your price</Text>
+          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{t('workerJob.yourPrice')}</Text>
           {offer && !editingPrice ? (
             <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16 }}>
               <Text variant="h2" weight="extrabold" color={theme.colors.textPrimary}>{formatMoney(offer.amount, offer.currency, locale)}</Text>
-              <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>Waiting for the customer · valid until {new Date(offer.expiresAt).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })}</Text>
+              <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>{t('workerJob.waitingValidUntil', { time: new Date(offer.expiresAt).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }) })}</Text>
               <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
-                <View style={{ flex: 1 }}><Button title="Withdraw" variant="secondary" disabled={busy} onPress={withdraw} /></View>
-                <View style={{ flex: 1 }}><Button title="Change price" variant="primary" disabled={busy} onPress={() => setEditingPrice(true)} /></View>
+                <View style={{ flex: 1 }}><Button title={t('workerJob.withdraw')} variant="secondary" disabled={busy} onPress={withdraw} /></View>
+                <View style={{ flex: 1 }}><Button title={t('workerJob.changePrice')} variant="primary" disabled={busy} onPress={() => setEditingPrice(true)} /></View>
               </View>
             </View>
           ) : me.data ? (
@@ -199,19 +240,19 @@ export default function WorkerJobScreen() {
               submitLabel={offer ? 'Update price' : 'Send price'} onSubmit={sendPrice}
             />
           ) : null}
-          {!offer ? <View style={{ marginTop: 12 }}><Button title="Not for me" variant="ghost" disabled={busy} onPress={notForMe} /></View> : null}
+          {!offer ? <View style={{ marginTop: 12 }}><Button title={t('workerJob.notForMe')} variant="ghost" disabled={busy} onPress={notForMe} /></View> : null}
         </View>
       ) : null}
       {job.agreedAmount && job.agreedCurrency ? (
         <View style={{ marginTop: 20 }}>
-          <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>Agreed price: {formatMoney(job.agreedAmount, job.agreedCurrency, locale)}</Text>
+          <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{t('customerJob.agreedPrice', { price: formatMoney(job.agreedAmount, job.agreedCurrency, locale) })}</Text>
           {needsPayment ? (
             <View style={{ marginTop: 12 }}>
-              <Button title="Mark Cash Received" variant="primary" loading={busy} disabled={busy} onPress={handleMarkCash} />
+              <Button title={t('workerJob.iReceivedInCash', { amount: formatMoney(job.agreedAmount, job.agreedCurrency ?? 'PKR', locale) })} variant="primary" loading={busy} disabled={busy} onPress={handleMarkCash} />
             </View>
           ) : payment ? (
-            <Text variant="bodySmall" weight="bold" color={payment.status === 'CONFIRMED' ? theme.colors.success : theme.colors.warning} style={{ marginTop: 8 }}>
-              Payment: {payment.status.replace(/_/g, ' ')}
+            <Text variant="bodySmall" weight="bold" color={payment.status === 'CONFIRMED' ? theme.colors.successText : payment.status === 'DISPUTED' ? theme.colors.error : theme.colors.warning} style={{ marginTop: 8 }}>
+              {PAYMENT_LABEL_WORKER[payment.status] ?? t('workerJob.paymentRecorded')}
             </Text>
           ) : null}
         </View>
@@ -220,12 +261,15 @@ export default function WorkerJobScreen() {
       {job.status === 'COMPLETED' && job.customer && currentUser && !job.reviews?.some(r => r.reviewerId === currentUser.id) && (
         <ReviewForm 
           jobId={job.id} 
-          targetId={job.customer.id} 
+          reviewing="customer"
           targetName={job.customer.name} 
           onSubmitted={reload} 
         />
       )}
 
+      {['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'].includes(job.status) ? (
+        <View style={{ marginTop: 16 }}><Button title={t('customerJob.emergencyIFeelUnsafe')} variant="ghost" onPress={() => router.push({ pathname: '/sos', params: { jobId: job.id } } as any)} /></View>
+      ) : null}
       <JobHistory events={job.events ?? []} viewer="worker" locale={locale} />
     </Screen>
   );

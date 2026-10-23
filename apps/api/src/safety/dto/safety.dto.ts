@@ -1,44 +1,54 @@
-import { IsString, IsNotEmpty, MaxLength, IsOptional, IsBoolean, IsIn } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export class ReportIncidentDto {
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(['SOS', 'EMERGENCY', 'REPORT_PROBLEM'])
-  type: string;
+export const SOS_KINDS = ['LIFE_THREATENING', 'WATER', 'ELECTRIC', 'GAS', 'IN_JOB'] as const;
+export type SosKind = (typeof SOS_KINDS)[number];
+export const PROPERTY_KINDS: SosKind[] = ['WATER', 'ELECTRIC', 'GAS'];
 
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(['LIFE_THREATENING', 'PROPERTY_DAMAGE', 'MODERATE'])
-  severity: string;
+export class SosDto {
+  @IsIn(SOS_KINDS)
+  kind: SosKind;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  targetId?: string;
+  /** Property emergencies: where (default address if omitted). */
+  @IsOptional() @IsString() @MaxLength(64)
+  addressId?: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(64)
+  /** In-job SOS: the job you're on. */
+  @IsOptional() @IsString() @MaxLength(64)
   jobRequestId?: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  description?: string;
+  @IsOptional() @IsString() @MaxLength(500)
+  note?: string;
+
+  /** Client-generated so a double tap or a retry doesn't create two emergencies. */
+  @IsString() @MaxLength(64)
+  idempotencyKey: string;
+}
+
+export class ReportIncidentDto {
+  @IsIn(['REPORT_PROBLEM'])
+  type: 'REPORT_PROBLEM';
+
+  @IsIn(['MODERATE', 'PROPERTY_DAMAGE'])
+  severity: 'MODERATE' | 'PROPERTY_DAMAGE';
+
+  @IsOptional() @IsString() @MaxLength(64)
+  targetId?: string;
+
+  @IsOptional() @IsString() @MaxLength(64)
+  jobRequestId?: string;
+
+  @IsString() @IsNotEmpty() @MaxLength(2000)
+  description: string;
 }
 
 export class AddTrustedContactDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
+  @IsString() @IsNotEmpty() @MaxLength(100)
   name: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(20)
+  /** Any format the person types; normalised to E.164 for their country. */
+  @IsString() @IsNotEmpty() @MaxLength(30)
   phone: string;
 
-  @IsOptional()
-  @IsBoolean()
+  @IsOptional() @IsBoolean()
   notifyOnSos?: boolean;
 }

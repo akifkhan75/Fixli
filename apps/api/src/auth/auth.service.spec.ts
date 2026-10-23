@@ -11,7 +11,7 @@ describe('AuthService', () => {
   const sessions = { create: jest.fn(), refresh: jest.fn(), revoke: jest.fn(), revokeAllExcept: jest.fn(), list: jest.fn() };
   const config = { get: jest.fn() };
   const audit = { record: jest.fn() };
-  const svc = new AuthService(prisma, sessions as any, config as any, audit as any);
+  const svc = new AuthService(prisma, sessions as any, config as any, audit as any, { check: jest.fn() } as any);
   const device = { deviceId: 'device-12345' };
 
   beforeEach(() => {

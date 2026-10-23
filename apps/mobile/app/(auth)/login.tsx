@@ -66,7 +66,7 @@ export default function LoginScreen() {
         />
 
         {error ? (
-          <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text>
+          <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text>
         ) : null}
 
         <View style={{ marginTop: 28 }}>
@@ -76,7 +76,7 @@ export default function LoginScreen() {
         <View style={styles.footer}>
           <Text variant="body" color={theme.colors.textSecondary}>{t('auth.noAccount')} </Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/signup' as any)} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}>
-            <Text variant="body" weight="bold" color={theme.colors.primary}>{t('auth.createAccount')}</Text>
+            <Text variant="body" weight="bold" color={theme.colors.primaryText}>{t('auth.createAccount')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

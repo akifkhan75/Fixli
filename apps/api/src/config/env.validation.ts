@@ -38,6 +38,26 @@ export interface AppEnv {
   REMATCH_RADIUS_FACTOR: number;
   /** Run the background sweeper (offer expiry, re-matching) in this process. */
   RUN_BACKGROUND_JOBS: boolean;
+  /** Start needs a before photo and Finish an after photo (or a stated reason). */
+  REQUIRE_JOB_PHOTOS: boolean;
+  /** A finished job the customer hasn't confirmed completes by itself after this (D-F2). */
+  AUTO_CONFIRM_HOURS: number;
+  /** Cash the worker marked and the customer didn't answer is confirmed after this (D-F2). */
+  CASH_AUTO_CONFIRM_HOURS: number;
+  /** Worker location points are deleted after this many days (D-F3). */
+  LOCATION_RETENTION_DAYS: number;
+  /** SOS: how long the nearest worker has to accept before the next one is asked. */
+  SOS_ACCEPT_SECONDS: number;
+  /** SOS: how many workers are asked one by one before normal offers. */
+  SOS_DIRECT_TRIES: number;
+  /** Who sends trusted-contact alerts (and OTP later). none = not configured (D-F5). */
+  SMS_PROVIDER: 'none';
+  /** Straight-line ETA until a routing provider is configured. */
+  AVG_TRAVEL_SPEED_KMH: number;
+  /** Staff must use an authenticator app (second factor). Default true; false only for tests. */
+  ADMIN_TOTP_REQUIRED: boolean;
+  /** 32 bytes, base64: encrypts staff authenticator secrets at rest. Required in production. */
+  TOTP_ENCRYPTION_KEY?: string;
   /** Enables multi-instance realtime (socket.io Redis adapter) and shared rate limits. */
   REDIS_URL?: string;
   EXPO_PUSH_URL?: string;
@@ -47,6 +67,12 @@ export interface AppEnv {
   /** Model id; configurable so a retired model never needs a code change. */
   GEMINI_MODEL?: string;
   LOG_LEVEL: string;
+  /** Where crashes are reported. Empty = not reported (fine in development). */
+  SENTRY_DSN?: string;
+  /** Shown on every report so a bug can be tied to a release (the git commit or version). */
+  APP_RELEASE?: string;
+  /** Lets monitoring read /health/ready details (socket count etc.). Min 24 characters. */
+  OPS_TOKEN?: string;
 }
 
 export function validateEnv(raw: Record<string, unknown>): AppEnv {
@@ -105,8 +131,24 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   const offerTtl = intIn('OFFER_TTL_MINUTES', 10, 1, 240);
   const rematchAfter = intIn('REMATCH_AFTER_MINUTES', 15, 1, 240);
   const rematchFactor = intIn('REMATCH_RADIUS_FACTOR', 1.5, 1, 5);
+  const autoConfirmHours = intIn('AUTO_CONFIRM_HOURS', 24, 1, 24 * 14);
+  const cashAutoConfirmHours = intIn('CASH_AUTO_CONFIRM_HOURS', 48, 1, 24 * 14);
+  const locationRetentionDays = intIn('LOCATION_RETENTION_DAYS', 30, 1, 365);
+  const travelSpeed = intIn('AVG_TRAVEL_SPEED_KMH', 20, 5, 120);
+  const sosAccept = intIn('SOS_ACCEPT_SECONDS', 180, 30, 900);
+  const sosTries = intIn('SOS_DIRECT_TRIES', 3, 1, 10);
+  const sms = str('SMS_PROVIDER') || 'none';
+  if (sms !== 'none') errors.push('SMS_PROVIDER: only "none" is available until a provider is chosen (doc 25 D-F5)');
 
   if (str('REDIS_URL') && !/^rediss?:\/\//.test(str('REDIS_URL'))) errors.push('REDIS_URL must be a redis:// or rediss:// URL');
+  if (str('OPS_TOKEN') && str('OPS_TOKEN').length < 24) errors.push('OPS_TOKEN must be at least 24 characters');
+  if (str('SENTRY_DSN') && !/^https:\/\//.test(str('SENTRY_DSN'))) errors.push('SENTRY_DSN must be an https:// URL (leave empty to turn reporting off)');
+
+  const totpKey = str('TOTP_ENCRYPTION_KEY');
+  if (totpKey && Buffer.from(totpKey, 'base64').length !== 32) errors.push('TOTP_ENCRYPTION_KEY must be 32 bytes, base64 (openssl rand -base64 32)');
+  if (nodeEnv === 'production' && !totpKey) errors.push('TOTP_ENCRYPTION_KEY is required in production');
+  const totpRequired = (str('ADMIN_TOTP_REQUIRED') || (nodeEnv === 'test' ? 'false' : 'true')) === 'true';
+  if (nodeEnv === 'production' && !totpRequired) errors.push('ADMIN_TOTP_REQUIRED cannot be false in production');
 
   if (errors.length) {
     throw new Error(`Invalid environment configuration:\n - ${errors.join('\n - ')}`);
@@ -135,9 +177,22 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     REMATCH_AFTER_MINUTES: rematchAfter,
     REMATCH_RADIUS_FACTOR: rematchFactor,
     REDIS_URL: str('REDIS_URL') || undefined,
+    SENTRY_DSN: str('SENTRY_DSN') || undefined,
+    APP_RELEASE: str('APP_RELEASE') || undefined,
+    OPS_TOKEN: str('OPS_TOKEN') || undefined,
     EXPO_PUSH_URL: str('EXPO_PUSH_URL') || undefined,
     EXPO_ACCESS_TOKEN: str('EXPO_ACCESS_TOKEN') || undefined,
     RUN_BACKGROUND_JOBS: (str('RUN_BACKGROUND_JOBS') || (nodeEnv === 'test' ? 'false' : 'true')) === 'true',
+    REQUIRE_JOB_PHOTOS: (str('REQUIRE_JOB_PHOTOS') || 'true') === 'true',
+    AUTO_CONFIRM_HOURS: autoConfirmHours,
+    CASH_AUTO_CONFIRM_HOURS: cashAutoConfirmHours,
+    LOCATION_RETENTION_DAYS: locationRetentionDays,
+    AVG_TRAVEL_SPEED_KMH: travelSpeed,
+    SOS_ACCEPT_SECONDS: sosAccept,
+    SOS_DIRECT_TRIES: sosTries,
+    SMS_PROVIDER: 'none',
+    ADMIN_TOTP_REQUIRED: totpRequired,
+    TOTP_ENCRYPTION_KEY: totpKey || undefined,
     FRONTEND_URL: str('FRONTEND_URL') || undefined,
     GEMINI_API_KEY: str('GEMINI_API_KEY') || undefined,
     GEMINI_MODEL: str('GEMINI_MODEL') || undefined,

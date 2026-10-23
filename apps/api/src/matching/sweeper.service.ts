@@ -3,8 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { MatchingService } from './matching.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { LeaseService } from '../common/lease/lease.service';
 
-const LOCK_KEY = 4_242_001; // one sweeper at a time across all API instances
+const LEASE = 'sweeper'; // one sweeper at a time across all API instances
+const LEASE_MS = 5 * 60_000; // a crashed runner's lease lapses after this
 const EVERY_MS = 60_000;
 
 /**
@@ -12,7 +14,7 @@ const EVERY_MS = 60_000;
  *  - expire offers past their time limit
  *  - match new requests that were not matched at creation (e.g. a transient failure)
  *  - widen the search once for requests nobody has answered
- * A Postgres advisory lock keeps it to a single runner even with several API instances.
+ * A lease (LeaseService) keeps it to a single runner even with several API instances.
  */
 @Injectable()
 export class SweeperService implements OnModuleInit, OnModuleDestroy {
@@ -24,10 +26,12 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
     private readonly matching: MatchingService,
     private readonly config: ConfigService,
     private readonly realtime: RealtimeService,
+    private readonly lease: LeaseService,
   ) {}
 
   onModuleInit() {
     if (this.config.get('RUN_BACKGROUND_JOBS') === true || this.config.get('RUN_BACKGROUND_JOBS') === 'true') {
+      this.lease.expect(LEASE, EVERY_MS);
       this.timer = setInterval(() => void this.sweep().catch((e) => this.logger.error(e)), EVERY_MS);
     }
   }
@@ -36,10 +40,12 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  async sweep(now = new Date()): Promise<{ expired: number; matched: number; widened: number; readOnly?: number } | null> {
-    const [{ locked }] = await this.prisma.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_lock(${LOCK_KEY}) AS locked`;
-    if (!locked) return null;
-    try {
+  sweep(now = new Date()): Promise<{ expired: number; matched: number; widened: number; readOnly?: number } | null> {
+    return this.lease.runExclusive(LEASE, LEASE_MS, () => this.run(now));
+  }
+
+  private async run(now: Date) {
+    {
       const due = await this.prisma.offer.findMany({
         where: { status: 'PENDING', expiresAt: { lte: now } },
         select: { id: true, jobRequestId: true, workerId: true, jobRequest: { select: { customerId: true } } }, take: 500,
@@ -74,15 +80,15 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
           isReadOnly: false,
           jobRequest: {
             status: { in: ['COMPLETED', 'CANCELLED'] },
-            updatedAt: { lte: cutoff }
+            updatedAt: { lte: cutoff },
+            // A problem is being looked at: both sides may still need to talk.
+            disputes: { none: { status: { in: ['OPEN', 'IN_REVIEW'] } } },
           }
         },
-        data: { isReadOnly: true }
+        data: { isReadOnly: true, closedAt: now }
       });
 
       return { expired: expired.count, matched: unmatched.length, widened: stale.length, readOnly: readOnlyCount.count };
-    } finally {
-      await this.prisma.$queryRaw`SELECT pg_advisory_unlock(${LOCK_KEY})`;
     }
   }
 }

@@ -18,17 +18,17 @@ describe('CNIC mask', () => {
 
 describe('money', () => {
   it('formats minor units with the currency decimals, never floats', () => {
-    expect(formatMoney(150000, 'USD')).toMatch(/1,500/);
-    expect(formatMoney(150050, 'USD')).toMatch(/1,500\.5/);
+    expect(formatMoney(150000, 'PKR')).toMatch(/1,500/);
+    expect(formatMoney(150050, 'PKR')).toMatch(/1,500\.5/);
     expect(formatMoney(500, 'JPY')).toMatch(/500/);
   });
   it('parses what a person types into integer minor units', () => {
-    expect(parseMajorToMinor('1500', 'USD')).toBe(150000);
-    expect(parseMajorToMinor('1,500.50', 'USD')).toBe(150050);
-    expect(parseMajorToMinor('0', 'USD')).toBeNull();
-    expect(parseMajorToMinor('-5', 'USD')).toBeNull();
-    expect(parseMajorToMinor('12abc', 'USD')).toBeNull();
-    expect(parseMajorToMinor('', 'USD')).toBeNull();
+    expect(parseMajorToMinor('1500', 'PKR')).toBe(150000);
+    expect(parseMajorToMinor('1,500.50', 'PKR')).toBe(150050);
+    expect(parseMajorToMinor('0', 'PKR')).toBeNull();
+    expect(parseMajorToMinor('-5', 'PKR')).toBeNull();
+    expect(parseMajorToMinor('12abc', 'PKR')).toBeNull();
+    expect(parseMajorToMinor('', 'PKR')).toBeNull();
   });
 });
 
@@ -39,5 +39,13 @@ describe('catalog names', () => {
     expect(localizedName(c, 'ar')).toBe('Plumbing');
     expect(localizedName(c, 'en')).toBe('Plumbing');
     expect(humanize('APPLIANCE_REPAIR')).toBe('Appliance repair');
+  });
+});
+
+describe('money is the same on every device (doc 26 9.10)', () => {
+  it('PKR always has 2 decimals here, whatever the phone\'s Intl says; no float errors', () => {
+    expect(parseMajorToMinor('0.29', 'PKR')).toBe(29);
+    expect(parseMajorToMinor('2500', 'PKR')).toBe(250000);
+    expect(formatMoney(250000, 'PKR')).toMatch(/2,500(?!\.)/);
   });
 });

@@ -1,0 +1,63 @@
+name: Admin portal browser test
+
+# Real browser against a real API and database (doc 27 F8.1): sign in, approve a professional,
+# resolve a dispute, check the audit log, check a limited staff role sees a limited menu.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  admin-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: fixli, POSTGRES_PASSWORD: fixli, POSTGRES_DB: fixli_e2e }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fixli" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      DATABASE_URL: postgresql://fixli:fixli@localhost:5432/fixli_e2e?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-e2e-secret-ci-only-e2e-secret-ci-only
+      ADMIN_TOTP_REQUIRED: 'false'
+      PORT: '3002'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fixli/shared build
+      - name: Database, test accounts, API
+        working-directory: apps/api
+        run: |
+          pnpm exec prisma generate
+          pnpm exec prisma migrate deploy
+          pnpm db:seed:catalog
+          pnpm seed:e2e
+          pnpm build
+          node dist/main > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:3002/api/health && break; sleep 1; done
+      - name: Install the browser
+        working-directory: apps/admin
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Browser test
+        working-directory: apps/admin
+        env:
+          API_URL: http://localhost:3002/api
+        run: pnpm e2e
+      - name: Keep the report and the API log when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-e2e-failure
+          path: |
+            apps/admin/playwright-report
+            apps/admin/test-results
+            /tmp/api.log

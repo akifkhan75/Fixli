@@ -25,7 +25,8 @@ describe('StorageService', () => {
     createUploadTarget: jest.fn().mockResolvedValue({ url: 'http://x/put', method: 'PUT', headers: {} }),
     stat: jest.fn(), readHead: jest.fn(), publicUrl: (k: string) => `http://cdn/${k}`, signedGetUrl: jest.fn().mockResolvedValue('http://signed'), remove: jest.fn().mockResolvedValue(undefined),
   };
-  const svc = new StorageService(prisma, driver);
+  const staff = { assert: jest.fn() };
+  const svc = new StorageService(prisma, driver, staff as any);
   afterEach(() => jest.clearAllMocks());
 
   describe('createUpload', () => {

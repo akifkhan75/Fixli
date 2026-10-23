@@ -1,22 +1,19 @@
-import { IsNotEmpty, IsOptional, IsString, MaxLength, IsBoolean } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
+/**
+ * What a person may send. Deliberately no `isSystem`, sender or receiver: those come from the
+ * server (unknown fields are rejected), so nobody can post a fake "Fixli" message.
+ */
 export class SendMessageDto {
-  @IsOptional() @IsString() @MaxLength(64)
-  threadId?: string;
-
-  @IsOptional() @IsString() @MaxLength(64)
-  receiverId?: string;
-
-  @ApiProperty() @IsOptional() @IsString() @MaxLength(4000)
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(4000)
   text?: string;
 
-  @ApiProperty() @IsOptional() @IsString() @MaxLength(128)
+  /** Idempotency key from the app; resending the same clientId returns the first message. */
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(128)
   clientId?: string;
 
-  @ApiProperty() @IsOptional() @IsString() @MaxLength(256)
-  imageKey?: string;
-
-  @ApiProperty() @IsOptional() @IsBoolean()
-  isSystem?: boolean;
+  /** A CHAT_PHOTO upload of yours (POST /uploads ... /complete). Never a storage key. */
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(64)
+  imageUploadId?: string;
 }

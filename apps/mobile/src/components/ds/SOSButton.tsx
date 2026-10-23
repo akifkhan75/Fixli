@@ -1,9 +1,11 @@
 import React, { useRef, useState } from 'react';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { View, Animated, StyleSheet, TouchableWithoutFeedback, Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
+import { t } from '../../i18n';
 
 export interface SOSButtonProps {
   onSOSTriggered: () => void;
@@ -13,6 +15,7 @@ export const SOSButton = ({ onSOSTriggered }: SOSButtonProps) => {
   const theme = useTheme();
   const [isPressing, setIsPressing] = useState(false);
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion(); // the 2 s hold is a safeguard and stays; only the growing ring is skipped
 
   const handlePressIn = () => {
     setIsPressing(true);
@@ -42,7 +45,7 @@ export const SOSButton = ({ onSOSTriggered }: SOSButtonProps) => {
 
   const ringWidth = progressAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 10], // Ring expands as user holds
+    outputRange: [0, reduceMotion ? 0 : 10], // Ring expands as user holds
   });
 
   return (
@@ -50,7 +53,7 @@ export const SOSButton = ({ onSOSTriggered }: SOSButtonProps) => {
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       accessibilityRole="button"
-      accessibilityLabel="SOS Emergency Button. Press and hold for 2 seconds to trigger."
+      accessibilityLabel={t('sOSButton.sosEmergencyButtonPress')}
     >
       <View style={[styles.container, { backgroundColor: theme.colors.sos }]}>
         <Animated.View
@@ -65,7 +68,7 @@ export const SOSButton = ({ onSOSTriggered }: SOSButtonProps) => {
         />
         <Ionicons name="warning" size={28} color="#FFF" />
         <Text variant="h3" weight="extrabold" style={{ color: '#FFF' }}>
-          {isPressing ? 'HOLD...' : 'SOS'}
+          {isPressing ? t('sOSButton.hold') : t('sOSButton.sos')}
         </Text>
       </View>
     </TouchableWithoutFeedback>

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { seedCatalog } from './seed-catalog';
 
 const prisma = new PrismaClient();
@@ -12,9 +12,10 @@ async function main() {
   console.log('🌱 Seeding DEV database (demo accounts, password: password123)...');
 
   // Clean existing data
-  await prisma.chatMessage.deleteMany();
-  await prisma.chatThread.deleteMany();
-  await prisma.transaction.deleteMany();
+  await prisma.message.deleteMany();
+  await prisma.conversation.deleteMany();
+  await prisma.ledgerEntry.deleteMany();
+  await prisma.payment.deleteMany();
   await prisma.jobEvidence.deleteMany();
   await prisma.changeOrder.deleteMany();
   await prisma.quote.deleteMany();
@@ -47,9 +48,9 @@ async function main() {
   });
 
   await prisma.user.create({
-    data: { id: 'admin1', name: 'Dev Admin', email: 'admin@fixli.dev', password: hashedPassword, type: 'admin' },
+    data: { id: 'admin1', name: 'Dev Admin', email: 'admin@fixli.dev', password: hashedPassword, type: 'admin', adminRoles: ['Super Admin'] },
   });
-  console.log('Dev logins (password: password123): customer 0300 1234567 · worker 0311 2345678 · admin admin@fixli.dev');
+  console.log('Dev logins (password: password123): customer 0300 1234567 · worker 0311 2345678 · admin admin@fixli.dev (sets up an authenticator at first sign-in)');
 
   // Workers
   await prisma.worker.create({

@@ -5,10 +5,11 @@ import { Text } from './Text';
 import { Button } from './Button';
 import { TextInput } from './TextInput';
 import { ChipChoice } from './ChipChoice';
-import { formatMoney, parseMajorToMinor } from '../../utils/money';
+import { currencyExponent, formatMoney, parseMajorToMinor } from '../../utils/money';
 import { useI18n } from '../../hooks/useI18n';
+import { t } from '../../i18n';
 
-const ETAS = [{ id: '30', label: '30 min' }, { id: '60', label: '1 hour' }, { id: '120', label: '2 hours' }, { id: '240', label: '4 hours' }, { id: '1440', label: 'Tomorrow' }];
+const ETAS = () => ([{ id: '30', label: t('priceForm.30Min') }, { id: '60', label: t('priceForm.1Hour') }, { id: '120', label: t('priceForm.2Hours') }, { id: '240', label: t('priceForm.4Hours') }, { id: '1440', label: t('customerRequestService.tomorrow') }]);
 
 /**
  * "Send my price": numeric keypad + quick picks around the worker's usual fee, arrival time
@@ -20,7 +21,7 @@ export function PriceForm({ currency, usualMinor, initialMinor, initialEta, loca
   }) {
   const theme = useTheme();
   const { t } = useI18n();
-  const digits = useMemo(() => new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2, [currency]);
+  const digits = useMemo(() => currencyExponent(currency), [currency]);
   const toMajor = (minor: number) => String(Math.round(minor / 10 ** digits));
   const [text, setText] = useState(initialMinor ? toMajor(initialMinor) : '');
   const [eta, setEta] = useState<string[]>(initialEta ? [String(initialEta)] : ['60']);
@@ -32,9 +33,9 @@ export function PriceForm({ currency, usualMinor, initialMinor, initialEta, loca
 
   return (
     <View>
-      <TextInput label={`Your price (${currency})`} keyboardType="number-pad" value={text} onChangeText={(v) => setText(v.replace(/[^\d,]/g, ''))}
-        error={submitted && !minor ? 'Enter your price, for example 1500.' : undefined} style={{ fontSize: 24 }} />
-      {minor ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>The customer sees {formatMoney(minor, currency, locale)}</Text> : null}
+      <TextInput testID="price-input" label={t('priceForm.yourPrice', { currency })} keyboardType="number-pad" value={text} onChangeText={(v) => setText(v.replace(/[^\d,]/g, ''))}
+        error={submitted && !minor ? t('priceForm.enterYourPriceFor') : undefined} style={{ fontSize: 24 }} />
+      {minor ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>{t('priceForm.customerSees', { price: formatMoney(minor, currency, locale) })}</Text> : null}
       {quick.length ? (
         <View style={{ marginTop: 12 }}>
           <ChipChoice options={[...new Set(quick)].filter((q) => q > 0).map((q) => ({ id: String(q), label: formatMoney(q, currency, locale) }))}
@@ -42,9 +43,9 @@ export function PriceForm({ currency, usualMinor, initialMinor, initialEta, loca
         </View>
       ) : null}
       <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 20, marginBottom: 8 }}>{t('worker.etaPrefix')}</Text>
-      <ChipChoice options={ETAS} selectedIds={eta} onChange={setEta} />
+      <ChipChoice options={ETAS()} selectedIds={eta} onChange={setEta} />
       <View style={{ marginTop: 16 }}>
-        <TextInput label="Note for the customer (optional)" placeholder="e.g. Price includes the new washer" value={note} onChangeText={setNote} maxLength={300} />
+        <TextInput label={t('priceForm.noteForTheCustomer')} placeholder={t('priceForm.eGPriceIncludes')} value={note} onChangeText={setNote} maxLength={300} />
       </View>
       <View style={{ marginTop: 20 }}>
         <Button title={submitLabel} variant="primary" size="lg" loading={busy} disabled={busy}

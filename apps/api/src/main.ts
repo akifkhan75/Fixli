@@ -7,15 +7,10 @@ import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { configureRealtime } from './realtime/redis-io.adapter';
 
-import * as Sentry from '@sentry/node';
+import { initSentry } from './observability/sentry';
 
 async function bootstrap() {
-  if (process.env.SENTRY_DSN) {
-    Sentry.init({
-      dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV || 'development',
-    });
-  }
+  initSentry(); // first, so a failure while starting is reported too
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const isProd = process.env.NODE_ENV === 'production';
@@ -64,7 +59,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.PORT || 3002;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   Logger.log(`Fixli API listening on :${port}${isProd ? '' : ` (docs at /docs)`}`, 'Bootstrap');
 }
 

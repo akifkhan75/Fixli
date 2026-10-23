@@ -1,8 +1,16 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { AdminController } from './admin.controller';
 import { AdminVerificationService } from './admin-verification.service';
 import { AdminService } from './admin.service';
-import { AdminGateway } from './gateways/admin.gateway';
+import { StaffFeedService } from './staff-feed.service';
+import { AdminConsoleService } from './admin-console.service';
+import { AdminConsoleController } from './admin-console.controller';
+import { JobsModule } from '../jobs/jobs.module';
 
-@Module({ controllers: [AdminController], providers: [AdminVerificationService, AdminService, AdminGateway] })
+@Module({
+  imports: [AuthModule, JobsModule],
+  controllers: [AdminController, AdminConsoleController],
+  providers: [AdminVerificationService, AdminService, StaffFeedService, AdminConsoleService],
+})
 export class AdminModule {}

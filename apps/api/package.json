@@ -18,7 +18,10 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:studio": "prisma studio",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "db:seed:catalog": "ts-node prisma/seed-catalog.ts"
+    "db:seed:catalog": "ts-node prisma/seed-catalog.ts",
+    "admin:create": "ts-node scripts/create-admin.ts",
+    "load": "node load/run.mjs",
+    "seed:e2e": "ts-node scripts/seed-e2e.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3",
@@ -38,6 +41,7 @@
     "@prisma/client": "^5.20.0",
     "@sentry/node": "^11.6.0",
     "@socket.io/redis-adapter": "^8.3.0",
+    "bcrypt": "^6",
     "bcryptjs": "^2.4.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
@@ -54,6 +58,7 @@
     "@nestjs/cli": "^10.4.0",
     "@nestjs/schematics": "^10.1.0",
     "@nestjs/testing": "^10.4.0",
+    "@types/bcrypt": "^6.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.14",

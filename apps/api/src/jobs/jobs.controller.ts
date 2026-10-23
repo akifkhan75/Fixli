@@ -1,3 +1,4 @@
+import { JobStepPhotosDto } from './dto/job-step.dto';
 import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JobsService, AuthUser } from './jobs.service';
@@ -70,13 +71,13 @@ export class JobsController {
 
   @Post(':id/start')
   @ApiOperation({ summary: 'Assigned worker starts the work' })
-  start(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: { beforePhotoKey?: string }) {
+  start(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: JobStepPhotosDto) {
     return this.jobsService.start(id, user, dto);
   }
 
   @Post(':id/finish')
   @ApiOperation({ summary: 'Assigned worker finishes the work (awaiting confirmation)' })
-  finish(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: { afterPhotoKey?: string }) {
+  finish(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: JobStepPhotosDto) {
     return this.jobsService.finish(id, user, dto);
   }
 
@@ -86,11 +87,18 @@ export class JobsController {
     return this.jobsService.confirm(id, user);
   }
 
-  @Post(':id/complete')
-  @ApiOperation({ summary: 'Assigned worker marks the work complete' })
-  complete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.jobsService.complete(id, user);
+  @Get(':id/contact')
+  @ApiOperation({ summary: "The other party's phone number, only while booked (audited)" })
+  contact(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.jobsService.contact(id, user);
   }
+
+  @Get(':id/location')
+  @ApiOperation({ summary: 'Customer: last known position of the professional on the way' })
+  location(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.jobsService.liveLocation(id, user);
+  }
+
 
   @Post(':id/cancel')
   @ApiOperation({ summary: 'Cancel a job before it is completed' })

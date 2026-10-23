@@ -1,3 +1,18 @@
+  # Development only. Deployments use apps/api/Dockerfile (a small production image that runs migrations on start).
+x-node: &node
+  image: node:22
+  working_dir: /app
+  environment:
+    CI: 'true'
+  volumes:
+    - ./:/app
+    - node_modules:/app/node_modules
+    - api_node_modules:/app/apps/api/node_modules
+    - admin_node_modules:/app/apps/admin/node_modules
+    - web_node_modules:/app/apps/web/node_modules
+    - shared_node_modules:/app/packages/shared/node_modules
+    - pnpm_store:/root/.local/share/pnpm
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -32,11 +47,16 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
 
+  # Runs once and exits: installs what the three dev servers need (not the phone app), then they start.
+  deps:
+    <<: *node
+    container_name: fixli-deps
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile --filter @fixli/api... --filter admin... --filter web... && pnpm --filter @fixli/shared build"
+
   api:
-    image: node:20
+    <<: *node
     container_name: fixli-api
-    working_dir: /app
-    command: sh -c "npm install -g pnpm && pnpm install && pnpm run db:generate && pnpm run dev:api"
+    command: sh -c "pnpm run db:generate && pnpm run dev:api"
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-fixli}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fixli}?schema=public
@@ -50,39 +70,42 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./:/app
+      deps:
+        condition: service_completed_successfully
 
   admin:
-    image: node:20
+    <<: *node
     container_name: fixli-admin
-    working_dir: /app
-    command: sh -c "npm install -g pnpm && pnpm install && cd apps/admin && pnpm run dev -- --host 0.0.0.0 --port 5173"
+    command: sh -c "cd apps/admin && pnpm run dev -- --host 0.0.0.0 --port 5173"
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-development}
     ports:
       - '5173:5173'
     depends_on:
-      - api
-    volumes:
-      - ./:/app
+      deps:
+        condition: service_completed_successfully
 
   web:
-    image: node:20
+    <<: *node
     container_name: fixli-web
-    working_dir: /app
-    command: sh -c "npm install -g pnpm && pnpm install && cd apps/web && pnpm run dev -- --host 0.0.0.0 --port 5174"
+    command: sh -c "cd apps/web && pnpm run dev -- --host 0.0.0.0 --port 5174"
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-development}
     ports:
       - '5174:5174'
     depends_on:
-      - api
-    volumes:
-      - ./:/app
+      deps:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
   pgadmin_data:
+  # Installed once by the `deps` service and kept between runs, so starting the stack is fast.
+  pnpm_store:
+  node_modules:
+  api_node_modules:
+  admin_node_modules:
+  web_node_modules:
+  shared_node_modules:

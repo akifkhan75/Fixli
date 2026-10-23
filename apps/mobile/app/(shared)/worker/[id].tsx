@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Image, ScrollView } from 'react-native';
+import { View, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -7,11 +8,15 @@ import { useApi } from '../../../src/hooks/useApi';
 import { useI18n } from '../../../src/hooks/useI18n';
 import { Screen } from '../../../src/components/ds/Screen';
 import { Avatar } from '../../../src/components/ds/Avatar';
+import { FavoriteHeart } from '../../../src/components/ds/FavoriteHeart';
+import { useAppSelector } from '../../../src/hooks/useRedux';
+import { selectCurrentUser } from '../../../src/store/authSlice';
 import { Text } from '../../../src/components/ds/Text';
 import { ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
 import { localizedName } from '../../../src/utils/catalog';
 import { formatMoney } from '../../../src/utils/money';
 import * as api from '../../../src/services/api';
+import { t, tn } from '../../../src/i18n';
 
 const BADGE_LABEL: Record<api.VerificationType, string> = {
   ID: 'ID checked', SELFIE: 'Face matches ID', TRADE_LICENSE: 'Trade licence checked', INSURANCE: 'Insurance checked',
@@ -22,9 +27,10 @@ export default function WorkerProfileScreen() {
   const theme = useTheme();
   const { locale } = useI18n();
   const { data: w, loading, error, reload } = useApi(() => api.getPublicWorker(id), [id]);
+  const viewer = useAppSelector(selectCurrentUser);
 
-  if (loading && !w) return <Screen title="Professional" back><LoadingState /></Screen>;
-  if (error && !w) return <Screen title="Professional" back><ErrorState message={error} onRetry={reload} /></Screen>;
+  if (loading && !w) return <Screen title={t('customerJob.professional')} back><LoadingState /></Screen>;
+  if (error && !w) return <Screen title={t('customerJob.professional')} back><ErrorState message={error} onRetry={reload} /></Screen>;
   if (!w) return null;
 
   const price =
@@ -33,14 +39,17 @@ export default function WorkerProfileScreen() {
     : 'Quote after inspection';
 
   return (
-    <Screen title="Professional" back>
+    <Screen title={t('customerJob.professional')} back>
       <View style={{ alignItems: 'center' }}>
         <Avatar name={w.user.name} imageUrl={w.user.profileImageUrl} size="xl" />
-        <Text variant="h2" weight="bold" color={theme.colors.textPrimary} style={{ marginTop: 12 }}>{w.user.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
+          <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>{w.user.name}</Text>
+          {viewer?.type === 'customer' ? <FavoriteHeart workerId={w.id} /> : null}
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
           <Ionicons name="star" size={16} color={theme.colors.accent} />
           <Text variant="body" color={theme.colors.textSecondary} style={{ marginStart: 4 }}>
-            {w.ratingCount > 0 ? `${w.rating.toFixed(1)} · ${w.ratingCount} reviews` : 'No reviews yet'}  ·  {w.jobsCompleted} jobs
+            {w.ratingCount > 0 ? `${w.rating.toFixed(1)} · ${tn('sharedWorker.reviews', w.ratingCount)}` : t('sharedWorker.noReviewsYet')}  ·  {tn('common.jobs', w.jobsCompleted)}
           </Text>
         </View>
         {w.serviceAreaLabel ? <Text variant="bodySmall" color={theme.colors.textTertiary} style={{ marginTop: 4 }}>{w.serviceAreaLabel}</Text> : null}
@@ -59,30 +68,30 @@ export default function WorkerProfileScreen() {
       ) : null}
 
       <View style={{ marginTop: 24 }}>
-        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>PRICE</Text>
+        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('sharedWorker.price')}</Text>
         <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{price}</Text>
       </View>
 
       {w.services.length ? (
         <View style={{ marginTop: 20 }}>
-          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>SKILLS</Text>
+          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('sharedWorker.skills')}</Text>
           <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{w.services.map((s) => localizedName(s.category, locale)).join(' · ')}</Text>
         </View>
       ) : null}
 
       {w.bio ? (
         <View style={{ marginTop: 20 }}>
-          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>ABOUT</Text>
+          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('sharedWorker.about')}</Text>
           <Text variant="body" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{w.bio}</Text>
           <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 4 }}>
-            {w.experienceYears ? `${w.experienceYears} years experience` : ''}{w.languages.length ? `${w.experienceYears ? '  ·  ' : ''}${w.languages.join(', ')}` : ''}
+            {w.experienceYears ? t('sharedWorker.yearsExperience', { experienceYears: w.experienceYears }) : ''}{w.languages.length ? `${w.experienceYears ? '  ·  ' : ''}${w.languages.join(', ')}` : ''}
           </Text>
         </View>
       ) : null}
 
       {w.portfolio.length ? (
         <View style={{ marginTop: 24 }}>
-          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary} style={{ marginBottom: 8 }}>PAST WORK</Text>
+          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary} style={{ marginBottom: 8 }}>{t('sharedWorker.pastWork')}</Text>
           {w.portfolio.map((p) => (
             <View key={p.id} style={{ marginBottom: 16 }}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>

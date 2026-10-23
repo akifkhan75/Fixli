@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { SearchUserRow, searchUsers, suspendUser } from '../api';
+import { reactivateUser, type SearchUserRow, searchUsers, suspendUser } from '../api';
+import { useStaff } from '../staff';
 import './Pages.css';
 
 export default function Users() {
@@ -24,16 +25,27 @@ export default function Users() {
     }
   };
 
-  const handleSuspend = async (id: string, currentStatus: string) => {
-    if (currentStatus === 'SUSPENDED') return; // For MVP, only suspend
-    const reason = prompt('Reason for suspension:');
-    if (!reason) return;
+  const { can } = useStaff();
+
+  const toggle = async (id: string, currentStatus: string) => {
+    const suspend = currentStatus !== 'SUSPENDED';
+    const reason = prompt(suspend ? 'Why is this account being suspended? (they are signed out everywhere)' : 'Why is this account being turned back on?')?.trim();
+    if (!reason || reason.length < 3) return;
     setBusyId(id);
     try {
-      await suspendUser(id, reason);
-      setUsers(prev => prev?.map(u => u.id === id ? { ...u, status: 'SUSPENDED' } : u) ?? null);
+      if (suspend) {
+        const r = await suspendUser(id, reason);
+        const lines = [`Suspended and signed out.`];
+        if (r.cancelled.length) lines.push(`${r.cancelled.length} open request(s) cancelled.`);
+        if (r.offersWithdrawn) lines.push(`${r.offersWithdrawn} price offer(s) withdrawn.`);
+        if (r.activeBookings.length) lines.push(`${r.activeBookings.length} live booking(s) were NOT cancelled; call both sides (Jobs page):`, ...r.activeBookings.map((j) => `• ${j.title ?? 'Job'} (${j.status.toLowerCase()}) ${j.id}`));
+        alert(lines.join('\n'));
+      } else {
+        await reactivateUser(id, reason);
+      }
+      setUsers(prev => prev?.map(u => u.id === id ? { ...u, status: suspend ? 'SUSPENDED' : 'ACTIVE' } : u) ?? null);
     } catch (err: any) {
-      alert(err.message || 'Failed to suspend user');
+      alert(err.message || 'Could not change the account');
     } finally {
       setBusyId(null);
     }
@@ -106,14 +118,15 @@ export default function Users() {
                     </td>
                     <td>{new Date(u.createdAt).toLocaleDateString()}</td>
                     <td>
-                      <button 
-                        className="btn btn-secondary" 
-                        style={{ padding: '6px 12px', fontSize: '0.875rem' }}
-                        disabled={busyId === u.id || u.status === 'SUSPENDED'}
-                        onClick={() => handleSuspend(u.id, u.status)}
-                      >
-                        {busyId === u.id ? '...' : u.status === 'SUSPENDED' ? 'Suspended' : 'Suspend'}
-                      </button>
+                      {can('users.suspend') && u.type !== 'admin' ? (
+                        <button
+                          className={`btn btn-sm ${u.status === 'SUSPENDED' ? 'btn-ghost' : 'btn-danger'}`}
+                          disabled={busyId === u.id}
+                          onClick={() => toggle(u.id, u.status)}
+                        >
+                          {busyId === u.id ? '...' : u.status === 'SUSPENDED' ? 'Reactivate' : 'Suspend'}
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))

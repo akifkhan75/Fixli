@@ -1,0 +1,24 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Every route enforces who may call it (e2e) the public routes are a short, known list (a new one has to be added here on purpose) 1`] = `
+[
+  "GET /api/config/countries",
+  "GET /api/files/private",
+  "GET /api/files/public/*",
+  "GET /api/health",
+  "GET /api/health/ready",
+  "GET /api/service-catalog/categories",
+  "GET /api/service-catalog/categories/:id",
+  "GET /api/service-packages",
+  "GET /api/service-packages/:id",
+  "GET /api/subscription-plans",
+  "GET /api/subscription-plans/:id",
+  "POST /api/auth/admin/login",
+  "POST /api/auth/admin/totp/activate",
+  "POST /api/auth/admin/totp/setup",
+  "POST /api/auth/login",
+  "POST /api/auth/refresh",
+  "POST /api/auth/signup",
+  "PUT /api/files/upload",
+]
+`;

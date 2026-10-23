@@ -1,0 +1,87 @@
+name: Phone flows (Maestro, Android emulator)
+
+# Started by hand (Actions > Run workflow). The flows in .maestro/ were written against the current screens but
+# have NOT yet been run on an emulator; expect the first run to need a few fixes (see .maestro/README.md).
+# Once it is green, change `on:` to run on pull requests.
+on:
+  workflow_dispatch:
+
+jobs:
+  maestro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: fixli, POSTGRES_PASSWORD: fixli, POSTGRES_DB: fixli_e2e }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fixli" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      DATABASE_URL: postgresql://fixli:fixli@localhost:5432/fixli_e2e?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-e2e-secret-ci-only-e2e-secret-ci-only
+      ADMIN_TOTP_REQUIRED: 'false'
+      PORT: '3002'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fixli/shared build
+
+      - name: API with test accounts
+        working-directory: apps/api
+        run: |
+          pnpm exec prisma generate
+          pnpm exec prisma migrate deploy
+          pnpm db:seed:catalog
+          pnpm seed:e2e
+          pnpm build
+          node dist/main > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:3002/api/health && break; sleep 1; done
+      - name: The helper actions work against this API (no phone yet)
+        run: API=http://localhost:3002/api node .maestro/helpers/check.mjs && pnpm --filter @fixli/api seed:e2e
+
+      - name: Build the Android app (release build, plain-http API allowed for the emulator only)
+        working-directory: apps/mobile
+        env:
+          EXPO_PUBLIC_API_URL: http://10.0.2.2:3002/api
+        run: |
+          pnpm exec expo prebuild --platform android --no-install
+          sed -i 's#<application #<application android:usesCleartextTraffic="true" #' android/app/src/main/AndroidManifest.xml
+          cd android && ./gradlew assembleRelease --no-daemon
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Run the flows on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+            maestro test --format junit --output /tmp/maestro-report.xml .maestro
+      - name: Keep the report and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report
+          path: |
+            /tmp/maestro-report.xml
+            /tmp/api.log
+            ~/.maestro/tests

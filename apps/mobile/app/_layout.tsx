@@ -8,24 +8,44 @@ import { store } from '../src/store';
 import { useAppSelector, useAppDispatch } from '../src/hooks/useRedux';
 import { selectCurrentUser, selectSessionRestored, restoreSession } from '../src/store/authSlice';
 import { realtime } from '../src/services/socket';
+import { chatOutbox } from '../src/services/chatOutbox';
+import { outbox } from '../src/services/outbox';
+import { registerOutboxHandlers } from '../src/services/outboxHandlers';
+import { connectivity } from '../src/services/connectivity';
+import { analytics } from '../src/services/analytics';
+import { clearCache } from '../src/services/cache';
+import { OutboxBar } from '../src/components/ds/OutboxBar';
 import { NotificationsProvider } from '../src/hooks/useNotifications';
 import { useWorkerLocationTracker } from '../src/hooks/useWorkerLocationTracker';
-import { useCustomerLocationTracker } from '../src/hooks/useCustomerLocationTracker';
 import * as Sentry from '@sentry/react-native';
+import { initSentry } from '../src/observability/sentry';
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN && process.env.EXPO_PUBLIC_SENTRY_DSN !== 'YOUR_SENTRY_DSN',
-  debug: false,
-});
+initSentry();
+
+registerOutboxHandlers();
 
 function SocketHandler() {
   const currentUser = useAppSelector(selectCurrentUser);
 
   useEffect(() => {
-    if (currentUser?.id) void realtime.connect();
-    else realtime.disconnect();
-    return () => realtime.disconnect();
+    void analytics.init().then(() => analytics.track('app_open'));
+    return connectivity.start();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      realtime.disconnect();
+      // Signed out: this account's unsent messages and saved actions don't stay on the phone.
+      void chatOutbox.clear();
+      void outbox.clear();
+      void clearCache();
+      return undefined;
+    }
+    void realtime.connect();
+    // Unsent chat messages and saved job steps / requests go out when the connection is back.
+    const stopChat = chatOutbox.start();
+    const stopOutbox = outbox.start();
+    return () => { stopChat(); stopOutbox(); realtime.disconnect(); };
   }, [currentUser?.id]);
 
   return null;
@@ -38,8 +58,9 @@ function SignedIn({ children }: { children: React.ReactNode }) {
 }
 
 function LocationTrackerHandler() {
+  // Workers send their position only while on the way to a job (started from the job screen).
+  // Customers' location is never tracked; they see the worker's position on the job screen.
   useWorkerLocationTracker();
-  useCustomerLocationTracker();
 
   return null;
 }
@@ -57,7 +78,7 @@ import * as SplashScreen from 'expo-splash-screen';
 SplashScreen.preventAutoHideAsync();
 
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { I18nProvider } from '../src/hooks/useI18n';
+import { I18nProvider, useI18n } from '../src/hooks/useI18n';
 import { CountryProvider } from '../src/hooks/useCountry';
 import { useTheme } from '../src/hooks/useTheme';
 
@@ -77,6 +98,10 @@ function SessionGate({ children }: { children: React.ReactNode }) {
     if (restored) SplashScreen.hideAsync();
   }, [restored]);
 
+  // Which screens are used (anonymous, and only if the person agreed): the route name, never ids or content.
+  const screen = segments.join('_').replace(/[^a-z0-9_]/gi, '').toLowerCase().replace(/^[^a-z]+/, '').slice(0, 40);
+  useEffect(() => { if (restored && screen) void analytics.screen(screen); }, [restored, screen]);
+
   // Signed-out users can only see (auth) screens; signed-in users never see them.
   useEffect(() => {
     if (!restored) return;
@@ -86,6 +111,12 @@ function SessionGate({ children }: { children: React.ReactNode }) {
   }, [restored, user, segments, router]);
 
   return restored ? <>{children}</> : null;
+}
+
+/** Redraws every screen when the language changes (text is looked up as each screen renders). */
+function LocaleBoundary({ children }: { children: React.ReactNode }) {
+  const { locale } = useI18n();
+  return <React.Fragment key={locale}>{children}</React.Fragment>;
 }
 
 function RootLayoutInner() {
@@ -99,8 +130,9 @@ function RootLayoutInner() {
           <SessionGate>
             <SocketHandler />
             <LocationTrackerHandler />
+            <OutboxBar />
             <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
-            <SignedIn>
+            <LocaleBoundary><SignedIn>
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -108,7 +140,7 @@ function RootLayoutInner() {
                   contentStyle: { backgroundColor: theme.colors.background },
                 }}
               />
-            </SignedIn>
+            </SignedIn></LocaleBoundary>
           </SessionGate>
         </View>
       </BottomSheetModalProvider>

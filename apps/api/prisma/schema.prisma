@@ -116,7 +116,13 @@ model User {
   failedLoginAttempts Int        @default(0)
   lockoutUntil        DateTime?
   adminRoles          String[]
+  /// Authenticator secret, AES-256-GCM encrypted (common/auth/crypto). Pending until totpEnabledAt is set.
   totpSecret          String?
+  totpEnabledAt       DateTime?
+  /// sha256 of unused one-time recovery codes.
+  totpRecoveryHashes  String[]
+  /// Last accepted authenticator time step: a code can't be used twice (replay protection).
+  totpLastStep        Int?
 
   worker          Worker?
   addresses       Address[]
@@ -183,6 +189,7 @@ model ServiceCategory {
   workers       WorkerService[]
   packages      ServicePackage[]
   subscriptions SubscriptionPlan[]
+  priceBands    PriceBand[]
   jobs          JobRequest[]
 }
 
@@ -219,6 +226,12 @@ model Worker {
   hasInsurance         Boolean          @default(false)
   equipment            String[]
   isOnline             Boolean          @default(false)
+  /// What this worker owes Fixli in commission (minor units, >= 0 in normal use).
+  ledgerBalance        Int              @default(0)
+  /// When the balance last went from zero to owing (for the maxDaysOwed limit).
+  owedSince            DateTime?
+  /// Over the hard limit or owing too long: no new requests or offers until settled.
+  balanceBlocked       Boolean          @default(false)
   /// Centre of the area the worker serves (their base), plus a label like "Gulshan-e-Iqbal, Karachi".
   serviceLat           Float?
   serviceLng           Float?
@@ -393,26 +406,33 @@ model JobRequest {
   agreedCurrency    String?
   acceptedOfferId   String?
   bookedAt          DateTime?
+  /// Worker pressed "Finish" (AWAITING_CONFIRMATION); starts the auto-confirm clock.
+  finishedAt        DateTime?
+  /// Became COMPLETED (customer confirmed, or auto-confirmed after AUTO_CONFIRM_HOURS).
+  completedAt       DateTime?
+  autoConfirmed     Boolean          @default(false)
   /// 1 = first search; 2 = widened search after nobody responded.
   matchRound        Int              @default(0)
   lastMatchedAt     DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  media         JobMedia[]
-  events        JobEvent[]
-  matches       JobMatch[]
-  offers        Offer[]
-  analyses      JobAiAnalysis[]
-  conversations Conversation[]
-  evidence      JobEvidence[]
-  quotes        Quote[]
-  changeOrders  ChangeOrder[]
-  payments      Payment[]
-  ledgers       LedgerEntry[]
-  disputes      Dispute[]
-  reviews       Review[]
-  incidents     Incident[]
+  media          JobMedia[]
+  events         JobEvent[]
+  matches        JobMatch[]
+  offers         Offer[]
+  analyses       JobAiAnalysis[]
+  conversations  Conversation[]
+  evidence       JobEvidence[]
+  quotes         Quote[]
+  changeOrders   ChangeOrder[]
+  payments       Payment[]
+  ledgers        LedgerEntry[]
+  disputes       Dispute[]
+  reviews        Review[]
+  incidents      Incident[]
+  locationPoints JobLocationPoint[]
+  sosDispatch    SosDispatch?
 
   @@unique([customerId, idempotencyKey])
   @@index([customerId])
@@ -495,33 +515,40 @@ model Quote {
 }
 
 model ChangeOrder {
-  id           String     @id @default(cuid())
-  jobRequestId String
-  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
-  reason       String
-  addedScope   String
-  revisedPrice Int
-  currency     String     @default("USD")
-  mediaKeys    String[]
-  status       String     @default("PENDING") // PENDING, APPROVED, REJECTED
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id            String     @id @default(cuid())
+  jobRequestId  String
+  jobRequest    JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  reason        String
+  addedScope    String
+  /// The new total for the job (integer minor units of `currency`, which is the job's currency).
+  revisedPrice  Int
+  currency      String     @default("USD")
+  /// Total before this change; set when it is approved.
+  previousPrice Int?
+  mediaKeys     String[]
+  status        String     @default("PENDING") // PENDING, APPROVED, REJECTED
+  decidedAt     DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
 
 model Review {
-  id           String     @id @default(cuid())
+  id           String         @id @default(cuid())
   jobRequestId String
-  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id])
+  jobRequest   JobRequest     @relation(fields: [jobRequestId], references: [id])
   reviewerId   String
-  reviewer     User       @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewer     User           @relation("ReviewsGiven", fields: [reviewerId], references: [id])
   targetId     String
-  target       User       @relation("ReviewsReceived", fields: [targetId], references: [id])
-  revieweeRole String     @default("worker")
+  target       User           @relation("ReviewsReceived", fields: [targetId], references: [id])
+  revieweeRole String         @default("worker")
   rating       Int
   comment      String?
   tags         String[]
-  status       String     @default("PUBLISHED")
-  createdAt    DateTime   @default(now())
+  status       String         @default("PUBLISHED")
+  /// Needs a moderator's look (auto rules or a report). Hidden reviews have status HIDDEN.
+  flagged      Boolean        @default(false)
+  reports      ReviewReport[]
+  createdAt    DateTime       @default(now())
 
   @@unique([jobRequestId, reviewerId])
   @@index([targetId])
@@ -532,41 +559,62 @@ model Payment {
   jobRequestId   String
   jobRequest     JobRequest @relation(fields: [jobRequestId], references: [id])
   method         String // CASH, CARD, WALLET
+  /// Always the job's agreed total at the time it was marked (never typed by anyone).
   amount         Int
   currency       String     @default("USD")
   status         String // PENDING, MARKED_BY_WORKER, CONFIRMED, DISPUTED, CAPTURED, REFUNDED
   provider       String?
   providerRef    String?    @unique
   idempotencyKey String?    @unique
+  markedById     String?
+  markedAt       DateTime?
+  confirmedAt    DateTime?
+  /// Confirmed by the sweeper after CASH_AUTO_CONFIRM_HOURS because the customer didn't answer.
+  autoConfirmed  Boolean    @default(false)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+
+  /// One payment per job per method: marking cash twice returns the same row.
+  @@unique([jobRequestId, method])
 }
 
 model LedgerEntry {
-  id           String      @id @default(cuid())
-  workerId     String
-  worker       Worker      @relation(fields: [workerId], references: [id])
-  jobRequestId String?
-  jobRequest   JobRequest? @relation(fields: [jobRequestId], references: [id])
-  type         String // COMMISSION_OWED, COMMISSION_SETTLED, PAYOUT, ADJUSTMENT, REFUND
-  amount       Int // signed minor units
-  currency     String      @default("USD")
-  balanceAfter Int
-  createdById  String?
-  createdAt    DateTime    @default(now())
+  id             String      @id @default(cuid())
+  workerId       String
+  worker         Worker      @relation(fields: [workerId], references: [id])
+  jobRequestId   String?
+  jobRequest     JobRequest? @relation(fields: [jobRequestId], references: [id])
+  type           String // COMMISSION_OWED, COMMISSION_SETTLED, ADJUSTMENT
+  /// Change in what the worker owes Fixli, minor units: + adds to the debt, - reduces it.
+  amount         Int
+  currency       String      @default("USD")
+  /// Worker.ledgerBalance after this entry (written under a row lock, so it is exact).
+  balanceAfter   Int
+  /// e.g. "commission:<jobId>", "settlement:<id>": the same real event can't be booked twice.
+  idempotencyKey String?     @unique
+  note           String?
+  createdById    String?
+  createdAt      DateTime    @default(now())
+
+  @@index([workerId, createdAt])
 }
 
 model Settlement {
-  id        String   @id @default(cuid())
-  workerId  String
-  worker    Worker   @relation(fields: [workerId], references: [id])
-  amount    Int
-  currency  String   @default("USD")
-  rail      String
-  reference String
-  status    String // PENDING, COMPLETED, FAILED
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(cuid())
+  workerId     String
+  worker       Worker    @relation(fields: [workerId], references: [id])
+  amount       Int
+  currency     String    @default("USD")
+  rail         String
+  reference    String
+  status       String // PENDING, COMPLETED, FAILED
+  reviewedById String?
+  reviewedAt   DateTime?
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, createdAt])
 }
 
 model Dispute {
@@ -580,6 +628,8 @@ model Dispute {
   description  String?
   amountHeld   Int?
   evidenceKeys String[]
+  /// Set when the dispute is about a cash payment ("I didn't pay that").
+  paymentId    String?
   status       String     @default("OPEN") // OPEN, IN_REVIEW, RESOLVED, CLOSED
   resolution   String?
   resolvedById String?
@@ -594,6 +644,8 @@ model Conversation {
   jobRequest    JobRequest? @relation(fields: [jobRequestId], references: [id])
   lastMessageAt DateTime?
   isReadOnly    Boolean     @default(false)
+  /// When it became read-only (some days after the job ended). A dispute reopens it.
+  closedAt      DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -611,7 +663,12 @@ model Message {
   text           String? // optional if imageKey is present
   imageKey       String? // object-storage key for image message
   isSystem       Boolean      @default(false)
+  /// Server-written messages: template key + params (chat/system-messages.ts); `text` is the English fallback.
+  systemKey      String?
+  systemParams   Json?
   clientId       String? // idempotency
+  /// Looked like contact sharing (phone, link, WhatsApp…): the sender was reminded; staff can review.
+  isFlagged      Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   reads MessageRead[]
@@ -646,18 +703,26 @@ model Block {
 }
 
 model Incident {
-  id           String      @id @default(cuid())
-  reporterId   String
-  reporter     User        @relation("IncidentsReported", fields: [reporterId], references: [id])
-  targetId     String?
-  jobRequestId String?
-  jobRequest   JobRequest? @relation(fields: [jobRequestId], references: [id])
-  type         String // SOS, EMERGENCY, REPORT_PROBLEM
-  severity     String // LIFE_THREATENING, PROPERTY_DAMAGE, MODERATE
-  description  String?
-  status       String      @default("OPEN") // OPEN, INVESTIGATING, RESOLVED
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                  String         @id @default(cuid())
+  reporterId          String
+  reporter            User           @relation("IncidentsReported", fields: [reporterId], references: [id])
+  targetId            String?
+  jobRequestId        String?
+  jobRequest          JobRequest?    @relation(fields: [jobRequestId], references: [id])
+  type                String // SOS, REPORT_PROBLEM, REPORT_USER
+  severity            String // LIFE_THREATENING, PROPERTY_DAMAGE, MODERATE
+  /// SOS kind: LIFE_THREATENING, WATER, ELECTRIC, GAS, IN_JOB
+  kind                String?
+  description         String?
+  /// Trusted-contact alert outcome: SENT, PARTLY_SENT, NO_PROVIDER, NO_CONTACTS, FAILED (null = not an alerting incident)
+  contactsAlertStatus String?
+  contactsAlerted     Int            @default(0)
+  /// "sos:<userId>:<client key>": a double tap or a retry returns the same emergency.
+  idempotencyKey      String?        @unique
+  status              String         @default("OPEN") // OPEN, INVESTIGATING, RESOLVED
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  notes               IncidentNote[]
 }
 
 model TrustedContact {
@@ -678,6 +743,14 @@ model CountryConfig {
   countryCode      String   @unique
   currency         String
   emergencyNumbers Json
+  /// { rateBps, minMinor, maxMinor }: Fixli's commission per cash job (O8).
+  commission       Json
+  /// { softMinor, hardMinor, maxDaysOwed }: owed-balance limits that pause new work (O8).
+  cashLimits       Json
+  /// e.g. [{ id: "JAZZCASH", label: "JazzCash", account: "0300…" }]: how workers pay what they owe.
+  settlementRails  Json
+  /// Bumped on every change (admin edits are audited; F6).
+  version          Int      @default(1)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -881,4 +954,108 @@ model Notification {
   @@unique([userId, eventKey])
   @@index([userId, createdAt])
   @@index([userId, readAt])
+}
+
+/// Who runs a background job right now. A row-based lease works through a connection pool,
+/// unlike Postgres session advisory locks (lock and unlock may land on different connections).
+model SchedulerLease {
+  name      String   @id
+  holder    String
+  expiresAt DateTime
+}
+
+/// Worker position while on the way (EN_ROUTE only), at most one point per 30 s. Deleted after
+/// LOCATION_RETENTION_DAYS (sweeper). Never shown to anyone but the job's customer.
+model JobLocationPoint {
+  id           String     @id @default(cuid())
+  jobRequestId String
+  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  latitude     Float
+  longitude    Float
+  heading      Float?
+  at           DateTime   @default(now())
+
+  @@index([jobRequestId, at])
+  @@index([at])
+}
+
+/// SOS property emergency: offered to the nearest available worker, one at a time, each for
+/// SOS_ACCEPT_SECONDS; after SOS_DIRECT_TRIES (or nobody near) it falls back to normal offers.
+model SosDispatch {
+  id              String     @id @default(cuid())
+  jobRequestId    String     @unique
+  jobRequest      JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  incidentId      String?
+  /// OFFERING, ACCEPTED, FALLBACK, CANCELLED
+  status          String     @default("OFFERING")
+  attempt         Int        @default(0)
+  currentWorkerId String?
+  expiresAt       DateTime?
+  triedWorkerIds  String[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([status, expiresAt])
+}
+
+/// "This review is unfair / abusive": puts it in the moderation queue.
+model ReviewReport {
+  id         String   @id @default(cuid())
+  reviewId   String
+  review     Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporterId String
+  reason     String
+  createdAt  DateTime @default(now())
+
+  @@unique([reviewId, reporterId])
+}
+
+/// Staff notes on a safety incident (who did what, when).
+model IncidentNote {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  authorId   String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@index([incidentId, createdAt])
+}
+
+/// Typical price range per service per city (O1). Edited by staff; shown in the app only once approved.
+model PriceBand {
+  id          String          @id @default(cuid())
+  categoryId  String
+  category    ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  issueCode   String?
+  city        String
+  currency    String
+  minMinor    Int
+  maxMinor    Int
+  approved    Boolean         @default(false)
+  updatedById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([categoryId, issueCode, city])
+}
+
+/// Every saved version of a country's settings (money rules, limits, rails, emergency numbers).
+model CountryConfigVersion {
+  id          String   @id @default(cuid())
+  countryCode String
+  version     Int
+  data        Json
+  editedById  String?
+  createdAt   DateTime @default(now())
+
+  @@unique([countryCode, version])
+}
+
+/// Runtime switches staff can change without a release (audited).
+model FeatureFlag {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }

@@ -97,6 +97,24 @@ describe('Matching, offers and booking (e2e)', () => {
   const matchedWorkers = async (jobId: string) =>
     (await prisma.jobMatch.findMany({ where: { jobRequestId: jobId }, orderBy: { rank: 'asc' } })).map((m) => Object.keys(ids).find((k) => ids[k] === m.workerId));
 
+  describe('sweeper lease (one runner across instances)', () => {
+    it('skips while another instance holds a live lease, runs once it lapses, and sweeps repeatedly', async () => {
+      await prisma.$executeRaw`INSERT INTO "SchedulerLease" ("name", "holder", "expiresAt") VALUES ('sweeper', 'other-instance', ${new Date(Date.now() + 60_000)})
+        ON CONFLICT ("name") DO UPDATE SET "holder" = 'other-instance', "expiresAt" = EXCLUDED."expiresAt"`;
+      expect(await sweeper.sweep()).toBeNull();
+      await prisma.$executeRaw`UPDATE "SchedulerLease" SET "expiresAt" = ${new Date(Date.now() - 1000)} WHERE "name" = 'sweeper'`;
+      expect(await sweeper.sweep()).not.toBeNull();
+      // Released after each run, so back-to-back sweeps (and other instances) keep working.
+      for (let i = 0; i < 5; i++) expect(await sweeper.sweep()).not.toBeNull();
+      expect(await prisma.$queryRaw<unknown[]>`SELECT 1 FROM "SchedulerLease" WHERE "name" = 'sweeper'`).toHaveLength(0);
+    });
+
+    it('two overlapping sweeps in one process: only one runs', async () => {
+      const [a, b] = await Promise.all([sweeper.sweep(), sweeper.sweep()]);
+      expect([a, b].filter((r) => r !== null)).toHaveLength(1);
+    });
+  });
+
   describe('matching', () => {
     let jobId: string;
 

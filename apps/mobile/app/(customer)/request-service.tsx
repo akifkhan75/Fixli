@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Image, TouchableOpacity, ScrollView, Linking } from 'react-native';
+import { View, Image, TouchableOpacity, ScrollView, Linking, Alert } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +19,13 @@ import { VoiceField, type VoiceValue } from '../../src/forms/components/VoiceFie
 import { humanize, localizedName } from '../../src/utils/catalog';
 import { ApiError } from '../../src/services/api';
 import { useNotifications } from '../../src/hooks/useNotifications';
+import { useAppSelector } from '../../src/hooks/useRedux';
+import { selectCurrentUser } from '../../src/store/authSlice';
+import { submitJobRequest } from '../../src/services/outboxHandlers';
+import { analytics } from '../../src/services/analytics';
 import * as api from '../../src/services/api';
+import { t, tn } from '../../src/i18n';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 type When = 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED';
 type Slot = 'MORNING' | 'AFTERNOON' | 'EVENING';
@@ -47,13 +53,13 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const isoLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 export default function RequestServiceScreen() {
-  const params = useLocalSearchParams<{ categoryId?: string; issue?: string; isEmergency?: string }>();
+  const params = useLocalSearchParams<{ categoryId?: string; issue?: string; isEmergency?: string; workerId?: string }>();
   const emergency = params.isEmergency === 'true';
   const theme = useTheme();
   const { t, locale } = useI18n();
   const { config: countryConfig } = useCountry();
-  const catalog = useApi(api.getCatalog);
-  const addresses = useApi(api.getAddresses);
+  const catalog = useApi(api.getCatalog, [], { cacheKey: 'catalog' });
+  const addresses = useApi(api.getAddresses, [], { cacheKey: 'addresses' });
   useFocusEffect(useCallback(() => { addresses.reload(); }, [addresses.reload]));
 
   const [d, setD] = useState<Draft>(() => ({
@@ -67,6 +73,9 @@ export default function RequestServiceScreen() {
   const [error, setError] = useState<string | undefined>();
   const photoUp = usePhotoUpload('JOB_PHOTO');
   const analyzedFor = useRef('');
+  const me = useAppSelector(selectCurrentUser);
+  const startedAt = useRef(Date.now());
+  useEffect(() => { void analytics.track('request_started', { emergency }); }, [emergency]);
 
   const set = (patch: Partial<Draft>) => setD((cur) => ({ ...cur, ...patch }));
 
@@ -130,7 +139,7 @@ export default function RequestServiceScreen() {
     day.setDate(day.getDate() + i);
     return {
       id: isoLocal(day),
-      label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' }).format(day),
+      label: i === 0 ? t('customerRequestService.today') : i === 1 ? t('customerRequestService.tomorrow') : new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' }).format(day),
     };
   }), [locale]);
 
@@ -145,7 +154,7 @@ export default function RequestServiceScreen() {
     setSubmitting(true);
     setError(undefined);
     try {
-      const job = await api.createJob({
+      const sent = await submitJobRequest(me?.id ?? '', {
         categoryId: category.id,
         issueCodes: d.issueCodes,
         description: d.description.trim() || undefined,
@@ -159,35 +168,49 @@ export default function RequestServiceScreen() {
         isEmergency: emergency || undefined,
         analysisId: analysis?.analysisId ?? undefined,
         idempotencyKey: d.idempotencyKey,
+      }, localizedName(category, locale) ?? category.name, params.workerId);
+      await AsyncStorage.removeItem(DRAFT_KEY).catch(() => undefined);
+      void analytics.track('request_sent', {
+        time_ms: Math.min(3_600_000, Date.now() - startedAt.current),
+        used_photo: d.photos.length > 0, used_voice: !!d.voice.audioUploadId, emergency,
       });
+      if (sent.queued) {
+        // No signal: saved on the phone and sent when back online (the bar at the top says so).
+        Alert.alert(t('offline.requestSaved'));
+        router.replace('/(customer)/bookings' as any);
+        return;
+      }
+      const job = sent.result;
       // Right after sending is when "we'll tell you when prices arrive" makes sense.
       void askForPush();
-      await AsyncStorage.removeItem(DRAFT_KEY).catch(() => undefined);
+      // "Book again": ask the same professional first. If they're not available, the request
+      // simply stays open for others (matching already ran).
+      if (params.workerId) await api.requestWorkerForJob(job.id, params.workerId).catch(() => undefined);
       router.replace(`/(customer)/job/${job.id}` as any);
     } catch (e) {
       setError(e instanceof ApiError
-        ? e.message
-        : "No connection right now. Your request is saved on this phone. Tap Send again when you're back online.");
+        ? (e.code === 'OFFLINE' ? t('offline.emergency') : e.userMessage)
+        : friendlyError(e));
     } finally {
       setSubmitting(false);
     }
   };
 
   const back = () => (d.step === 0 ? router.back() : set({ step: d.step - 1 }));
-  const next = () => set({ step: Math.min(4, d.step + 1) });
+  const next = () => { void analytics.track('request_step_completed', { step: STEPS[d.step].toLowerCase() }); set({ step: Math.min(4, d.step + 1) }); };
 
-  if (catalog.loading && !catalog.data) return <Screen title="Get help" back><LoadingState /></Screen>;
-  if (catalog.error && !catalog.data) return <Screen title="Get help" back><ErrorState message={catalog.error} onRetry={catalog.reload} /></Screen>;
+  if (catalog.loading && !catalog.data) return <Screen title={t('customerRequestService.getHelp')} back><LoadingState /></Screen>;
+  if (catalog.error && !catalog.data) return <Screen title={t('customerRequestService.getHelp')} back><ErrorState message={catalog.error} onRetry={catalog.reload} /></Screen>;
 
   const emergencyCard = (strong: boolean) => (
     <View style={{ backgroundColor: theme.colors.sos + (strong ? '22' : '12'), borderColor: theme.colors.sos, borderWidth: strong ? 1.5 : 0, borderRadius: 16, padding: 16, marginBottom: 20 }} accessibilityRole="alert">
-      <Text variant="bodyLarge" weight="bold" color={theme.colors.sos}>If anyone is in danger, call for help now</Text>
+      <Text variant="bodyLarge" weight="bold" color={theme.colors.errorText}>{t('customerRequestService.ifAnyoneIsIn')}</Text>
       <Text variant="bodySmall" color={theme.colors.textPrimary} style={{ marginTop: 4, marginBottom: 12 }}>
-        Fixli connects you with repair professionals. It is not an emergency service. For fire, gas, smoke, an electric shock or an injury, call:
+        {t('customerRequestService.fixliConnectsYouWith')}
       </Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {countryConfig.emergencyNumbers.map((n) => (
-          <TouchableOpacity key={n.number} onPress={() => Linking.openURL(`tel:${n.number}`)} accessibilityRole="button" accessibilityLabel={`Call ${n.label}, ${n.number}`}
+          <TouchableOpacity key={n.number} onPress={() => Linking.openURL(`tel:${n.number}`)} accessibilityRole="button" accessibilityLabel={t('customerRequestService.call', { label: n.label, number: n.number })}
             style={{ backgroundColor: theme.colors.sos, borderRadius: 12, paddingHorizontal: 16, minHeight: 48, justifyContent: 'center', flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="call" size={18} color="#FFF" />
             <Text variant="body" weight="bold" color="#FFF" style={{ marginStart: 8 }}>{n.label} {n.number}</Text>
@@ -198,17 +221,17 @@ export default function RequestServiceScreen() {
   );
 
   const footer = d.step < 4
-    ? <Button title={d.step === 1 && d.photos.length === 0 ? 'Skip for now' : 'Continue'} variant="primary" size="lg" disabled={!stepValid[d.step]} onPress={next} />
-    : <Button title="Send request" variant="primary" size="lg" loading={submitting} disabled={submitting || !stepValid.every(Boolean)} onPress={submit} />;
+    ? <Button title={d.step === 1 && d.photos.length === 0 ? t('customerRequestService.skipForNow') : t('customerRequestService.continue')} variant="primary" size="lg" disabled={!stepValid[d.step]} onPress={next} />
+    : <Button title={t('customerRequestService.sendRequest')} variant="primary" size="lg" loading={submitting} disabled={submitting || !stepValid.every(Boolean)} onPress={submit} />;
 
   return (
     <Screen footer={footer}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-        <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={{ width: 44, height: 44, justifyContent: 'center' }}>
-          <Ionicons name="arrow-back" size={26} color={theme.colors.textPrimary} />
+        <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel={t('authSignup.back')} style={{ width: 44, height: 44, justifyContent: 'center' }}>
+          <DirIcon name="arrow-back" size={26} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text variant="bodySmall" weight="semibold" color={emergency ? theme.colors.sos : theme.colors.textSecondary} style={{ flex: 1 }}>
-          {emergency ? 'Urgent help' : `Step ${d.step + 1} of ${STEPS.length}`}
+        <Text variant="bodySmall" weight="semibold" color={emergency ? theme.colors.errorText : theme.colors.textSecondary} style={{ flex: 1 }}>
+          {emergency ? t('customerRequestService.urgentHelp') : t('customerRequestService.stepOf', { step: d.step + 1, total: STEPS.length })}
         </Text>
       </View>
       <View style={{ flexDirection: 'row', gap: 6, marginBottom: 24 }} accessibilityRole="progressbar" accessibilityValue={{ min: 1, max: 5, now: d.step + 1 }}>
@@ -219,25 +242,25 @@ export default function RequestServiceScreen() {
 
       {d.step === 0 ? (
         <View>
-          <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 16 }}>What needs fixing?</Text>
+          <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 16 }}>{t('customerHome.whatNeedsFixing')}</Text>
           {!params.categoryId || !category ? (
             <>
-              <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginBottom: 8 }}>Type of help</Text>
+              <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginBottom: 8 }}>{t('customerRequestService.typeOfHelp')}</Text>
               <ChipChoice options={(catalog.data ?? []).map((c) => ({ id: c.id, label: catName(c) }))} selectedIds={d.categoryId ? [d.categoryId] : []}
                 onChange={(ids) => set({ categoryId: ids[0], issueCodes: [] })} />
             </>
           ) : (
-            <Text variant="bodyLarge" weight="semibold" color={theme.colors.primary} style={{ marginBottom: 4 }}>{catName(category)}</Text>
+            <Text variant="bodyLarge" weight="semibold" color={theme.colors.primaryText} style={{ marginBottom: 4 }}>{catName(category)}</Text>
           )}
           {category ? (
             <>
-              <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 20, marginBottom: 8 }}>What is the problem? (tap all that apply)</Text>
+              <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 20, marginBottom: 8 }}>{t('customerRequestService.whatIsTheProblem')}</Text>
               <ChipChoice multiSelect options={category.issues.map((i) => ({ id: i.code, label: localizedName(i, locale) }))} selectedIds={d.issueCodes} onChange={(ids) => set({ issueCodes: ids })} />
               <View style={{ marginTop: 24 }}>
                 <VoiceField value={d.voice} onChange={(voice) => set({ voice })} locale={locale} />
               </View>
               <View style={{ marginTop: 20 }}>
-                <TextInput label="Or write a few words (optional)" placeholder="e.g. water drips under the kitchen sink" value={d.description} onChangeText={(v) => set({ description: v })} multiline maxLength={2000} style={{ minHeight: 70, textAlignVertical: 'top' }} />
+                <TextInput label={t('customerRequestService.orWriteAFew')} placeholder={t('customerRequestService.eGWaterDrips')} value={d.description} onChangeText={(v) => set({ description: v })} multiline maxLength={2000} style={{ minHeight: 70, textAlignVertical: 'top' }} />
               </View>
             </>
           ) : null}
@@ -246,14 +269,14 @@ export default function RequestServiceScreen() {
 
       {d.step === 1 ? (
         <View>
-          <Text variant="h1" weight="bold" color={theme.colors.textPrimary}>Show us</Text>
-          <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 6, marginBottom: 20 }}>A photo helps the professional understand the problem and bring the right tools.</Text>
+          <Text variant="h1" weight="bold" color={theme.colors.textPrimary}>{t('customerRequestService.showUs')}</Text>
+          <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 6, marginBottom: 20 }}>{t('customerRequestService.aPhotoHelpsThe')}</Text>
           {d.photos.length ? (
             <ScrollView horizontal style={{ marginBottom: 16 }} showsHorizontalScrollIndicator={false}>
               {d.photos.map((p) => (
                 <View key={p.id} style={{ marginEnd: 10 }}>
-                  <Image source={{ uri: p.localUri }} style={{ width: 120, height: 120, borderRadius: 14, backgroundColor: theme.colors.surface }} accessibilityLabel="Photo of the problem" />
-                  <TouchableOpacity onPress={() => set({ photos: d.photos.filter((x) => x.id !== p.id) })} accessibilityRole="button" accessibilityLabel="Remove photo"
+                  <Image source={{ uri: p.localUri }} style={{ width: 120, height: 120, borderRadius: 14, backgroundColor: theme.colors.surface }} accessibilityLabel={t('customerRequestService.photoOfTheProblem')} />
+                  <TouchableOpacity onPress={() => set({ photos: d.photos.filter((x) => x.id !== p.id) })} accessibilityRole="button" accessibilityLabel={t('customerRequestService.removePhoto')}
                     style={{ position: 'absolute', top: 4, end: 4, backgroundColor: '#000A', borderRadius: 14, padding: 2 }}>
                     <Ionicons name="close" size={20} color="#FFF" />
                   </TouchableOpacity>
@@ -261,18 +284,18 @@ export default function RequestServiceScreen() {
               ))}
             </ScrollView>
           ) : null}
-          {d.photos.length < MAX_PHOTOS ? <PhotoButtons onPick={addPhoto} busy={photoUp.busy} error={photoUp.error} denied={photoUp.denied} /> : <Text variant="bodySmall" color={theme.colors.textSecondary}>That's the maximum of {MAX_PHOTOS} photos.</Text>}
+          {d.photos.length < MAX_PHOTOS ? <PhotoButtons onPick={addPhoto} busy={photoUp.busy} error={photoUp.error} denied={photoUp.denied} /> : <Text variant="bodySmall" color={theme.colors.textSecondary}>{t('requestService.maxPhotos', { n: MAX_PHOTOS })}</Text>}
         </View>
       ) : null}
 
       {d.step === 2 ? (
         <View>
-          <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 20 }}>When do you need help?</Text>
-          <ChipChoice options={[{ id: 'NOW', label: 'Now' }, { id: 'TODAY', label: 'Today' }, { id: 'TOMORROW', label: 'Tomorrow' }, { id: 'SCHEDULED', label: 'Choose a day' }]}
+          <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 20 }}>{t('customerRequestService.whenDoYouNeed')}</Text>
+          <ChipChoice options={[{ id: 'NOW', label: t('customerRequestService.now') }, { id: 'TODAY', label: t('customerRequestService.today') }, { id: 'TOMORROW', label: t('customerRequestService.tomorrow') }, { id: 'SCHEDULED', label: t('customerRequestService.chooseADay') }]}
             selectedIds={[d.when]} onChange={(ids) => ids[0] && set({ when: ids[0] as When, ...(ids[0] === 'SCHEDULED' ? {} : { date: undefined }) })} />
           {d.when === 'SCHEDULED' ? (
             <>
-              <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>Day</Text>
+              <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>{t('customerRequestService.day')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <ChipChoice options={days} selectedIds={d.date ? [d.date] : []} onChange={(ids) => set({ date: ids[0] })} />
               </ScrollView>
@@ -280,8 +303,8 @@ export default function RequestServiceScreen() {
           ) : null}
           {d.when === 'SCHEDULED' || d.when === 'TOMORROW' ? (
             <>
-              <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>Time of day{d.when === 'TOMORROW' ? ' (optional)' : ''}</Text>
-              <ChipChoice options={[{ id: 'MORNING', label: 'Morning (8–12)' }, { id: 'AFTERNOON', label: 'Afternoon (12–5)' }, { id: 'EVENING', label: 'Evening (5–9)' }]}
+              <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>{d.when === 'TOMORROW' ? t('requestService.timeOfDayOptional') : t('requestService.timeOfDay')}</Text>
+              <ChipChoice options={[{ id: 'MORNING', label: t('customerRequestService.morning812') }, { id: 'AFTERNOON', label: t('customerRequestService.afternoon125') }, { id: 'EVENING', label: t('customerRequestService.evening59') }]}
                 selectedIds={d.slot ? [d.slot] : []} onChange={(ids) => set({ slot: ids[0] as Slot | undefined })} />
             </>
           ) : null}
@@ -290,8 +313,8 @@ export default function RequestServiceScreen() {
 
       {d.step === 3 ? (
         <View>
-          <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 8 }}>Where?</Text>
-          <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 20 }}>Professionals only see your area until you book one of them.</Text>
+          <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 8 }}>{t('customerRequestService.where')}</Text>
+          <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 20 }}>{t('customerRequestService.professionalsOnlySeeYour')}</Text>
           {addresses.loading && !addresses.data ? <LoadingState /> : (addresses.data ?? []).map((a) => {
             const selected = a.id === d.addressId;
             return (
@@ -299,60 +322,60 @@ export default function RequestServiceScreen() {
                 style={{ borderWidth: 1.5, borderColor: selected ? theme.colors.primary : theme.colors.border, backgroundColor: selected ? theme.colors.primary + '10' : theme.colors.surface, borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={24} color={selected ? theme.colors.primary : theme.colors.textTertiary} />
                 <View style={{ flex: 1, marginStart: 12 }}>
-                  <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{a.label ?? 'Address'}</Text>
+                  <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{a.label ?? t('customerRequestService.address')}</Text>
                   <Text variant="bodySmall" color={theme.colors.textSecondary}>{[a.buildingDetail, a.streetAddress, a.area, a.city].filter(Boolean).join(', ')}</Text>
                 </View>
               </TouchableOpacity>
             );
           })}
-          <Button title={addresses.data?.length ? 'Add another address' : 'Add your address'} variant={addresses.data?.length ? 'secondary' : 'primary'} size="lg"
+          <Button title={addresses.data?.length ? t('customerRequestService.addAnotherAddress') : t('customerRequestService.addYourAddress')} variant={addresses.data?.length ? 'secondary' : 'primary'} size="lg"
             onPress={() => router.push('/address-edit' as any)} leftIcon={<Ionicons name="add" size={22} color={addresses.data?.length ? theme.colors.primary : '#FFF'} />} />
         </View>
       ) : null}
 
       {d.step === 4 && category ? (
         <View>
-          <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 20 }}>Check and send</Text>
+          <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 20 }}>{t('customerRequestService.checkAndSend')}</Text>
           {analysis?.safety.lifeThreatening ? emergencyCard(true) : null}
 
-          {analyzing ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginBottom: 12 }}>Looking at your request…</Text> : null}
+          {analyzing ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginBottom: 12 }}>{t('customerRequestService.lookingAtYourRequest')}</Text> : null}
           {analysis?.suggestion && analysis.suggestion.categoryId !== d.categoryId && analysis.suggestion.confidence >= 0.6 ? (() => {
             const s = catalog.data?.find((c) => c.id === analysis.suggestion!.categoryId);
             return s ? (
               <View style={{ backgroundColor: theme.colors.primary + '12', borderRadius: 16, padding: 14, marginBottom: 16 }}>
-                <Text variant="body" color={theme.colors.textPrimary}>✨ This sounds like <Text variant="body" weight="bold" color={theme.colors.textPrimary}>{catName(s)}</Text>.</Text>
+                <Text variant="body" color={theme.colors.textPrimary}>{t('requestService.soundsLike')} <Text variant="body" weight="bold" color={theme.colors.textPrimary}>{catName(s)}</Text>.</Text>
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                  <Button title={`Switch to ${catName(s)}`} size="sm" variant="primary" onPress={() => set({ categoryId: s.id, issueCodes: analysis.suggestion!.issueCodes })} />
-                  <Button title="Keep mine" size="sm" variant="ghost" onPress={() => setAnalysis({ ...analysis, suggestion: null })} />
+                  <Button title={t('customerRequestService.switchTo', { name: catName(s) })} size="sm" variant="primary" onPress={() => set({ categoryId: s.id, issueCodes: analysis.suggestion!.issueCodes })} />
+                  <Button title={t('customerRequestService.keepMine')} size="sm" variant="ghost" onPress={() => setAnalysis({ ...analysis, suggestion: null })} />
                 </View>
               </View>
             ) : null;
           })() : null}
 
           {[
-            { step: 0, icon: 'construct' as const, title: catName(category), body: [issueText, d.description.trim(), d.voice.transcript.trim()].filter(Boolean).join(' · ') || (d.voice.audioUploadId ? 'Voice note attached' : '') },
-            { step: 1, icon: 'camera' as const, title: d.photos.length ? `${d.photos.length} photo${d.photos.length > 1 ? 's' : ''}` : 'No photos', body: d.voice.audioUploadId ? 'Voice note attached' : '' },
-            { step: 2, icon: 'calendar' as const, title: d.when === 'NOW' ? 'Now' : d.when === 'TODAY' ? 'Today' : d.when === 'TOMORROW' ? 'Tomorrow' : days.find((x) => x.id === d.date)?.label ?? '', body: d.slot ? { MORNING: 'Morning', AFTERNOON: 'Afternoon', EVENING: 'Evening' }[d.slot] : '' },
-            { step: 3, icon: 'location' as const, title: address?.label ?? 'Address', body: address ? [address.streetAddress, address.area, address.city].filter(Boolean).join(', ') : '' },
+            { step: 0, icon: 'construct' as const, title: catName(category), body: [issueText, d.description.trim(), d.voice.transcript.trim()].filter(Boolean).join(' · ') || (d.voice.audioUploadId ? t('customerRequestService.voiceAttached') : '') },
+            { step: 1, icon: 'camera' as const, title: d.photos.length ? tn('customerRequestService.photos', d.photos.length) : t('customerRequestService.noPhotos'), body: d.voice.audioUploadId ? t('customerRequestService.voiceAttached') : '' },
+            { step: 2, icon: 'calendar' as const, title: d.when === 'NOW' ? t('customerRequestService.now') : d.when === 'TODAY' ? t('customerRequestService.today') : d.when === 'TOMORROW' ? t('customerRequestService.tomorrow') : days.find((x) => x.id === d.date)?.label ?? '', body: d.slot ? { MORNING: 'Morning', AFTERNOON: 'Afternoon', EVENING: 'Evening' }[d.slot] : '' },
+            { step: 3, icon: 'location' as const, title: address?.label ?? t('customerRequestService.address'), body: address ? [address.streetAddress, address.area, address.city].filter(Boolean).join(', ') : '' },
           ].map((row) => (
-            <TouchableOpacity key={row.step} onPress={() => set({ step: row.step })} accessibilityRole="button" accessibilityLabel={`${row.title}. ${row.body}. Change`}
+            <TouchableOpacity key={row.step} onPress={() => set({ step: row.step })} accessibilityRole="button" accessibilityLabel={t('customerRequestService.change', { title: row.title, body: row.body })}
               style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: 16, padding: 16, marginBottom: 10 }}>
               <Ionicons name={row.icon} size={22} color={theme.colors.primary} />
               <View style={{ flex: 1, marginHorizontal: 12 }}>
                 <Text variant="body" weight="semibold" color={theme.colors.textPrimary}>{row.title}</Text>
                 {row.body ? <Text variant="bodySmall" color={theme.colors.textSecondary} numberOfLines={3}>{row.body}</Text> : null}
               </View>
-              <Text variant="bodySmall" weight="semibold" color={theme.colors.primary}>Change</Text>
+              <Text variant="bodySmall" weight="semibold" color={theme.colors.primaryText}>{t('customerRequestService.change2')}</Text>
             </TouchableOpacity>
           ))}
 
           <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'flex-start' }}>
             <Ionicons name="pricetag-outline" size={20} color={theme.colors.textSecondary} />
             <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ flex: 1, marginStart: 8 }}>
-              You will see each professional's price before you choose. Nothing is charged until you agree.
+              {t('customerRequestService.youWillSeeEach')}
             </Text>
           </View>
-          {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
+          {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
         </View>
       ) : null}
     </Screen>

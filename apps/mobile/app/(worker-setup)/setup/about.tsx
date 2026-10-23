@@ -15,9 +15,10 @@ import { ChipChoice } from '../../../src/components/ds/ChipChoice';
 import { PhotoButtons } from '../../../src/components/ds/PhotoButtons';
 import { LoadingState } from '../../../src/components/ds/EmptyState';
 import * as api from '../../../src/services/api';
+import { t } from '../../../src/i18n';
 
 const LANGUAGES = ['Urdu', 'English', 'Punjabi', 'Sindhi', 'Pashto', 'Arabic', 'Hindi', 'Bengali'].map((l) => ({ id: l, label: l }));
-const GENDERS = [{ id: 'FEMALE', label: 'Woman' }, { id: 'MALE', label: 'Man' }, { id: 'NONE', label: 'Prefer not to say' }];
+const GENDERS = () => ([{ id: 'FEMALE', label: t('workerSetupAbout.woman') }, { id: 'MALE', label: t('workerSetupAbout.man') }, { id: 'NONE', label: t('workerSetupAbout.preferNotToSay') }]);
 
 export default function AboutScreen() {
   const theme = useTheme();
@@ -43,7 +44,7 @@ export default function AboutScreen() {
     setHidePhoto(w.hidePhotoUntilBooked);
   }, [me.data]);
 
-  if (me.loading && !me.data) return <Screen title="About you" back><LoadingState /></Screen>;
+  if (me.loading && !me.data) return <Screen title={t('workerSetupAbout.aboutYou')} back><LoadingState /></Screen>;
 
   const save = async () => {
     setSaving(true);
@@ -63,32 +64,32 @@ export default function AboutScreen() {
 
   const w = me.data;
   return (
-    <Screen title="About you" back footer={<Button title="Save" size="lg" variant="primary" loading={saving} disabled={saving} onPress={save} />}>
+    <Screen title={t('workerSetupAbout.aboutYou')} back footer={<Button title={t('sharedEditProfile.save')} size="lg" variant="primary" loading={saving} disabled={saving} onPress={save} />}>
       <View style={{ alignItems: 'center', marginBottom: 20 }}>
         <Avatar name={w?.user.name} imageUrl={photo?.localUri ?? w?.user.profileImageUrl} size="xl" />
       </View>
-      <PhotoButtons onPick={async (s) => { const u = await upload.run(s); if (u) setPhoto({ id: u.id, localUri: u.localUri }); }} busy={upload.busy} error={upload.error} denied={upload.denied} takeLabel="Take a profile photo" />
+      <PhotoButtons onPick={async (s) => { const u = await upload.run(s); if (u) setPhoto({ id: u.id, localUri: u.localUri }); }} busy={upload.busy} error={upload.error} denied={upload.denied} takeLabel={t('workerSetupAbout.takeAProfilePhoto')} />
 
       <View style={{ gap: 16, marginTop: 28 }}>
-        <TextInput label="Tell customers about your work" value={bio} onChangeText={setBio} multiline maxLength={600} style={{ minHeight: 90, textAlignVertical: 'top' }} />
-        <TextInput label="Years of experience" keyboardType="number-pad" value={years} onChangeText={(v) => setYears(v.replace(/\D/g, '').slice(0, 2))} />
+        <TextInput label={t('workerSetupAbout.tellCustomersAboutYour')} value={bio} onChangeText={setBio} multiline maxLength={600} style={{ minHeight: 90, textAlignVertical: 'top' }} />
+        <TextInput label={t('workerSetupAbout.yearsOfExperience')} keyboardType="number-pad" value={years} onChangeText={(v) => setYears(v.replace(/\D/g, '').slice(0, 2))} />
       </View>
 
-      <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>Languages you speak</Text>
+      <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>{t('workerSetupAbout.languagesYouSpeak')}</Text>
       <ChipChoice multiSelect options={LANGUAGES} selectedIds={languages} onChange={setLanguages} />
 
-      <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>I am a (optional)</Text>
-      <ChipChoice options={GENDERS} selectedIds={gender} onChange={setGender} />
-      <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 6 }}>Some customers prefer a woman or a man to visit. This is never shown on your profile.</Text>
+      <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>{t('workerSetupAbout.iAmAOptional')}</Text>
+      <ChipChoice options={GENDERS()} selectedIds={gender} onChange={setGender} />
+      <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 6 }}>{t('workerSetupAbout.someCustomersPreferA')}</Text>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24 }}>
         <View style={{ flex: 1, marginEnd: 12 }}>
-          <Text variant="body" weight="medium" color={theme.colors.textPrimary}>Hide my photo until a customer books me</Text>
-          <Text variant="caption" color={theme.colors.textTertiary}>Customers will see your first initial instead.</Text>
+          <Text variant="body" weight="medium" color={theme.colors.textPrimary}>{t('workerSetupAbout.hideMyPhotoUntil')}</Text>
+          <Text variant="caption" color={theme.colors.textTertiary}>{t('workerSetupAbout.customersWillSeeYour')}</Text>
         </View>
-        <Switch value={hidePhoto} onValueChange={setHidePhoto} accessibilityLabel="Hide my photo until a customer books me" trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
+        <Switch value={hidePhoto} onValueChange={setHidePhoto} accessibilityLabel={t('workerSetupAbout.hideMyPhotoUntil')} trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
       </View>
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
     </Screen>
   );
 }

@@ -61,6 +61,24 @@ export class AdminLoginDto extends DeviceDto {
 
   @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(200)
   password: string;
+
+  /** 6-digit authenticator code, or a recovery code (xxxxx-xxxxx). */
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(20)
+  code?: string;
+}
+
+export class TotpSetupDto {
+  /** Short-lived token from a TOTP_SETUP_REQUIRED login response. */
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(2000)
+  setupToken: string;
+}
+
+export class TotpActivateDto extends DeviceDto {
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(2000)
+  setupToken: string;
+
+  @ApiProperty() @IsString() @Length(6, 6)
+  code: string;
 }
 
 export class RefreshDto {

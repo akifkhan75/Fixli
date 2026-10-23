@@ -28,7 +28,7 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
 
   async function makeUser(key: string, type: 'customer' | 'worker' | 'admin', worker: Record<string, unknown> = {}) {
     const user = await prisma.user.create({
-      data: { name: `${key} User`, email: `${tag}-${key}@test.com`, password: await bcrypt.hash('x', 4), type, countryCode: 'PK' },
+      data: { name: `${key} User`, email: `${tag}-${key}@test.com`, password: await bcrypt.hash('x', 4), type, countryCode: 'PK', ...(type === 'admin' ? { adminRoles: ['Super Admin'] } : {}) },
     });
     if (type === 'worker') await prisma.worker.create({ data: { id: user.id, activationStatus: 'ONBOARDING', ...worker } });
     const session = await prisma.session.create({ data: { userId: user.id, deviceId: `dev-${key}`, refreshTokenHash: 'x', expiresAt: new Date(Date.now() + 3600_000) } });

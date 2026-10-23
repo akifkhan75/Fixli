@@ -1,3 +1,4 @@
+import { StaleNote } from '../../src/components/ds/StaleNote';
 import React, { useCallback, useState } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -9,22 +10,25 @@ import { Text } from '../../src/components/ds/Text';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import { isFinished, statusIcon, statusSentence } from '../../src/utils/jobStatus';
 import * as api from '../../src/services/api';
+import { t } from '../../src/i18n';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 export default function MyJobsScreen() {
   const theme = useTheme();
   const [tab, setTab] = useState<'ACTIVE' | 'PAST'>('ACTIVE');
-  const { data, loading, error, reload } = useApi(async () => (await api.listJobs()).items);
+  const { data, loading, error, reload, staleAt } = useApi(async () => (await api.listJobs()).items, [], { cacheKey: 'customer-bookings' });
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
   const shown = (data ?? []).filter((j) => (tab === 'PAST') === isFinished(j.status));
 
   return (
-    <Screen title="My jobs" onRefresh={reload} refreshing={loading && !!data}>
+    <Screen title={t('customerBookings.myJobs')} onRefresh={reload} refreshing={loading && !!data}>
+      <StaleNote at={staleAt} />
       <View style={{ flexDirection: 'row', backgroundColor: theme.colors.surface, borderRadius: 10, padding: 3, marginBottom: 20 }} accessibilityRole="tablist">
-        {(['ACTIVE', 'PAST'] as const).map((t) => (
-          <TouchableOpacity key={t} onPress={() => setTab(t)} accessibilityRole="tab" accessibilityState={{ selected: tab === t }}
-            style={{ flex: 1, minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 8, backgroundColor: tab === t ? theme.colors.primary : 'transparent' }}>
-            <Text variant="bodySmall" weight="bold" color={tab === t ? theme.colors.onPrimary : theme.colors.textSecondary}>{t === 'ACTIVE' ? 'Active' : 'Past'}</Text>
+        {(['ACTIVE', 'PAST'] as const).map((id) => (
+          <TouchableOpacity key={id} onPress={() => setTab(id)} accessibilityRole="tab" accessibilityState={{ selected: tab === id }}
+            style={{ flex: 1, minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 8, backgroundColor: tab === id ? theme.colors.primary : 'transparent' }}>
+            <Text variant="bodySmall" weight="bold" color={tab === id ? theme.colors.onPrimary : theme.colors.textSecondary}>{id === 'ACTIVE' ? t('customerBookings.active') : t('customerBookings.past')}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -32,9 +36,9 @@ export default function MyJobsScreen() {
       {loading && !data ? <LoadingState /> : error && !data ? <ErrorState message={error} onRetry={reload} /> : !shown.length ? (
         <EmptyState
           icon="calendar-outline"
-          title={tab === 'ACTIVE' ? "You don't have any jobs yet" : 'Nothing here yet'}
-          message={tab === 'ACTIVE' ? 'When you ask for help, your job will appear here so you can follow it.' : 'Finished and cancelled jobs will be listed here.'}
-          actionLabel={tab === 'ACTIVE' ? 'Find a service' : undefined}
+          title={tab === 'ACTIVE' ? t('customerBookings.youDontHaveAny') : t('customerBookings.nothingHereYet')}
+          message={tab === 'ACTIVE' ? t('customerBookings.whenYouAskFor') : t('customerBookings.finishedAndCancelledJobs')}
+          actionLabel={tab === 'ACTIVE' ? t('customerBookings.findAService') : undefined}
           onAction={tab === 'ACTIVE' ? () => router.push('/(customer)/(home)' as any) : undefined}
         />
       ) : shown.map((job) => (
@@ -46,7 +50,7 @@ export default function MyJobsScreen() {
             <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>{statusSentence(job.status, 'customer', job.assignedWorker?.user.name)}</Text>
             <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{new Date(job.createdAt).toLocaleDateString()}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
+          <DirIcon name="chevron-forward" size={20} color={theme.colors.textTertiary} />
         </TouchableOpacity>
       ))}
     </Screen>

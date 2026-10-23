@@ -2,14 +2,15 @@ import { Controller, Post, Get, Delete, Body, Param, HttpCode, HttpStatus } from
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { AdminLoginDto, ChangePasswordDto, LoginDto, RefreshDto, SignupDto } from './dto/auth.dto';
+import { AdminLoginDto, ChangePasswordDto, LoginDto, RefreshDto, SignupDto, TotpActivateDto, TotpSetupDto } from './dto/auth.dto';
+import { StaffTwoFactorService } from './staff-two-factor.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService, private readonly twoFactor: StaffTwoFactorService) {}
 
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
@@ -35,6 +36,24 @@ export class AuthController {
   @ApiOperation({ summary: 'Staff sign-in with email + password' })
   adminLogin(@Body() dto: AdminLoginDto) {
     return this.authService.adminLogin(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('admin/totp/setup')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Staff: start authenticator setup (after a TOTP_SETUP_REQUIRED login)' })
+  beginTotp(@Body() dto: TotpSetupDto) {
+    return this.twoFactor.begin(dto.setupToken);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('admin/totp/activate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Staff: confirm the first code; signs in and returns one-time recovery codes' })
+  activateTotp(@Body() dto: TotpActivateDto) {
+    return this.authService.activateStaffTwoFactor(dto);
   }
 
   @Public()
