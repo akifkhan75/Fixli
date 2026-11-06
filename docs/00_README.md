@@ -34,6 +34,12 @@ The original concept supplied for this project is preserved in the PRD and featu
 18. 18_ANTIGRAVITY_MASTER_PROMPT.md — master implementation prompt for Gemini/Antigravity
 19. 19_AGENT_ENGINEERING_RULES.md — rules for AI coding agents
 20. 20_RELEASE_CHECKLIST.md — production launch checklist
+21. 21_PRODUCTION_AUDIT_HARDENING.md — production readiness audit & hardening
+22. 22_UX_UI_AUDIT_AND_REDESIGN_PLAN.md — UX/UI redesign, design system & smart forms
+23. 23_TRIPLY_UI_UX_REDESIGN_PLAN.md — premium redesign instructions
+24. 24_IMPLEMENTATION_AUDIT_AND_PLAN.md — implementation audit and phase-wise build plan
+25. 25_OWNER_DECISIONS.md — living list of owner decisions and open questions
+26. 26_COMPREHENSIVE_PENDING_PLAN.md — master plan for all pending items & edge cases
 
 ## Recommended technology direction
 - Mobile: React Native + Expo + TypeScript

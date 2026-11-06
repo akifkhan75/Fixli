@@ -7,7 +7,8 @@ import { SendMessageDto } from './dto/send-message.dto';
 export class ChatService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notifications: NotificationService
+    @Inject(forwardRef(() => NotificationService))
+    private readonly notifications: NotificationService,
   ) {}
 
   async getConversationsForUser(userId: string, cursor?: string) {
