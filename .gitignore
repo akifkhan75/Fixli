@@ -24,6 +24,7 @@ dist/
 
 # Testing
 coverage/
+test-results/
 
 # Logs
 logs/

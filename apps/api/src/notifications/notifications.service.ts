@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -30,7 +30,7 @@ export class NotificationService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly realtime: RealtimeService,
+    @Inject(forwardRef(() => RealtimeService)) private readonly realtime: RealtimeService,
     @Inject(PUSH_PROVIDER) private readonly push: PushProvider,
   ) {}
 
