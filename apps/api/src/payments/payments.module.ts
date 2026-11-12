@@ -7,6 +7,7 @@ import { CommonModule } from '../common/common.module';
 @Module({
   imports: [DatabaseModule, CommonModule],
   providers: [PaymentsService],
-  controllers: [PaymentsController]
+  controllers: [PaymentsController],
+  exports: [PaymentsService],
 })
 export class PaymentsModule {}

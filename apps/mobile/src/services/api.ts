@@ -258,10 +258,17 @@ export const decideChangeOrder = (id: string, status: 'APPROVED' | 'REJECTED') =
 
 // ── Payments & Reviews ───────────────────────────────────────
 
-export interface LedgerSummary { balance: number; currency: string; history: { id: string; type: string; amount: number; createdAt: string }[] }
+export interface LedgerSummary {
+  /** Minor units; negative = you owe Fixli fees. */
+  balance: number; owed: number; currency: string;
+  status: 'OK' | 'WARN' | 'BLOCKED'; softLimit: number; hardLimit: number; settleDays: number;
+  history: { id: string; type: string; amount: number; createdAt: string }[];
+}
 export const getWorkerEarnings = () => request<LedgerSummary>('/workers/me/earnings');
-export const markCashReceived = (jobId: string, amount: number, currency?: string) => request<{ success: boolean }>(`/payments/job/${jobId}/cash`, { method: 'POST', body: JSON.stringify({ amount, currency }) });
-export const confirmPayment = (paymentId: string) => request<{ success: boolean }>(`/payments/${paymentId}/confirm`, { method: 'POST' });
+// Currency is never sent: the server takes it from the job.
+export const markCashReceived = (jobId: string, amount: number) => request<PaymentItem>(`/payments/job/${jobId}/cash`, { method: 'POST', body: JSON.stringify({ amount }) });
+export const confirmPayment = (paymentId: string) => request<PaymentItem>(`/payments/${paymentId}/confirm`, { method: 'POST' });
+export const disputePayment = (paymentId: string, claimedAmount: number) => request<PaymentItem>(`/payments/${paymentId}/dispute`, { method: 'POST', body: JSON.stringify({ claimedAmount }) });
 export const submitReview = (data: { jobRequestId: string; targetId: string; rating: number; comment?: string }) => request<{ success: boolean }>('/reviews', { method: 'POST', body: JSON.stringify(data) });
 
 // ── AI ─────────────────────────────────────────────────────

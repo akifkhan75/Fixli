@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { MatchingService } from './matching.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { PaymentsService } from '../payments/payments.service';
 
 const LOCK_KEY = 4_242_001; // one sweeper at a time across all API instances
 const EVERY_MS = 60_000;
@@ -24,11 +25,16 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
     private readonly matching: MatchingService,
     private readonly config: ConfigService,
     private readonly realtime: RealtimeService,
+    private readonly payments: PaymentsService,
   ) {}
 
   onModuleInit() {
     if (this.config.get('RUN_BACKGROUND_JOBS') === true || this.config.get('RUN_BACKGROUND_JOBS') === 'true') {
-      this.timer = setInterval(() => void this.sweep().catch((e) => this.logger.error(e)), EVERY_MS);
+      this.timer = setInterval(() => {
+        void this.sweep().catch((e) => this.logger.error(e));
+        // Idempotent per payment, so several instances running it together is safe.
+        void this.payments.sweepCash().catch((e) => this.logger.error(e));
+      }, EVERY_MS);
     }
   }
 

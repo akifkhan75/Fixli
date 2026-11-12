@@ -125,7 +125,7 @@ export default function WorkerJobScreen() {
     setBusy(true);
     setActionError(undefined);
     try {
-      await api.markCashReceived(job.id, job.agreedAmount, job.agreedCurrency || 'USD');
+      await api.markCashReceived(job.id, job.agreedAmount);
       await reload();
     } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
   };
