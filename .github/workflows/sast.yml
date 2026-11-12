@@ -19,7 +19,7 @@ jobs:
         with:
           version: 9
       - name: Dependency Audit
-        run: pnpm audit --audit-level high || true
+        run: pnpm audit --prod --audit-level critical
 
       # Secret Scan
       - name: Gitleaks Secret Scan

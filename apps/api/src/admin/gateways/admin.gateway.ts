@@ -5,14 +5,21 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards, Logger, Injectable } from '@nestjs/common';
+import { Logger, Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { DomainEvents } from '../../common/events/domain-events';
 import { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
 @WebSocketGateway({
   namespace: '/admin',
-  cors: { origin: '*' }, // Real deployment would restrict this
+  cors: {
+    origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
+      const allowed = (process.env.FRONTEND_URL ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+      cb(null, !origin || allowed.includes(origin));
+    },
+    credentials: true,
+  },
 })
 export class AdminGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -23,6 +30,7 @@ export class AdminGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly events: DomainEvents,
     private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
   ) {
     this.events.on('admin.verification_submitted', (payload) => {
       this.server.to('admin:Verification').emit('verification.new', payload);
@@ -33,59 +41,45 @@ export class AdminGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.events.on('admin.incident_reported', (payload) => {
       this.server.to('admin:Safety').emit('incident.new', payload);
     });
+    this.events.on('sessions.revoked', ({ sessionIds }) => {
+      for (const sid of sessionIds) this.server?.in(`session:${sid}`).disconnectSockets(true);
+    });
   }
 
   async handleConnection(client: Socket) {
-    // In a real implementation we would decode the JWT token, check if they are admin,
-    // and then add them to the relevant role rooms.
-    const token = client.handshake.auth?.token;
-    if (!token) {
-      client.disconnect();
-      return;
-    }
-
     try {
-      // Very basic simulation of JWT parsing and user role assignment for admin feed
-      // Normally uses JwtService
-      const adminId = this.parseTokenSimulated(token);
-      if (!adminId) throw new Error('Invalid token');
-
-      const admin = await this.prisma.user.findUnique({
-        where: { id: adminId },
-        select: { adminRoles: true },
+      const token = (client.handshake.auth?.token as string | undefined) ?? '';
+      const payload = this.jwt.verify<{ sub: string; sid?: string }>(token);
+      // Same rule as the /rt gateway: the token must belong to a live (not revoked/expired) session.
+      const session = await this.prisma.session.findFirst({
+        where: {
+          id: payload.sid ?? '',
+          userId: payload.sub,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+          user: { status: 'ACTIVE', type: 'admin' },
+        },
+        select: { user: { select: { id: true, adminRoles: true } } },
       });
+      const admin = session?.user;
+      if (!admin || !admin.adminRoles?.length) throw new Error('not an active admin session');
 
-      if (!admin || !admin.adminRoles) {
-        client.disconnect();
-        return;
-      }
-
-      admin.adminRoles.forEach(role => {
-        client.join(`admin:${role}`);
-      });
+      const rooms = new Set<string>([`session:${payload.sid}`]);
+      admin.adminRoles.forEach((role) => rooms.add(`admin:${role}`));
       if (admin.adminRoles.includes('Super Admin')) {
-        // Super admin joins all relevant rooms for notifications
-        ['Verification', 'Operations', 'Safety', 'Support', 'Finance'].forEach(role => {
-          client.join(`admin:${role}`);
-        });
+        ['Verification', 'Operations', 'Safety', 'Support', 'Finance'].forEach((role) => rooms.add(`admin:${role}`));
       }
-
-      this.logger.log(`Admin ${adminId} connected to realtime feed`);
-    } catch (err) {
-      client.disconnect();
+      await client.join([...rooms]);
+      client.data.userId = admin.id;
+      client.data.sessionId = payload.sid;
+      this.logger.log(`Admin ${admin.id} connected to realtime feed`);
+    } catch {
+      client.emit('error', { code: 'UNAUTHORIZED' });
+      client.disconnect(true);
     }
   }
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
-  }
-
-  private parseTokenSimulated(token: string): string | null {
-    // Simulated since we don't inject JwtService here to avoid circular dep
-    // In actual implementation, we verify token and extract user id
-    if (token.startsWith('admin-')) {
-      return token.replace('admin-', '');
-    }
-    return null; // Reject if not valid
   }
 }

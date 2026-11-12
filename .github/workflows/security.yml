@@ -18,31 +18,23 @@ jobs:
           node-version: 22
           
       - name: Install dependencies
-        run: npm install -g pnpm && pnpm install
+        run: npm install -g pnpm@9 && pnpm install --frozen-lockfile
 
-      - name: Run dependency scan
-        run: pnpm audit --audit-level high || true
+      # Blocking: no CRITICAL advisory in production dependencies.
+      - name: Dependency scan (prod, critical = blocking)
+        run: pnpm audit --prod --audit-level critical
+
+      # Reporting only until the production high-severity backlog (multer, lodash, js-yaml,
+      # date-and-time, node-forge) is upgraded - tracked in docs/27 R1. Dev-only advisories
+      # (e.g. ts-jest > handlebars) never ship. Flip to blocking once the backlog is 0.
+      - name: Dependency scan (prod, high = report)
+        run: pnpm audit --prod --audit-level high
+        continue-on-error: true
         
       - name: Run Secret Scan
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.88.0
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
           extra_args: --debug --only-verified
-
-  e2e-tests:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Maestro
-        run: curl -Ls "https://get.maestro.mobile.dev" | bash
-        
-      - name: Run Maestro Tests
-        run: |
-          export PATH="$PATH:$HOME/.maestro/bin"
-          # Typically you would build the app or download the APK/app artifact first
-          # maestro test apps/mobile/.maestro/customer_flow.yaml
-          # maestro test apps/mobile/.maestro/worker_flow.yaml
-          echo "Maestro E2E ready for CI execution once build artifacts are available"
