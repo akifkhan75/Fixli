@@ -1,5 +1,6 @@
 # Fixli — Master Plan for All Pending Items & Edge Cases
 
+> **Note (2026-11-13):** some items below are described as implemented (e.g. `DELETE /me`, CNIC encryption, idempotency interceptor) but the audit found they are not. See `27_AUDIT_REMEDIATION_PLAN.md`.
 > **Target Version:** Production Release 1.0 (Pakistan Pilot) & Beyond  
 > **Status:** Comprehensive Implementation & Operational Plan  
 > **Governing Specifications:** Docs 00–25, System Architecture, Legal Framework  
@@ -425,7 +426,7 @@ flowchart LR
 
 ### 3.3 App Store Review Compliance (Apple & Google Play)
 * **Account Deletion (App Store Guideline 5.1.1v):**
-  * Fully implemented in `DELETE /me`.
+  * **Target (not yet implemented — see doc 27 R4):** `DELETE /me` currently only sets status DELETED and blanks phone/email.
   * Soft-deletes user record, revokes all active auth sessions, cancels open jobs, and anonymizes personal identifiers (name, phone, email, avatar).
 * **Data Safety Declarations:**
   * Location: Used only for service fulfillment and live navigation while active.
@@ -483,7 +484,7 @@ timeline
 | **Week 3** | **Hardware Push & Calling** | Link EAS Project ID; FCM/APNs certificates; In-app notification toast; Masked calling expiry logic. | Foreground, background, and killed app state notifications pass verification. |
 | **Week 4** | **Ledger & Legal Controls** | Cash dispute resolution sheet; auto-confirm timeout cron; CNIC vault encryption; provincial tax calculations. | Reconciled ledger test on 50 simulated cash jobs with dispute edge cases. |
 | **Week 5** | **Typography, RTL & QA** | Nastaliq typography font sizing; RTL icon inversion; Native speaker Urdu review; Low-end device profiling. | Zero UI clipping on 200% dynamic type scale across low-end Android test devices. |
-| **Week 6** | **Release & Store Gate** | Penetration test sign-off; Disaster recovery snapshot drills; App Store data safety submission; Soft launch. | All 65 items in `docs/20_RELEASE_CHECKLIST.md` verified green. |
+| **Week 6** | **Release & Store Gate** | Penetration test sign-off; Disaster recovery snapshot drills; App Store data safety submission; Soft launch. | All 71 items in `docs/20_RELEASE_CHECKLIST.md` verified green. |
 
 ---
 

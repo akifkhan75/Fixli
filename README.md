@@ -18,7 +18,7 @@ Fixli is an advanced platform (built as a Turborepo Monorepo) designed to bridge
 -   **Mobile App:** React Native, Expo, Redux Toolkit, React Navigation
 -   **Backend API:** NestJS, TypeScript, WebSocket (Socket.io)
 -   **Database:** PostgreSQL (via Prisma ORM)
--   **Testing:** Jest, @testing-library/react-native (Test Coverage > 70%)
+-   **Testing:** Jest, @testing-library/react-native (API line coverage 44.7% as of 2026-11-13; target ≥70%, see docs/27)
 -   **AI Integration:** Google Gemini API
 
 ## Prerequisites

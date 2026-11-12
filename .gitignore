@@ -47,3 +47,11 @@ apps/api/storage/
 # Native directories (Expo CNG)
 apps/mobile/ios/
 apps/mobile/android/
+
+# Scratch / legacy artifacts
+*.bak
+scratch_*
+/screenshot.png
+/metadata.json
+Prolivo_*.zip
+venv/

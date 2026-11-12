@@ -1,5 +1,7 @@
 # Triply — Premium UI/UX Redesign Plan & Instructions
 
+> **SUPERSEDED (2026-11-13):** the brand stays **Fixli** (owner decision O4 default; all logos, app config and docs 00–22 use Fixli). Do NOT rename anything to Triply. Keep this file only for its UI/UX guidance.
+
 > **Context:** The project has been rebranded from *Fixli* to **Triply**. This document outlines the absolute highest-tier UI/UX requirements for Triply, inspired by Apple's Human Interface Guidelines, and serves as a direct instruction manual for any AI or developer continuing the work.
 
 ---

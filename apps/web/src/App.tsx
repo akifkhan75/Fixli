@@ -6,7 +6,7 @@ function App() {
     <>
       <nav className="navbar">
         <div className="container nav-content">
-          <a href="/" className="nav-logo">Triply</a>
+          <a href="/" className="nav-logo">Fixli</a>
           <div className="nav-links">
             <a href="#services" className="nav-link">Services</a>
             <a href="#professionals" className="nav-link">For Professionals</a>
@@ -45,7 +45,7 @@ function App() {
 
         <section id="services" className="features">
           <div className="container">
-            <h2 className="hero-title" style={{ fontSize: '48px', textAlign: 'center', marginBottom: 64 }}>Why Triply?</h2>
+            <h2 className="hero-title" style={{ fontSize: '48px', textAlign: 'center', marginBottom: 64 }}>Why Fixli?</h2>
             
             <div className="features-grid">
               <div className="feature-card">
@@ -61,7 +61,7 @@ function App() {
                   <ShieldCheck size={24} />
                 </div>
                 <h3 className="feature-title">Vetted Professionals</h3>
-                <p className="feature-text">Every worker on Triply is background-checked, highly rated, and verified for your peace of mind.</p>
+                <p className="feature-text">Every worker on Fixli is background-checked, highly rated, and verified for your peace of mind.</p>
               </div>
 
               <div className="feature-card">
