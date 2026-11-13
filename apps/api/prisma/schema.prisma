@@ -664,9 +664,15 @@ model Incident {
   type         String // SOS, EMERGENCY, REPORT_PROBLEM
   severity     String // LIFE_THREATENING, PROPERTY_DAMAGE, MODERATE
   description  String?
+  latitude     Float?
+  longitude    Float?
+  /// Device-generated; a retried SOS returns the same incident (and the same emergency job).
+  idempotencyKey String?
   status       String      @default("OPEN") // OPEN, INVESTIGATING, RESOLVED
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
+  @@unique([reporterId, idempotencyKey])
 }
 
 model TrustedContact {

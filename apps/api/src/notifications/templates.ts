@@ -6,6 +6,7 @@ import { formatMoney } from '../common/money';
 
 export type NotificationType =
   | 'job.request'
+  | 'job.emergency_request'
   | 'job.direct_request'
   | 'offer.received'
   | 'offer.accepted'
@@ -32,6 +33,7 @@ type P = Record<string, string | number | Money | undefined>;
 type T = (p: P) => { title: string; body: string };
 
 const en: Record<NotificationType, T> = {
+  'job.emergency_request': (p) => ({ title: 'EMERGENCY near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. A customer needs urgent help. Send your price now.` }),
   'job.direct_request': (p) => ({ title: 'A customer asked for you', body: `"${p.title}". Accept or decline in the app.` }),
   'job.request': (p) => ({ title: 'New request near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. Send your price.` }),
   'offer.received': (p) => ({ title: 'You got a price', body: `${p.worker} can do it for ${p.price}.` }),
@@ -55,6 +57,7 @@ const en: Record<NotificationType, T> = {
 };
 
 const ur: Record<NotificationType, T> = {
+  'job.emergency_request': (p) => ({ title: 'آپ کے قریب ایمرجنسی', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ ایک گاہک کو فوری مدد چاہیے۔ ابھی اپنی قیمت بھیجیں۔` }),
   'job.direct_request': (p) => ({ title: 'ایک گاہک نے آپ کو بلایا ہے', body: `"${p.title}"۔ ایپ میں قبول یا انکار کریں۔` }),
   'job.request': (p) => ({ title: 'آپ کے قریب نئی درخواست', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ اپنی قیمت بھیجیں۔` }),
   'offer.received': (p) => ({ title: 'آپ کو قیمت ملی', body: `${p.worker} یہ کام ${p.price} میں کر سکتے ہیں۔` }),
@@ -78,6 +81,7 @@ const ur: Record<NotificationType, T> = {
 };
 
 const ar: Record<NotificationType, T> = {
+  'job.emergency_request': (p) => ({ title: 'طوارئ بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. عميل يحتاج مساعدة عاجلة. أرسل سعرك الآن.` }),
   'job.direct_request': (p) => ({ title: 'طلبك أحد العملاء', body: `"${p.title}". اقبل أو ارفض من التطبيق.` }),
   'job.request': (p) => ({ title: 'طلب جديد بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. أرسل سعرك.` }),
   'offer.received': (p) => ({ title: 'وصلك سعر', body: `يمكن لـ ${p.worker} القيام بالعمل مقابل ${p.price}.` }),

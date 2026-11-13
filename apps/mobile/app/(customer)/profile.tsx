@@ -42,6 +42,7 @@ export default function AccountScreen() {
 
       <GroupedList items={[
         { id: 'addresses', label: 'Saved addresses', icon: 'location-outline', value: addresses.data ? String(addresses.data.length) : undefined, onPress: go('/addresses') },
+        { id: 'trusted', label: 'Trusted contacts (for SOS)', icon: 'people-outline', onPress: go('/trusted-contacts') },
       ]} />
       <GroupedList items={[
         { id: 'prefs', label: 'Language & appearance', icon: 'language-outline', value: `${LANG_LABEL[locale]} · ${APPEARANCE_LABEL[appearance]}`, onPress: go('/preferences') },

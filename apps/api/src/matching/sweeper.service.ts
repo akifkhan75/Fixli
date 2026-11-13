@@ -63,6 +63,18 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
       });
       for (const j of unmatched) await this.matching.matchJob(j.id, 1);
 
+      // SOS: the nearest worker had a short window; if nobody sent a price, cascade to the top few.
+      const sosWindow = Number(this.config.get('SOS_ESCALATE_SECONDS') ?? 180);
+      const sosStale = await tx.jobRequest.findMany({
+        where: {
+          status: 'MATCHES_FOUND', isEmergency: true, matchRound: 1,
+          lastMatchedAt: { lte: new Date(now.getTime() - sosWindow * 1000) },
+          offers: { none: { status: 'PENDING' } },
+        },
+        select: { id: true }, take: 50,
+      });
+      for (const j of sosStale) await this.matching.matchJob(j.id, 2);
+
       const after = Number(this.config.get('REMATCH_AFTER_MINUTES') ?? 15);
       const stale = await tx.jobRequest.findMany({
         where: {
@@ -87,7 +99,7 @@ export class SweeperService implements OnModuleInit, OnModuleDestroy {
         data: { isReadOnly: true }
       });
 
-      return { expired: expired.count, matched: unmatched.length, widened: stale.length, readOnly: readOnlyCount.count };
+      return { expired: expired.count, matched: unmatched.length, widened: stale.length + sosStale.length, readOnly: readOnlyCount.count };
     });
   }
 }

@@ -245,7 +245,8 @@ export const acceptJob = jobAction('accept');
 export const declineJob = jobAction('decline');
 export const enRouteJob = jobAction('en-route');
 export const arriveJob = jobAction('arrive');
-export const startJob = (id: string, beforePhotoKey?: string) => request<JobView>(`/job-requests/${id}/start`, { method: 'POST', body: JSON.stringify({ beforePhotoKey }) });
+export const startJob = (id: string, beforePhotoKey?: string, hazard?: { shutoffVerified: boolean; protectiveEquipment: boolean }) =>
+  request<JobView>(`/job-requests/${id}/start`, { method: 'POST', body: JSON.stringify({ beforePhotoKey, ...hazard }) });
 export const finishJob = (id: string, afterPhotoKey?: string) => request<JobView>(`/job-requests/${id}/finish`, { method: 'POST', body: JSON.stringify({ afterPhotoKey }) });
 export const completeJob = jobAction('complete');
 export const confirmJob = jobAction('confirm');
@@ -416,3 +417,29 @@ export const markNotificationsRead = (ids?: string[]) =>
   request<{ updated: number }>('/notifications/read', { method: 'POST', body: JSON.stringify(ids ? { ids } : {}) });
 export const registerPushToken = (token: string) =>
   request<{ success: boolean }>('/notifications/push-token', { method: 'PUT', body: JSON.stringify({ token }) });
+
+
+// ── Safety & SOS ─────────────────────────────────────────────
+
+export interface EmergencyNumber { label: string; number: string }
+export interface EmergencyNumbers { country: string; numbers: EmergencyNumber[]; disclaimer: string }
+export const getEmergencyNumbers = () => request<EmergencyNumbers>('/safety/emergency-numbers');
+
+export type SosKind = 'WATER' | 'ELECTRICAL' | 'GAS';
+export interface IncidentInput {
+  type: 'SOS' | 'EMERGENCY' | 'REPORT_PROBLEM';
+  severity: 'LIFE_THREATENING' | 'PROPERTY_DAMAGE' | 'MODERATE';
+  description?: string; latitude?: number; longitude?: number;
+  sosKind?: SosKind; addressId?: string; idempotencyKey?: string;
+}
+export interface IncidentResult {
+  jobId: string | null; replay: boolean; country: string; disclaimer: string;
+  emergencyNumbers: EmergencyNumber[];
+  trustedContacts: { total: number; notified: number; smsConfigured: boolean };
+}
+export const reportIncident = (data: IncidentInput) => request<IncidentResult>('/safety/incidents', { method: 'POST', body: JSON.stringify(data) });
+
+export interface TrustedContact { id: string; name: string; phone: string; notifyOnSos: boolean }
+export const getTrustedContacts = () => request<TrustedContact[]>('/safety/trusted-contacts');
+export const addTrustedContact = (c: { name: string; phone: string; notifyOnSos?: boolean }) => request<TrustedContact>('/safety/trusted-contacts', { method: 'POST', body: JSON.stringify(c) });
+export const removeTrustedContact = (id: string) => request<{ success: boolean }>(`/safety/trusted-contacts/${id}`, { method: 'DELETE' });

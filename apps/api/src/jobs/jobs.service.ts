@@ -301,8 +301,16 @@ export class JobsService {
     return this.workerTransition(id, user, 'ARRIVED', 'ARRIVED');
   }
 
-  async start(id: string, user: AuthUser, dto?: { beforePhotoKey?: string }) {
+  async start(id: string, user: AuthUser, dto?: { beforePhotoKey?: string; shutoffVerified?: boolean; protectiveEquipment?: boolean }) {
     if (user.type !== 'worker') throw new ForbiddenException('Only the assigned worker can do this');
+    // Emergency (SOS) jobs may involve live power, gas or water: the safety checklist is mandatory (doc 26 §1.3).
+    const hazard = await this.prisma.jobRequest.findFirst({ where: { id, assignedWorkerId: user.id }, select: { isEmergency: true } });
+    if (hazard?.isEmergency && !(dto?.shutoffVerified === true && dto?.protectiveEquipment === true)) {
+      throw new BadRequestException({
+        code: 'HAZARD_CHECKLIST_REQUIRED',
+        message: 'Before starting an emergency job, confirm the power/gas/water is shut off and you are wearing protective equipment.',
+      });
+    }
     const result = await this.transition(id, user, 'IN_PROGRESS', { onlyIf: { assignedWorkerId: user.id }, event: { type: 'WORK_STARTED' } });
     if (dto?.beforePhotoKey) {
       await this.prisma.jobMedia.create({ data: { jobRequestId: id, kind: 'PHOTO', phase: 'BEFORE', storageKey: dto.beforePhotoKey, mime: 'image/jpeg', createdById: user.id } });

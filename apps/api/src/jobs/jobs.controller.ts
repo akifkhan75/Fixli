@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
+import { StartJobDto } from './dto/start-job.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JobsService, AuthUser } from './jobs.service';
 import { CreateJobDto } from './dto/create-job.dto';
@@ -70,7 +71,7 @@ export class JobsController {
 
   @Post(':id/start')
   @ApiOperation({ summary: 'Assigned worker starts the work' })
-  start(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: { beforePhotoKey?: string }) {
+  start(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: StartJobDto) {
     return this.jobsService.start(id, user, dto);
   }
 
