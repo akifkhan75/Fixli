@@ -12,6 +12,7 @@ import { Button } from '../../src/components/ds/Button';
 import * as api from '../../src/services/api';
 import { friendlyError } from '../../src/hooks/useApi';
 import { FALLBACK_NUMBERS, SOS_ADVICE, SOS_CHOICES, SosChoice, describeContacts, pickAddress, telUrl } from '../../src/utils/sos';
+import { AnalyticsService } from '../../src/services/analytics';
 
 const NUMBERS_KEY = 'sos.numbers.v1';
 const COUNTDOWN_S = 10;
@@ -25,6 +26,7 @@ type Step = 'choose' | 'countdown' | 'sending' | 'done';
  * Property hazard: 10 s to cancel a false alarm, then an urgent request goes to the nearest professional.
  */
 export default function SosScreen() {
+  useEffect(() => { AnalyticsService.track('emergency_opened'); }, []);
   const theme = useTheme();
   const [numbers, setNumbers] = useState<api.EmergencyNumber[]>(FALLBACK_NUMBERS);
   const [disclaimer, setDisclaimer] = useState('Fixli SOS is an emergency coordination tool. It does NOT replace government emergency services. In danger to life, call the emergency numbers directly.');

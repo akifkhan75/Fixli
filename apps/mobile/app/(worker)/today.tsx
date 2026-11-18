@@ -17,6 +17,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/Em
 import { statusSentence } from '../../src/utils/jobStatus';
 import * as api from '../../src/services/api';
 import { DirIcon } from '../../src/components/ds/DirIcon';
+import { AnalyticsService } from '../../src/services/analytics';
 
 export default function TodayScreen() {
   const theme = useTheme();
@@ -43,6 +44,7 @@ export default function TodayScreen() {
     setToggleError(undefined);
     try {
       me.setData(await api.patchWorkerMe({ isOnline: value }));
+      AnalyticsService.track(value ? 'went_online' : 'went_offline');
       // Going online is when new-job alerts start to matter: ask now, with that context.
       if (value) void askForPush();
     } catch (e) { setToggleError(friendlyError(e)); } finally { setToggling(false); }

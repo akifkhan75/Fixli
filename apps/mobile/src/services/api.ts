@@ -11,8 +11,13 @@ import type {
 import { API_URL } from '../config';
 import { getAccessToken, getDeviceInfo, refreshAccessToken } from './session';
 import type { CountryListItem, CountryCode } from '@fixli/shared';
+import { AnalyticsService } from './analytics';
 
 // ── HTTP Client ──────────────────────────────────────────────
+
+/** Fire an analytics event after a call succeeds. Never carries personal data (see services/analytics). */
+const tracked = <T,>(call: Promise<T>, event: string, props?: Record<string, unknown>): Promise<T> =>
+  call.then((r) => { AnalyticsService.track(event, props); return r; });
 
 export class ApiError extends Error {
   constructor(
@@ -206,7 +211,8 @@ export interface OfferCard {
   worker: { id: string; name: string; profileImageUrl: string | null; rating: number; ratingCount: number; jobsCompleted: number; isVerified: boolean; experienceYears: number; distanceKm: number | null };
 }
 export const listOffers = (jobId: string) => request<OfferCard[]>(`/job-requests/${jobId}/offers`);
-export const acceptOffer = (offerId: string) => request<{ jobId: string; status: string }>(`/offers/${offerId}/accept`, { method: 'POST' });
+export const acceptOffer = (offerId: string) =>
+  tracked(request<{ jobId: string; status: string }>(`/offers/${offerId}/accept`, { method: 'POST' }), 'booking_confirmed');
 
 export interface FeedItem {
   id: string; title: string | null; description: string; area: string | null; city: string | null; urgency: string | null; isEmergency: boolean;
@@ -215,7 +221,7 @@ export interface FeedItem {
 }
 export const getWorkerFeed = () => request<FeedItem[]>('/workers/me/requests');
 export const submitOffer = (jobId: string, amount: number, etaMinutes?: number, note?: string) =>
-  request<MyOffer>(`/job-requests/${jobId}/offers`, { method: 'POST', body: JSON.stringify({ amount, etaMinutes, note }) });
+  tracked(request<MyOffer>(`/job-requests/${jobId}/offers`, { method: 'POST', body: JSON.stringify({ amount, etaMinutes, note }) }), 'job_accepted');
 export const withdrawOffer = (jobId: string) => request<{ success: boolean }>(`/job-requests/${jobId}/offers/mine`, { method: 'DELETE' });
 export const notInterested = (jobId: string) => request<{ success: boolean }>(`/job-requests/${jobId}/not-interested`, { method: 'POST' });
 
@@ -283,10 +289,13 @@ export interface LedgerSummary {
 }
 export const getWorkerEarnings = () => request<LedgerSummary>('/workers/me/earnings');
 // Currency is never sent: the server takes it from the job.
-export const markCashReceived = (jobId: string, amount: number) => request<PaymentItem>(`/payments/job/${jobId}/cash`, { method: 'POST', body: JSON.stringify({ amount }) });
-export const confirmPayment = (paymentId: string) => request<PaymentItem>(`/payments/${paymentId}/confirm`, { method: 'POST' });
+export const markCashReceived = (jobId: string, amount: number) =>
+  tracked(request<PaymentItem>(`/payments/job/${jobId}/cash`, { method: 'POST', body: JSON.stringify({ amount }) }), 'payment_marked');
+export const confirmPayment = (paymentId: string) =>
+  tracked(request<PaymentItem>(`/payments/${paymentId}/confirm`, { method: 'POST' }), 'payment_confirmed');
 export const disputePayment = (paymentId: string, claimedAmount: number) => request<PaymentItem>(`/payments/${paymentId}/dispute`, { method: 'POST', body: JSON.stringify({ claimedAmount }) });
-export const submitReview = (data: { jobRequestId: string; targetId: string; rating: number; comment?: string }) => request<{ success: boolean }>('/reviews', { method: 'POST', body: JSON.stringify(data) });
+export const submitReview = (data: { jobRequestId: string; targetId: string; rating: number; comment?: string }) =>
+  tracked(request<{ success: boolean }>('/reviews', { method: 'POST', body: JSON.stringify(data) }), 'review_submitted');
 
 // ── AI ─────────────────────────────────────────────────────
 
@@ -407,7 +416,8 @@ export const setWorkerHours = (days: { weekday: number; startMinute: number; end
 export const addPortfolioItem = (title: string, uploadIds: string[], description?: string) => request<WorkerMe>('/workers/me/portfolio', { method: 'POST', body: JSON.stringify({ title, uploadIds, description }) });
 export const removePortfolioItem = (id: string) => request<WorkerMe>(`/workers/me/portfolio/${id}`, { method: 'DELETE' });
 export const submitWorkerDocument = (type: VerificationType, uploadIds: string[], reference?: string) => request<WorkerMe>('/workers/me/verification', { method: 'POST', body: JSON.stringify({ type, uploadIds, reference }) });
-export const submitWorkerForReview = () => request<WorkerMe>('/workers/me/submit', { method: 'POST' });
+export const submitWorkerForReview = () =>
+  tracked(request<WorkerMe>('/workers/me/submit', { method: 'POST' }), 'verification_completed');
 
 export interface PublicWorker {
   id: string; rating: number; ratingCount: number; jobsCompleted: number; bio: string | null; experienceYears: number;
@@ -458,7 +468,8 @@ export interface IncidentResult {
   emergencyNumbers: EmergencyNumber[];
   trustedContacts: { total: number; notified: number; smsConfigured: boolean };
 }
-export const reportIncident = (data: IncidentInput) => request<IncidentResult>('/safety/incidents', { method: 'POST', body: JSON.stringify(data) });
+export const reportIncident = (data: IncidentInput) =>
+  tracked(request<IncidentResult>('/safety/incidents', { method: 'POST', body: JSON.stringify(data) }), 'incident_created', { type: data.type, severity: data.severity });
 
 export interface TrustedContact { id: string; name: string; phone: string; notifyOnSos: boolean }
 export const getTrustedContacts = () => request<TrustedContact[]>('/safety/trusted-contacts');

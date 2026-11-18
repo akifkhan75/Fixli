@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/tool
 import type { IUser, AuthFlowState } from '@fixli/shared';
 import * as api from '../services/api';
 import { outbox } from '../services/offline';
+import { AnalyticsService } from '../services/analytics';
 import { saveTokens, clearTokens, getAccessToken } from '../services/session';
 import type { CountryCode } from '@fixli/shared';
 import type { RootState } from './index';
@@ -51,6 +52,7 @@ export const signupUser = createAsyncThunk<
   try {
     const res = await api.signup(args);
     await saveTokens(res.token, res.refreshToken);
+    AnalyticsService.track(args.type === 'worker' ? 'professional_signup' : 'customer_signup');
     return { user: res.user, token: res.token };
   } catch (error: any) {
     return rejectWithValue(friendlyAuthError(error));
