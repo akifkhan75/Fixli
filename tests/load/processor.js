@@ -6,6 +6,11 @@ let counter = 0;
 function rnd(n) { return Math.floor(Math.random() * n); }
 
 module.exports = {
+  addIp(req, ctx, _events, next) {
+    req.headers = { ...(req.headers || {}), 'X-Forwarded-For': ctx.vars.ip || `10.0.0.${1 + rnd(250)}` };
+    return next();
+  },
+
   newPerson(ctx, _events, done) {
     counter += 1;
     const tail = String((Date.now() + counter * 7919 + rnd(1000)) % 10_000_000).padStart(7, '0');
