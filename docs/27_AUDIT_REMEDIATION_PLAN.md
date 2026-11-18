@@ -112,6 +112,16 @@ Files: `apps/api/src/safety/*`, `apps/api/src/jobs/jobs.service.ts`, `apps/api/s
   - **Doc 20 checklist** re-reviewed with evidence: 12 items ticked `[x]`, 10 `[~]` partial, 1 `[n/a]`, the rest honestly still open (payments provider, penetration test, monitoring/alerts, staging, store builds, legal).
   - **Exit criteria not met:** doc 20 is not green and the audit's P0/P1 list is not empty. Still open: SMS provider (OTP and SOS contact texts), EAS/store accounts and real builds, staging environment and monitoring, native-speaker review of Urdu/Arabic, legal review, a device pass of everything above, penetration test, and the Super-Admin-can-reveal-ID-number decision.
 
+## After R7: follow-ups (2026-11-18)
+Found or closed after the phase work, same standard (claim only what was verified):
+- **Money display bug (found by CI):** the API and mobile formatted amounts using the runtime's `Intl` decimals. On Node 22 PKR is zero-decimal, so a 1,500-rupee price was announced as "PKR 150,000" in push text, and the mobile price parser would have stored a typed "1500" as Rs 15 on such a runtime. Both now use `currencyExponent()` from `@fixli/shared` (the country config). Regression tests fake the bad ICU. The admin Ledger page still divides by 100 (correct for PKR/INR/AED/SAR/BDT; revisit before a zero-decimal currency).
+- **Safety incidents console:** `PATCH /admin/v1/incidents/:id` (OPEN, INVESTIGATING, RESOLVED; a note is required to resolve; conditional update so two staff cannot overwrite each other; audited) and an admin Incidents page (severity first, reporter phone, location link, refreshes every 15 s; no push to staff yet). Disputes page now shows category and the amount in question.
+- **Doc 16 funnel:** 11 events instrumented from the API layer (signup, offer sent, booking, payment marked/confirmed, review, verification submitted, went online/offline, SOS opened, incident created). No personal data in any of them.
+- **Dev seed was broken:** `db:seed` referenced models deleted long ago, so the demo accounts (and the Maestro flows that use them) could not be created. Now truncates generically; the demo worker is online and matchable; the dev admin has the Super Admin role.
+- **ID-number key rotation:** `pnpm --filter @fixli/api db:rotate-key` (dry run by default, `--apply` to write; idempotent; verifies a round trip before writing; conditional updates). Procedure is in the script header. Not run against real data (there is none yet).
+- **Data export (access request):** `GET /users/me/export`, 3 per hour, audited. Own data only; no password hash, no other person's contact details, ID number masked.
+- Still open from the earlier list: offers cannot be queued offline; no 30-day deletion grace period; mobile coverage floor only; device pass (below).
+
 ---
 
 ## Owner-blocked items (tracked, not engineering-blocking until R5/R7)
