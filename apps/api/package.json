@@ -19,7 +19,8 @@
     "db:studio": "prisma studio",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:seed:catalog": "ts-node prisma/seed-catalog.ts",
-    "db:encrypt-ids": "ts-node prisma/encrypt-id-numbers.ts"
+    "db:encrypt-ids": "ts-node prisma/encrypt-id-numbers.ts",
+    "db:rotate-key": "ts-node prisma/rotate-field-key.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3",
