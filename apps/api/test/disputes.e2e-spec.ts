@@ -91,4 +91,24 @@ describe('Disputes & favourites (e2e)', () => {
       expect((await http().get('/api/users/me/favorites').set(as('cust')).expect(200)).body).toHaveLength(0);
     });
   });
+
+  describe('data export', () => {
+    it('returns my own data, with the other side and secrets left out', async () => {
+      const c = await http().get('/api/users/me/export').set(as('cust')).expect(200);
+      expect(c.body.account.id).toBe(ids.cust);
+      expect(c.body.jobs.map((j: any) => j.id)).toContain(jobId);
+      expect(c.body.jobs[0].yourRole).toBe('customer');
+      expect(JSON.stringify(c.body)).not.toMatch(/password|refreshToken/i);
+      expect(JSON.stringify(c.body)).not.toContain(ids.work); // the professional's id is not in the customer's export
+
+      const w = await http().get('/api/users/me/export').set(as('work')).expect(200);
+      expect(w.body.jobs[0].yourRole).toBe('professional');
+      expect(w.body.professionalProfile).toBeDefined();
+
+      // A third person's export never contains either of them. (The limit is 3 per hour per client, so this is the last call.)
+      const o = await http().get('/api/users/me/export').set(as('other')).expect(200);
+      expect(o.body.jobs).toEqual([]);
+      expect(JSON.stringify(o.body)).not.toContain(ids.cust);
+    });
+  });
 });

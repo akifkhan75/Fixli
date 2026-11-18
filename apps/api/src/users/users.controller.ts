@@ -4,6 +4,8 @@ import { UsersService } from './users.service';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { AccountDeletionService } from './account-deletion.service';
+import { DataExportService } from './data-export.service';
+import { Throttle } from '@nestjs/throttler';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -14,6 +16,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly deletion: AccountDeletionService,
+    private readonly dataExport: DataExportService,
   ) {}
 
   @Get()
@@ -28,6 +31,13 @@ export class UsersController {
   @ApiOperation({ summary: 'Own profile' })
   me(@CurrentUser('id') id: string) {
     return this.usersService.findById(id);
+  }
+
+  @Get('me/export')
+  @Throttle({ default: { limit: 3, ttl: 3_600_000 } })
+  @ApiOperation({ summary: 'Download my own data as JSON (access request). Limited to 3 per hour.' })
+  exportMyData(@CurrentUser('id') id: string) {
+    return this.dataExport.export(id);
   }
 
   @Patch('me')
