@@ -58,6 +58,9 @@ export class UsersService {
   }
 
   async addFavorite(customerId: string, workerId: string) {
+    if (!(await this.prisma.worker.findUnique({ where: { id: workerId }, select: { id: true } }))) {
+      throw new NotFoundException({ code: 'NOT_FOUND', message: 'That worker was not found.' });
+    }
     await this.prisma.favoriteWorker.upsert({
       where: { customerId_workerId: { customerId, workerId } },
       create: { customerId, workerId },

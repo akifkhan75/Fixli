@@ -4,9 +4,11 @@ import { RecurringJobsService } from './recurring-jobs.service';
 import { CreateRecurringJobDto } from './dto/recurring-job.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequiresFeature } from '../common/features/feature.guard';
 
 @ApiTags('recurring-jobs')
 @ApiBearerAuth()
+@RequiresFeature('recurring_jobs')
 @Controller('recurring-jobs')
 export class RecurringJobsController {
   constructor(private readonly recurringJobsService: RecurringJobsService) {}

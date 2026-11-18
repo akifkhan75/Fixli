@@ -35,6 +35,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { PaymentsModule } from './payments/payments.module';
 import { SafetyModule } from './safety/safety.module';
 import { SmsModule } from './sms/sms.module';
+import { FeatureGuard } from './common/features/feature.guard';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { SmsModule } from './sms/sms.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: FeatureGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

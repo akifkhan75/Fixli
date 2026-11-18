@@ -50,6 +50,8 @@ export interface AppEnv {
   FIELD_ENCRYPTION_KEY?: string;
   /** Signup needs a verified phone code. Defaults on in production, off elsewhere (dev/tests). */
   OTP_REQUIRED: boolean;
+  /** Roadmap APIs switched on (recurring_jobs, properties, service_packages, subscriptions). Empty = hidden. */
+  ENABLED_FEATURES: string[];
   LOG_LEVEL: string;
 }
 
@@ -114,6 +116,9 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   const rematchAfter = intIn('REMATCH_AFTER_MINUTES', 15, 1, 240);
   const rematchFactor = intIn('REMATCH_RADIUS_FACTOR', 1.5, 1, 5);
 
+  const unknownFeatures = str('ENABLED_FEATURES').split(',').map((x) => x.trim()).filter((x) => x && !['recurring_jobs', 'properties', 'service_packages', 'subscriptions'].includes(x));
+  if (unknownFeatures.length) errors.push(`ENABLED_FEATURES has unknown feature(s): ${unknownFeatures.join(', ')}`);
+
   if (str('REDIS_URL') && !/^rediss?:\/\//.test(str('REDIS_URL'))) errors.push('REDIS_URL must be a redis:// or rediss:// URL');
 
   if (errors.length) {
@@ -150,6 +155,7 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     GEMINI_API_KEY: str('GEMINI_API_KEY') || undefined,
     GEMINI_MODEL: str('GEMINI_MODEL') || undefined,
     FIELD_ENCRYPTION_KEY: fieldKey || undefined,
+    ENABLED_FEATURES: str('ENABLED_FEATURES').split(',').map((x) => x.trim()).filter(Boolean),
     OTP_REQUIRED: (str('OTP_REQUIRED') || (nodeEnv === 'production' ? 'true' : 'false')) === 'true',
     LOG_LEVEL: str('LOG_LEVEL') || 'info',
   };

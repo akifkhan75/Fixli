@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { JobAccessService } from '../common/access/job-access.service';
 import { AuditService } from '../common/audit/audit.service';
@@ -16,14 +16,17 @@ export class DisputesService {
 
   async createDispute(user: { id: string; type: string }, dto: CreateDisputeDto) {
     await this.access.requireParticipant(dto.jobRequestId, user);
+    // One open dispute per person per job: a second tap or a retry returns the existing one.
+    const open = await this.prisma.dispute.findFirst({
+      where: { jobRequestId: dto.jobRequestId, raisedById: user.id, status: { in: ['OPEN', 'IN_REVIEW'] } },
+    });
+    if (open) throw new ConflictException({ code: 'DISPUTE_EXISTS', message: 'You already have an open report for this job. We are looking into it.', details: { disputeId: open.id } });
     const dispute = await this.prisma.dispute.create({
       data: {
         jobRequestId: dto.jobRequestId,
         category: dto.category ?? 'OTHER',
         reason: dto.reason,
         description: dto.description,
-        amountHeld: dto.amountHeld,
-        evidenceKeys: dto.evidenceKeys ?? [],
         raisedById: user.id,
       },
     });
