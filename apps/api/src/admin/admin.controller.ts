@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminVerificationService } from './admin-verification.service';
 import { AdminService } from './admin.service';
-import { VerificationDecisionDto, VerificationQueryDto, ActionReasonDto } from './dto/admin.dto';
+import { VerificationDecisionDto, VerificationQueryDto, ActionReasonDto, IncidentUpdateDto } from './dto/admin.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AdminRoles } from '../common/decorators/admin-roles.decorator';
@@ -88,6 +88,13 @@ export class AdminController {
   @ApiOperation({ summary: 'List safety incidents' })
   listIncidents(@Query('status') status?: string, @Query('skip') skip?: string) {
     return this.adminService.getIncidents(status, skip ? parseInt(skip, 10) : 0);
+  }
+
+  @Patch('incidents/:id')
+  @AdminRoles('Operations', 'Safety')
+  @ApiOperation({ summary: 'Mark an incident as being handled, or resolved (with what was done)' })
+  updateIncident(@Param('id') id: string, @CurrentUser('id') adminId: string, @Body() dto: IncidentUpdateDto) {
+    return this.adminService.updateIncident(id, adminId, dto.status, dto.note);
   }
 
   // --- Payments & Ledger ---

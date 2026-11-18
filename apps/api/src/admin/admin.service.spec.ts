@@ -1,11 +1,11 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 
 describe('AdminService', () => {
   const prisma: any = {
     user: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     jobRequest: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
-    auditLog: { findMany: jest.fn() }, incident: { findMany: jest.fn() }, payment: { findMany: jest.fn() },
+    auditLog: { findMany: jest.fn() }, incident: { findMany: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() }, payment: { findMany: jest.fn() },
     serviceCategory: { findMany: jest.fn() }, countryConfig: { findMany: jest.fn() }, review: { findMany: jest.fn() },
   };
   const audit = { record: jest.fn() };
@@ -49,6 +49,32 @@ describe('AdminService', () => {
       await svc.cancelJob('j', 'adm', 'fraud');
       expect(prisma.jobRequest.update).toHaveBeenCalledWith({ where: { id: 'j' }, data: { status: 'CANCELLED' } });
       expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'job.cancelled', after: { status: 'CANCELLED', reason: 'fraud' } }));
+    });
+  });
+
+  describe('updateIncident', () => {
+    it('resolving needs a note about what was done', async () => {
+      await expect(svc.updateIncident('i1', 'adm', 'RESOLVED', '  ')).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.incident.findUnique).not.toHaveBeenCalled();
+    });
+    it('404 for an unknown incident; a resolved one is final', async () => {
+      prisma.incident.findUnique.mockResolvedValueOnce(null);
+      await expect(svc.updateIncident('i1', 'adm', 'INVESTIGATING')).rejects.toBeInstanceOf(NotFoundException);
+      prisma.incident.findUnique.mockResolvedValueOnce({ status: 'RESOLVED' });
+      await expect(svc.updateIncident('i1', 'adm', 'INVESTIGATING')).rejects.toMatchObject({ response: { code: 'INCIDENT_RESOLVED' } });
+    });
+    it('is conditional on the status it read (two staff cannot clobber each other)', async () => {
+      prisma.incident.findUnique.mockResolvedValue({ status: 'OPEN' });
+      prisma.incident.updateMany.mockResolvedValue({ count: 0 });
+      await expect(svc.updateIncident('i1', 'adm', 'INVESTIGATING')).rejects.toMatchObject({ response: { code: 'INCIDENT_CHANGED' } });
+      expect(prisma.incident.updateMany).toHaveBeenCalledWith({ where: { id: 'i1', status: 'OPEN' }, data: { status: 'INVESTIGATING' } });
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+    it('updates and audits who, from what, to what and the note', async () => {
+      prisma.incident.findUnique.mockResolvedValue({ status: 'INVESTIGATING' });
+      prisma.incident.updateMany.mockResolvedValue({ count: 1 });
+      await expect(svc.updateIncident('i1', 'adm', 'RESOLVED', ' called 15, all safe ')).resolves.toEqual({ id: 'i1', status: 'RESOLVED' });
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ actorId: 'adm', action: 'incident.resolved', before: { status: 'INVESTIGATING' }, after: { status: 'RESOLVED', note: 'called 15, all safe' } }));
     });
   });
 

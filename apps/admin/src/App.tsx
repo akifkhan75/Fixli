@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Verifications from './pages/Verifications';
+import Incidents from './pages/Incidents';
 import Disputes from './pages/Disputes';
 import Services from './pages/Services';
 import Users from './pages/Users';
@@ -22,6 +23,7 @@ function Gate() {
         <Route path="users" element={<Users />} />
         <Route path="jobs" element={<Jobs />} />
         <Route path="verifications" element={<Verifications />} />
+        <Route path="incidents" element={<Incidents />} />
         <Route path="disputes" element={<Disputes />} />
         <Route path="ledger" element={<Ledger />} />
         <Route path="services" element={<Services />} />

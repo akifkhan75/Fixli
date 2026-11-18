@@ -118,10 +118,19 @@ export const revealReference = (id: string) => request<{ id: string; reference: 
 export const decideCase = (id: string, decision: 'APPROVE' | 'REJECT' | 'NEEDS_INFO', reason?: string) =>
   request<{ id: string; status: string }>(`/admin/v1/verification-cases/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision, reason }) });
 
-export interface DisputeRow { id: string; reason: string; description: string | null; status: string; resolution: string | null; createdAt: string; raisedBy: { name: string; type: string }; jobRequest: { id: string; customerName: string; status: string } }
+export interface DisputeRow { id: string; category?: string; amountHeld?: number | null; reason: string; description: string | null; status: string; resolution: string | null; createdAt: string; raisedBy: { name: string; type: string }; jobRequest: { id: string; customerName: string; status: string } }
 export const listDisputes = () => request<DisputeRow[]>('/disputes/all');
 export const updateDispute = (id: string, status: string, resolution?: string) =>
   request(`/disputes/${id}/resolve`, { method: 'PATCH', body: JSON.stringify({ status, resolution }) });
+
+export interface IncidentRow {
+  id: string; type: string; severity: 'LIFE_THREATENING' | 'PROPERTY_DAMAGE' | 'MODERATE'; description: string | null;
+  latitude: number | null; longitude: number | null; status: 'OPEN' | 'INVESTIGATING' | 'RESOLVED'; createdAt: string;
+  reporter: { name: string; type: string; phone: string | null }; jobRequest: { id: string; status: string } | null;
+}
+export const listIncidents = (status?: string) => request<IncidentRow[]>(`/admin/v1/incidents${status ? `?status=${status}` : ''}`);
+export const updateIncident = (id: string, status: 'INVESTIGATING' | 'RESOLVED', note?: string) =>
+  request<{ id: string; status: string }>(`/admin/v1/incidents/${id}`, { method: 'PATCH', body: JSON.stringify({ status, note }) });
 
 export interface Category { id: string; name: string; description: string | null; iconName: string | null; isActive: boolean; translations: Record<string, { name?: string }> | null; services: { id: string; name: string }[]; issues: { id: string; name: string }[] }
 export const listCategories = () => request<Category[]>('/service-catalog/categories');

@@ -29,7 +29,7 @@ export default function Disputes() {
           : data.map((d) => (
             <div key={d.id} className="table-row">
               <div className="col font-medium">{d.raisedBy.name} <span className="text-muted">({d.raisedBy.type})</span></div>
-              <div className="col">{d.reason}{d.description ? <div className="text-muted">{d.description}</div> : null}</div>
+              <div className="col">{d.reason}{d.category && d.category !== 'OTHER' ? <span className="text-muted"> · {d.category.replace('_', ' ').toLowerCase()}</span> : null}{d.description ? <div className="text-muted">{d.description}</div> : null}{d.amountHeld ? <div className="text-muted">Amount in question: {(d.amountHeld / 100).toLocaleString()} (set by the payment report)</div> : null}</div>
               <div className="col"><span className="badge badge-warning">{d.status.replace('_', ' ').toLowerCase()}</span></div>
               <div className="col text-muted">{new Date(d.createdAt).toLocaleDateString()}</div>
               <div className="col">
