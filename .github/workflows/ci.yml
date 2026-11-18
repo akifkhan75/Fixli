@@ -50,8 +50,16 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit Tests
-        run: pnpm test
+      # Unit tests with the coverage thresholds in each package.json (API 70% lines; mobile is a
+      # no-regression floor). Falling below fails the build.
+      - name: Unit Tests + coverage gate (API)
+        run: pnpm --filter @fixli/api exec jest --coverage --runInBand
+
+      - name: Unit Tests + coverage gate (mobile)
+        run: pnpm --filter @fixli/mobile exec jest --coverage
+
+      - name: Unit Tests (other packages)
+        run: pnpm --filter "!@fixli/api" --filter "!@fixli/mobile" -r --if-present test
 
       # Mobile smoke build to ensure UI doesn't break
       - name: Setup Expo

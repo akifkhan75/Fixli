@@ -89,6 +89,14 @@
     ],
     "setupFiles": [
       "<rootDir>/jest.setup.js"
-    ]
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 30,
+        "branches": 24,
+        "functions": 20,
+        "lines": 31
+      }
+    }
   }
 }

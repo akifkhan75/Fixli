@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 
@@ -61,6 +61,12 @@ export class AdminService {
   }
 
   async cancelJob(id: string, adminId: string, reason: string) {
+    const current = await this.prisma.jobRequest.findUnique({ where: { id }, select: { status: true } });
+    if (!current) throw new NotFoundException('Job not found');
+    // A finished job stays finished: cancelling it would rewrite history (and the payment trail).
+    if (current.status === 'COMPLETED' || current.status === 'CANCELLED') {
+      throw new ConflictException({ code: 'JOB_FINISHED', message: `This job is already ${current.status.toLowerCase()}.` });
+    }
     const job = await this.prisma.jobRequest.update({
       where: { id },
       data: { status: 'CANCELLED' },
