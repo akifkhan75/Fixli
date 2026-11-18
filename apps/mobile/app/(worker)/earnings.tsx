@@ -57,6 +57,17 @@ export default function WorkerEarningsScreen() {
         <ErrorState message={error} onRetry={reload} />
       ) : data ? (
         <View style={styles.container}>
+          {data.status !== 'OK' ? (
+            <View style={[styles.balanceCard, { backgroundColor: data.status === 'BLOCKED' ? theme.colors.error : theme.colors.warning, marginBottom: 16 }]} accessibilityRole="alert">
+              <Text variant="bodyLarge" weight="bold" color={theme.colors.onPrimary}>
+                {data.status === 'BLOCKED' ? 'You are offline until you settle' : 'Fixli fees are building up'}
+              </Text>
+              <Text variant="body" color={theme.colors.onPrimary} style={{ textAlign: 'center', marginTop: 4 }}>
+                You owe {formatMoney(data.owed, data.currency, locale)} (limit {formatMoney(data.status === 'BLOCKED' ? data.hardLimit : data.softLimit, data.currency, locale)}).
+                {data.status === 'BLOCKED' ? ' Settle your balance to receive new jobs. Jobs already booked are not affected.' : ` Please settle within ${data.settleDays} days.`}
+              </Text>
+            </View>
+          ) : null}
           <View style={[styles.balanceCard, { backgroundColor: theme.colors.primary }]}>
             <Text variant="bodyLarge" weight="semibold" color={theme.colors.onPrimary} style={{ opacity: 0.8 }}>
               Current Balance

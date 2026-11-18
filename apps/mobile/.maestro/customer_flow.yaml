@@ -1,24 +1,19 @@
+# Seeded customer (apps/api: pnpm db:seed): 0300 1234567 / password123
 appId: com.fixli.app
 ---
-- launchApp
-- assertVisible: "How will you use Fixli?"
-- tapOn: "I need a service"
-- assertVisible: "Choose your country"
-- tapOn: "Pakistan"
+- launchApp:
+    clearState: true
+- assertVisible: "Welcome back"
 - tapOn: "Mobile number"
-- inputText: "3001234567"
+- inputText: "03001234567"
 - tapOn: "Password"
-- inputText: "TestPass123!"
+- inputText: "password123"
 - tapOn: "Sign In"
 - assertVisible: "Hello,"
-- tapOn: "Plumbing"
-- assertVisible: "Describe what you need help with..."
-- inputText: "My sink is leaking"
-- tapOn: "Search"
-- assertVisible: "Services"
-- tapOn: "Leaky Pipe"
-- tapOn: "Request"
-- assertVisible: "Bookings"
-- tapOn: "Profile"
-- tapOn: "Log Out"
-- assertVisible: "Sign In"
+- tapOn: "Account"
+- assertVisible: "Saved workers"
+- tapOn: "My reports"
+- assertVisible: "My reports"
+- back
+- tapOn: "Log out"
+- assertVisible: "Welcome back"

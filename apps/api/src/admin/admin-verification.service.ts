@@ -4,6 +4,7 @@ import { PrismaService } from '../database/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../common/audit/audit.service';
 import { latestCases } from '../workers/onboarding';
+import { decryptField, maskIdNumber } from '../common/crypto/field-crypto';
 import { VerificationDecisionDto, VerificationQueryDto } from './dto/admin.dto';
 
 @Injectable()
@@ -28,7 +29,9 @@ export class AdminVerificationService {
       },
     });
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    // The ID number is never in a list: masked only (full value = audited reveal, Compliance role).
+    const items = page.map(({ reference, ...r }) => ({ ...r, referenceMasked: maskIdNumber(reference) }));
     return { items, nextCursor: hasMore ? items[items.length - 1].id : null };
   }
 
@@ -49,8 +52,17 @@ export class AdminVerificationService {
     if (!c) throw new NotFoundException('Case not found');
     const documents = await Promise.all(c.documentKeys.map(async (key) => ({ url: await this.storage.signedUrlForKey(key, 300) })));
     await this.audit.record({ actorId: adminId, action: 'verification.documents_viewed', entityType: 'VerificationCase', entityId: id });
-    const { documentKeys, ...rest } = c;
-    return { ...rest, documents };
+    const { documentKeys, reference, ...rest } = c;
+    return { ...rest, referenceMasked: maskIdNumber(reference), documents };
+  }
+
+  /** Full ID number. Compliance only (see controller); every reveal is written to the audit log. */
+  async revealReference(id: string, adminId: string) {
+    const c = await this.prisma.verificationCase.findUnique({ where: { id }, select: { reference: true, workerId: true, type: true } });
+    if (!c) throw new NotFoundException('Case not found');
+    if (!c.reference) throw new NotFoundException('This case has no ID number');
+    await this.audit.record({ actorId: adminId, action: 'verification.reference_revealed', entityType: 'VerificationCase', entityId: id, after: { workerId: c.workerId, type: c.type } });
+    return { id, reference: decryptField(c.reference) };
   }
 
   async decide(id: string, adminId: string, dto: VerificationDecisionDto) {

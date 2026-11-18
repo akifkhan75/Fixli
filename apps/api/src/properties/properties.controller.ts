@@ -4,10 +4,12 @@ import { PropertiesService } from './properties.service';
 import { CreatePropertyDto, CreateAssetDto, CreateWarrantyDto } from './dto/property.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RequiresFeature } from '../common/features/feature.guard';
 
 @ApiTags('properties')
 @ApiBearerAuth()
 @Roles('customer')
+@RequiresFeature('properties')
 @Controller('properties')
 export class PropertiesController {
   constructor(private readonly propertiesService: PropertiesService) {}

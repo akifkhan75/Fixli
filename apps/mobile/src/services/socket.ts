@@ -114,18 +114,9 @@ class RealtimeClient {
 
   // ── chat & live location (used by Phase 7/8 screens) ─────────
 
+  /** Live path only. When offline, chat screens queue the message in the outbox instead (services/offline.ts). */
   sendMessage(threadId: string, text: string) {
-    if (this.socket?.connected) {
-      this.socket.emit('sendMessage', { threadId, text });
-    } else {
-      // Offline enqueue
-      import('./offline').then(({ OfflineQueueService }) => {
-        OfflineQueueService.enqueue({
-          type: 'SEND_MESSAGE',
-          payload: { threadId, text }
-        }).catch(console.error);
-      });
-    }
+    if (this.socket?.connected) this.socket.emit('sendMessage', { threadId, text });
   }
 
   sendLocation(jobId: string, latitude: number, longitude: number, heading?: number) {

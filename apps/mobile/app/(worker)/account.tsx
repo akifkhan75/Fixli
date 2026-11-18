@@ -74,11 +74,13 @@ export default function WorkerAccountScreen() {
         { id: 'public', label: 'See how customers see you', icon: 'eye-outline', onPress: go(`/worker/${w.id}`) },
       ]} />
       <GroupedList items={[
+        { id: 'reports', label: 'My reports', icon: 'flag-outline', onPress: go('/disputes') },
         { id: 'prefs', label: 'Language & appearance', icon: 'language-outline', value: `${LANG_LABEL[locale]} · ${APPEARANCE_LABEL[appearance]}`, onPress: go('/preferences') },
       ]} />
       <GroupedList title="Security" items={[
         { id: 'password', label: 'Change password', icon: 'lock-closed-outline', onPress: go('/change-password') },
         { id: 'devices', label: 'Your devices', icon: 'phone-portrait-outline', onPress: go('/devices') },
+        { id: 'delete', label: 'Delete my account', icon: 'trash-outline', destructive: true, onPress: go('/delete-account') },
       ]} />
       <GroupedList items={[
         { id: 'logout', label: 'Log out', icon: 'log-out-outline', destructive: true, onPress: () => dispatch(logoutUser()) },

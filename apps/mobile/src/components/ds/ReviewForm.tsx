@@ -43,7 +43,7 @@ export function ReviewForm({ jobId, targetId, targetName, onSubmitted }: ReviewF
       
       <View style={styles.starsContainer}>
         {[1, 2, 3, 4, 5].map(star => (
-          <TouchableOpacity key={star} onPress={() => setRating(star)} style={styles.star}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${star} ${star === 1 ? 'star' : 'stars'}`} accessibilityState={{ selected: star === rating }} key={star} onPress={() => setRating(star)} style={styles.star}>
             <Ionicons 
               name={star <= rating ? 'star' : 'star-outline'} 
               size={36} 

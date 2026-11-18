@@ -21,6 +21,8 @@ import { selectCurrentUser } from '../../store/authSlice';
 import * as api from '../../services/api';
 import { realtime } from '../../services/socket';
 import { useI18n } from '../../hooks/useI18n';
+import { outbox, TTL_SCHEDULED_MS } from '../../services/offline';
+import { DirIcon } from '../ds/DirIcon';
 
 export function ChatThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -104,12 +106,18 @@ export function ChatThreadScreen() {
     setMessages(prev => [optimisticMsg, ...prev]);
 
     try {
-      // The socket gateway listens to sendMessage and handles it
-      // or we can use the API directly. We will use the REST API here for simplicity.
       await api.sendChatMessage(id, { text, clientId });
     } catch (err) {
-      // Revert optimistic update on error if you wanted, or show error state.
-      // For now, keep it simple.
+      if (api.isOfflineError(err)) {
+        // No connection: keep the message and send it when we are back. The server dedupes on clientId.
+        await outbox.enqueue({
+          id: clientId, userId: user!.id, kind: 'MESSAGE', method: 'POST', endpoint: `/conversations/${id}/messages`,
+          body: { text, clientId }, label: 'Your message', ttlMs: TTL_SCHEDULED_MS,
+        });
+      } else {
+        // The server said no: do not leave a message on screen that the other person will never get.
+        setMessages(prev => prev.filter(m => (m as any).clientId !== clientId));
+      }
     } finally {
       setSending(false);
     }
@@ -148,8 +156,8 @@ export function ChatThreadScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.header, { borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.backButton}>
+          <DirIcon name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text variant="h3" weight="bold" color={theme.colors.textPrimary}>{t('chat.title')}</Text>
         <View style={{ width: 24 }} />
@@ -174,7 +182,7 @@ export function ChatThreadScreen() {
           onChangeText={setInputText}
           multiline
         />
-        <TouchableOpacity 
+        <TouchableOpacity accessibilityRole="button" 
           style={[styles.sendButton, { backgroundColor: inputText.trim() ? theme.colors.primary : theme.colors.surfaceElevated }]}
           onPress={sendMessage}
           disabled={!inputText.trim()}

@@ -36,7 +36,7 @@ export default function DocumentVerification({ onUploadSuccess }: DocumentVerifi
           <Text style={styles.successText}>{t('verify.success')}</Text>
         </View>
       ) : (
-        <TouchableOpacity 
+        <TouchableOpacity accessibilityRole="button" 
           style={styles.uploadArea} 
           activeOpacity={0.7} 
           onPress={handleUpload}

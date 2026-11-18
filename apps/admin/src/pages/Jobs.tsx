@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AdminJobRow, listJobs, adminCancelJob } from '../api';
+import { type AdminJobRow, listJobs, adminCancelJob } from '../api';
 import './Pages.css';
 
 export default function Jobs() {

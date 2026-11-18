@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
+import { DirIcon } from './DirIcon';
 
 interface ScreenProps {
   title?: string;
@@ -40,7 +41,7 @@ export function Screen({ title, back, footer, scroll = true, refreshing, onRefre
         <View style={styles.header}>
           {back ? (
             <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back" style={styles.back} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="arrow-back" size={26} color={theme.colors.textPrimary} />
+              <DirIcon name="arrow-back" size={26} color={theme.colors.textPrimary} />
             </TouchableOpacity>
           ) : null}
           {title ? <Text variant="h2" weight="bold" color={theme.colors.textPrimary} style={{ flex: 1 }} accessibilityRole="header">{title}</Text> : null}

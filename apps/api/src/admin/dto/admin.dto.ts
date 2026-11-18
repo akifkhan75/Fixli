@@ -17,3 +17,9 @@ export class ActionReasonDto {
   @MaxLength(500)
   reason: string;
 }
+
+export class IncidentUpdateDto {
+  @IsIn(['INVESTIGATING', 'RESOLVED']) status: 'INVESTIGATING' | 'RESOLVED';
+  /** What was done (who was called, outcome). Required to resolve. */
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}

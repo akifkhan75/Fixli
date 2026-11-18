@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiError, decideCase, getCase, listCases, type CaseDetail } from '../api';
+import { ApiError, decideCase, getCase, listCases, revealReference, type CaseDetail } from '../api';
 import { useLoad } from '../hooks';
 import './Pages.css';
 
@@ -11,6 +11,13 @@ export default function Verifications() {
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [detailError, setDetailError] = useState<string | undefined>();
   const [reason, setReason] = useState('');
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
+  const [revealError, setRevealError] = useState<string | undefined>();
+  const reveal = async (id: string) => {
+    setRevealError(undefined);
+    try { setRevealed((r) => ({ ...r, [id]: '' })); const x = await revealReference(id); setRevealed((r) => ({ ...r, [id]: x.reference })); }
+    catch (e) { setRevealed((r) => { const { [id]: _drop, ...rest } = r; return rest; }); setRevealError(e instanceof ApiError ? e.message : 'Could not reveal the ID number.'); }
+  };
   const [busy, setBusy] = useState(false);
 
   const open = async (id: string) => {
@@ -43,8 +50,11 @@ export default function Verifications() {
           {detail ? (
             <>
               <p className="text-muted">
-                Phone {detail.worker.user.phone ?? '—'}{detail.reference ? ` · ID number ${detail.reference}` : ''} · submitted {new Date(detail.createdAt).toLocaleString()}
+                Phone {detail.worker.user.phone ?? '—'}{detail.referenceMasked ? ` · ID number ${revealed[detail.id] || detail.referenceMasked}` : ''} · submitted {new Date(detail.createdAt).toLocaleString()}
               </p>
+              {detail.referenceMasked && !revealed[detail.id] ? (
+                <p className="text-muted"><button className="btn" onClick={() => reveal(detail.id)}>Reveal full ID number (Compliance only, audited)</button>{revealError ? <span style={{ color: 'var(--danger, #c00)', marginLeft: 8 }}>{revealError}</span> : null}</p>
+              ) : null}
               <p className="text-muted">Other documents: {detail.worker.verifications.map((v) => `${TYPE_LABEL[v.type] ?? v.type} (${v.status.toLowerCase().replace('_', ' ')})`).join(', ')}</p>
               <div className="detail-grid" style={{ margin: '1rem 0' }}>
                 {detail.documents.map((d, i) => <img key={d.url} className="doc-img" src={d.url} alt={`Document ${i + 1}`} />)}

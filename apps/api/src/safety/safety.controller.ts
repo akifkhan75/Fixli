@@ -12,8 +12,8 @@ export class SafetyController {
 
   @Get('emergency-numbers')
   @ApiOperation({ summary: 'Get local emergency numbers (e.g. Police, Ambulance)' })
-  getEmergencyNumbers() {
-    return this.safetyService.getEmergencyNumbers();
+  getEmergencyNumbers(@CurrentUser('id') userId: string) {
+    return this.safetyService.getEmergencyNumbers(userId);
   }
 
   @Post('incidents')

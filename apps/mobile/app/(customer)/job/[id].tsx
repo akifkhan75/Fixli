@@ -19,11 +19,34 @@ import { OfferCard } from '../../../src/components/ds/OfferCard';
 import MapView, { Marker } from 'react-native-maps';
 import { useAppDispatch, useAppSelector } from '../../../src/hooks/useRedux';
 import { selectTrackingState, startTracking, stopTracking } from '../../../src/store/trackingSlice';
-import { formatMoney } from '../../../src/utils/money';
+import { formatMoney, parseMajorToMinor } from '../../../src/utils/money';
 import { CANCEL_REASON_LABEL, formatWindow, statusSentence, toPhase } from '../../../src/utils/jobStatus';
 import { humanize, localizedName } from '../../../src/utils/catalog';
 import * as api from '../../../src/services/api';
 import { useLiveReload } from '../../../src/hooks/useRealtime';
+
+/** Heart toggle: save this worker for next time (or remove them). */
+function SaveWorkerButton({ workerId, name }: { workerId: string; name: string }) {
+  const favourites = useApi(api.getFavorites, [workerId]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | undefined>();
+  const theme = useTheme();
+  const saved = !!favourites.data?.some((f) => f.worker.id === workerId);
+  if (favourites.loading && !favourites.data) return null;
+  const toggle = async () => {
+    setBusy(true); setErr(undefined);
+    try {
+      if (saved) await api.removeFavorite(workerId); else await api.addFavorite(workerId);
+      await favourites.reload();
+    } catch (e) { setErr(friendlyError(e)); } finally { setBusy(false); }
+  };
+  return (
+    <View>
+      <Button title={saved ? `Saved: ${name}` : `Save ${name} for next time`} variant={saved ? 'primary' : 'secondary'} loading={busy} disabled={busy} onPress={toggle} />
+      {err ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 6 }}>{err}</Text> : null}
+    </View>
+  );
+}
 
 // Live tracking, payment and reviews arrive with their phases. Job status and prices update live.
 export default function CustomerJobScreen() {
@@ -89,6 +112,20 @@ export default function CustomerJobScreen() {
   };
 
   const payment = job.payments?.[0];
+  const [disputing, setDisputing] = useState(false);
+  const [claimed, setClaimed] = useState('');
+  const claimedMinor = payment ? parseMajorToMinor(claimed, payment.currency) : null;
+  const claimValid = !!payment && claimedMinor !== null && claimedMinor < payment.amount;
+  const submitDispute = async () => {
+    if (!payment || claimedMinor === null) return;
+    setBusy(true);
+    setActionError(undefined);
+    try {
+      await api.disputePayment(payment.id, claimedMinor);
+      setDisputing(false);
+      await reload();
+    } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
+  };
   const confirmCash = async () => {
     if (!payment) return;
     setBusy(true);
@@ -131,11 +168,32 @@ export default function CustomerJobScreen() {
           {payment?.status === 'MARKED_BY_WORKER' && (
             <View style={{ backgroundColor: theme.colors.surfaceElevated, padding: 16, borderRadius: theme.borderRadius.lg, marginTop: 12 }}>
               <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>Professional requested payment</Text>
-              <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>They marked that you paid them in cash. Please confirm this.</Text>
-              <View style={{ marginTop: 12 }}>
-                <Button title="Confirm Cash Given" variant="primary" loading={busy} disabled={busy} onPress={confirmCash} />
-              </View>
+              <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
+                They say you paid {formatMoney(payment.amount, payment.currency, locale)} in cash. If that is right, confirm. If you do nothing it is confirmed automatically after 24 hours.
+              </Text>
+              {disputing ? (
+                <View style={{ marginTop: 12 }}>
+                  <TextInput label="How much did you really pay?" value={claimed} onChangeText={setClaimed} keyboardType="numeric" placeholder="e.g. 1000" />
+                  {claimed && !claimValid ? (
+                    <Text variant="bodySmall" color={theme.colors.error} style={{ marginTop: 4 }}>Enter an amount lower than {formatMoney(payment.amount, payment.currency, locale)}.</Text>
+                  ) : null}
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                    <View style={{ flex: 1 }}><Button title="Back" variant="secondary" disabled={busy} onPress={() => setDisputing(false)} /></View>
+                    <View style={{ flex: 1 }}><Button title="Report amount" variant="danger" loading={busy} disabled={busy || !claimValid} onPress={submitDispute} /></View>
+                  </View>
+                </View>
+              ) : (
+                <View style={{ marginTop: 12, gap: 8 }}>
+                  <Button title="Yes, I paid this" variant="primary" loading={busy} disabled={busy} onPress={confirmCash} />
+                  <Button title="That is not what I paid" variant="secondary" disabled={busy} onPress={() => setDisputing(true)} />
+                </View>
+              )}
             </View>
+          )}
+          {payment?.status === 'DISPUTED' && (
+            <Text variant="bodySmall" weight="bold" color={theme.colors.warning} style={{ marginTop: 8 }}>
+              Payment amount is being reviewed by Fixli support
+            </Text>
           )}
           {payment?.status === 'CONFIRMED' && (
             <Text variant="bodySmall" weight="bold" color={theme.colors.success} style={{ marginTop: 8 }}>
@@ -249,6 +307,13 @@ export default function CustomerJobScreen() {
           onSubmitted={reload} 
         />
       )}
+
+      {job.assignedWorker && ['ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? (
+        <View style={{ marginTop: 16, gap: 10 }}>
+          {job.status === 'COMPLETED' ? <SaveWorkerButton workerId={job.assignedWorker.user.id} name={job.assignedWorker.user.name} /> : null}
+          <Button title="Report a problem" variant="secondary" onPress={() => router.push({ pathname: '/report-problem', params: { jobId: job.id } } as any)} />
+        </View>
+      ) : null}
 
       <JobHistory events={job.events ?? []} viewer="customer" locale={locale} />
     </Screen>

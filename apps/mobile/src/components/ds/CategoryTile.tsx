@@ -45,7 +45,8 @@ export const CategoryTile = ({ name, icon = 'construct', onPress }: CategoryTile
 
 const styles = StyleSheet.create({
   container: {
-    height: 120,
+    // minHeight: Urdu text is ~1.7x taller and must grow the tile, not be clipped.
+    minHeight: 120,
     padding: 16,
     justifyContent: 'center',
     shadowColor: 'rgba(10,18,40,0.06)',

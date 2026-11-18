@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 
@@ -61,6 +61,12 @@ export class AdminService {
   }
 
   async cancelJob(id: string, adminId: string, reason: string) {
+    const current = await this.prisma.jobRequest.findUnique({ where: { id }, select: { status: true } });
+    if (!current) throw new NotFoundException('Job not found');
+    // A finished job stays finished: cancelling it would rewrite history (and the payment trail).
+    if (current.status === 'COMPLETED' || current.status === 'CANCELLED') {
+      throw new ConflictException({ code: 'JOB_FINISHED', message: `This job is already ${current.status.toLowerCase()}.` });
+    }
     const job = await this.prisma.jobRequest.update({
       where: { id },
       data: { status: 'CANCELLED' },
@@ -92,13 +98,31 @@ export class AdminService {
     return this.prisma.incident.findMany({
       where,
       include: {
-        reporter: { select: { name: true, type: true } },
+        reporter: { select: { name: true, type: true, phone: true } },
         jobRequest: { select: { id: true, status: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
       take,
     });
+  }
+
+  /** OPEN -> INVESTIGATING -> RESOLVED. Every change is audited with who and why; a resolved incident is final. */
+  async updateIncident(id: string, adminId: string, status: 'INVESTIGATING' | 'RESOLVED', note?: string) {
+    if (status === 'RESOLVED' && !note?.trim()) {
+      throw new BadRequestException({ code: 'NOTE_REQUIRED', message: 'Write what was done before resolving.' });
+    }
+    const before = await this.prisma.incident.findUnique({ where: { id }, select: { status: true } });
+    if (!before) throw new NotFoundException('Incident not found');
+    if (before.status === 'RESOLVED') throw new ConflictException({ code: 'INCIDENT_RESOLVED', message: 'This incident is already resolved.' });
+    // Conditional on the status we read, so two staff members cannot overwrite each other.
+    const r = await this.prisma.incident.updateMany({ where: { id, status: before.status }, data: { status } });
+    if (r.count === 0) throw new ConflictException({ code: 'INCIDENT_CHANGED', message: 'Someone else just updated this incident. Refresh.' });
+    await this.audit.record({
+      actorId: adminId, action: `incident.${status.toLowerCase()}`, entityType: 'Incident', entityId: id,
+      before: { status: before.status }, after: { status, note: note?.trim() || undefined },
+    });
+    return { id, status };
   }
 
   // Payments

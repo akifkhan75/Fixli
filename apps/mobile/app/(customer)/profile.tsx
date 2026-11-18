@@ -42,6 +42,9 @@ export default function AccountScreen() {
 
       <GroupedList items={[
         { id: 'addresses', label: 'Saved addresses', icon: 'location-outline', value: addresses.data ? String(addresses.data.length) : undefined, onPress: go('/addresses') },
+        { id: 'trusted', label: 'Trusted contacts (for SOS)', icon: 'people-outline', onPress: go('/trusted-contacts') },
+        { id: 'saved', label: 'Saved workers', icon: 'heart-outline', onPress: go('/favourites') },
+        { id: 'reports', label: 'My reports', icon: 'flag-outline', onPress: go('/disputes') },
       ]} />
       <GroupedList items={[
         { id: 'prefs', label: 'Language & appearance', icon: 'language-outline', value: `${LANG_LABEL[locale]} · ${APPEARANCE_LABEL[appearance]}`, onPress: go('/preferences') },
@@ -49,6 +52,7 @@ export default function AccountScreen() {
       <GroupedList title="Security" items={[
         { id: 'password', label: 'Change password', icon: 'lock-closed-outline', onPress: go('/change-password') },
         { id: 'devices', label: 'Your devices', icon: 'phone-portrait-outline', onPress: go('/devices') },
+        { id: 'delete', label: 'Delete my account', icon: 'trash-outline', destructive: true, onPress: go('/delete-account') },
       ]} />
       <GroupedList items={[
         { id: 'logout', label: t('common.logout') || 'Log out', icon: 'log-out-outline', destructive: true, onPress: () => dispatch(logoutUser()) },

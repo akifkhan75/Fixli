@@ -28,7 +28,7 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
 
   async function makeUser(key: string, type: 'customer' | 'worker' | 'admin', worker: Record<string, unknown> = {}) {
     const user = await prisma.user.create({
-      data: { name: `${key} User`, email: `${tag}-${key}@test.com`, password: await bcrypt.hash('x', 4), type, countryCode: 'PK' },
+      data: { name: `${key} User`, email: `${tag}-${key}@test.com`, password: await bcrypt.hash('x', 4), type, countryCode: 'PK', adminRoles: type === 'admin' ? ['Super Admin'] : [] },
     });
     if (type === 'worker') await prisma.worker.create({ data: { id: user.id, activationStatus: 'ONBOARDING', ...worker } });
     const session = await prisma.session.create({ data: { userId: user.id, deviceId: `dev-${key}`, refreshTokenHash: 'x', expiresAt: new Date(Date.now() + 3600_000) } });
@@ -277,7 +277,13 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
 
       const detail = await http().get(`/api/admin/v1/verification-cases/${idCaseId}`).set(as('admin')).expect(200);
       expect(detail.body.documents).toHaveLength(2);
-      expect(detail.body.reference).toBe('42101-1234567-1');
+      // The ID number is encrypted at rest, masked in every admin read, and revealed only by an audited call.
+      expect(detail.body.reference).toBeUndefined();
+      expect(detail.body.referenceMasked).toBe('42101-*******-1');
+      const stored = (await prisma.verificationCase.findUniqueOrThrow({ where: { id: idCaseId } })).reference!;
+      expect(stored.startsWith('v1:')).toBe(true);
+      expect(stored).not.toContain('1234567');
+      expect(JSON.stringify(queue.body)).not.toContain('1234567');
       expect(JSON.stringify(detail.body)).not.toMatch(/"documentKeys"/);
       await http().get(pathOf(detail.body.documents[0].url)).expect(200);
       const audit = await prisma.auditLog.findFirst({ where: { action: 'verification.documents_viewed', entityId: idCaseId } });

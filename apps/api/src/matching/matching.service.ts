@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
-import { availableDuring, matchScore } from './rules';
+import { availableDuring, matchScore, selectRecipients } from './rules';
 
 interface Candidate {
   id: string;
@@ -61,13 +61,16 @@ export class MatchingService {
         distanceKm: c.distance_km == null ? null : Math.round(Number(c.distance_km) * 10) / 10,
         score: matchScore({ distanceKm: c.distance_km == null ? null : Number(c.distance_km), radiusKm: c.radius * factor, rating: c.rating, ratingCount: Number(c.rating_count) }),
       }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+      ;
+    const recipients = selectRecipients(ranked, {
+      isEmergency: job.isEmergency, round, limit,
+      sosFirst: this.num('SOS_FIRST_NOTIFY', 1), sosCascade: this.num('SOS_CASCADE_LIMIT', 5),
+    });
 
     await this.prisma.$transaction(async (tx) => {
-      if (ranked.length) {
+      if (recipients.length) {
         await tx.jobMatch.createMany({
-          data: ranked.map((r, i) => ({ jobRequestId: job.id, workerId: r.workerId, round, rank: i + 1, score: r.score, distanceKm: r.distanceKm })),
+          data: recipients.map((r, i) => ({ jobRequestId: job.id, workerId: r.workerId, round, rank: i + 1, score: r.score, distanceKm: r.distanceKm })),
           skipDuplicates: true,
         });
       }
@@ -75,31 +78,31 @@ export class MatchingService {
       await tx.jobEvent.create({
         data: {
           jobRequestId: job.id,
-          type: ranked.length ? 'PROFESSIONALS_NOTIFIED' : round === 1 ? 'NO_ONE_NEARBY_YET' : 'STILL_NO_ONE',
-          payload: { round, notified: ranked.length },
+          type: recipients.length ? 'PROFESSIONALS_NOTIFIED' : round === 1 ? 'NO_ONE_NEARBY_YET' : 'STILL_NO_ONE',
+          payload: { round, notified: recipients.length },
         },
       });
     });
 
     // Minimal payload: no customer identity, no exact address (doc 05 §6).
-    for (const r of ranked) {
+    for (const r of recipients) {
       await this.notifications.notify({
-        type: 'job.request', userIds: [r.workerId], eventKey: `job.request:${job.id}`,
+        type: job.isEmergency ? 'job.emergency_request' : 'job.request', userIds: [r.workerId], eventKey: `job.request:${job.id}`,
         params: { title: job.title ?? 'Repair', area: job.area ?? job.city ?? undefined, distance: r.distanceKm ?? undefined },
         data: { url: `/(worker)/job/${job.id}`, jobId: job.id, isEmergency: job.isEmergency },
       });
     }
-    if (ranked.length) this.realtime.emitToUsers(ranked.map((r) => r.workerId), 'feed.updated', { jobId: job.id });
+    if (recipients.length) this.realtime.emitToUsers(recipients.map((r) => r.workerId), 'feed.updated', { jobId: job.id });
     this.realtime.emitToUsers([job.customerId], 'job.updated', { jobId: job.id, status: job.status });
-    if (!ranked.length && round === 2) {
+    if (!recipients.length && round === 2) {
       // Honest, once: we widened the search and still nobody is free. The request stays open.
       await this.notifications.notify({
         type: 'job.no_one_available', userIds: [job.customerId], eventKey: `job.no_one_available:${job.id}`,
         params: { title: job.title ?? 'your request' }, data: { url: `/(customer)/job/${job.id}`, jobId: job.id },
       });
     }
-    this.logger.log(`Job ${job.id} round ${round}: ${candidates.length} in range, ${ranked.length} notified`);
-    return ranked.length;
+    this.logger.log(`Job ${job.id} round ${round}: ${candidates.length} in range, ${recipients.length} notified`);
+    return recipients.length;
   }
 
   private async findCandidates(

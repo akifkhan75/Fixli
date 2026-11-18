@@ -17,9 +17,14 @@ import { PhotoButtons } from '../../src/components/ds/PhotoButtons';
 import { ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import { VoiceField, type VoiceValue } from '../../src/forms/components/VoiceField';
 import { humanize, localizedName } from '../../src/utils/catalog';
-import { ApiError } from '../../src/services/api';
+import { AnalyticsService } from '../../src/services/analytics';
+import { ApiError, isOfflineError } from '../../src/services/api';
+import { outbox, TTL_URGENT_MS, TTL_SCHEDULED_MS } from '../../src/services/offline';
+import { useAppSelector } from '../../src/hooks/useRedux';
+import { selectCurrentUser } from '../../src/store/authSlice';
 import { useNotifications } from '../../src/hooks/useNotifications';
 import * as api from '../../src/services/api';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 type When = 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED';
 type Slot = 'MORNING' | 'AFTERNOON' | 'EVENING';
@@ -65,6 +70,8 @@ export default function RequestServiceScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [savedOffline, setSavedOffline] = useState(false);
+  const user = useAppSelector(selectCurrentUser);
   const photoUp = usePhotoUpload('JOB_PHOTO');
   const analyzedFor = useRef('');
 
@@ -144,8 +151,9 @@ export default function RequestServiceScreen() {
     if (!category || !address) return;
     setSubmitting(true);
     setError(undefined);
+    let payload: api.CreateJobInput | undefined;
     try {
-      const job = await api.createJob({
+      payload = {
         categoryId: category.id,
         issueCodes: d.issueCodes,
         description: d.description.trim() || undefined,
@@ -159,15 +167,25 @@ export default function RequestServiceScreen() {
         isEmergency: emergency || undefined,
         analysisId: analysis?.analysisId ?? undefined,
         idempotencyKey: d.idempotencyKey,
-      });
+      };
+      const job = await api.createJob(payload);
+      AnalyticsService.track('job_submitted', { categoryId: category.id, urgent: !!emergency, when: d.when });
       // Right after sending is when "we'll tell you when prices arrive" makes sense.
       void askForPush();
       await AsyncStorage.removeItem(DRAFT_KEY).catch(() => undefined);
       router.replace(`/(customer)/job/${job.id}` as any);
     } catch (e) {
-      setError(e instanceof ApiError
+      if (isOfflineError(e) && user && payload) {
+        // Saved on the phone and sent automatically when the connection returns (same idempotency key = one job).
+        await outbox.enqueue({
+          id: d.idempotencyKey, userId: user.id, kind: 'JOB', method: 'POST', endpoint: '/job-requests',
+          body: payload, label: 'Your service request', ttlMs: d.when === 'NOW' || emergency ? TTL_URGENT_MS : TTL_SCHEDULED_MS,
+        });
+        await AsyncStorage.removeItem(DRAFT_KEY).catch(() => undefined);
+        setSavedOffline(true);
+      } else setError(e instanceof ApiError
         ? e.message
-        : "No connection right now. Your request is saved on this phone. Tap Send again when you're back online.");
+        : "We couldn't send your request. Check your connection and tap Send again.");
     } finally {
       setSubmitting(false);
     }
@@ -175,6 +193,20 @@ export default function RequestServiceScreen() {
 
   const back = () => (d.step === 0 ? router.back() : set({ step: d.step - 1 }));
   const next = () => set({ step: Math.min(4, d.step + 1) });
+
+  if (savedOffline) {
+    return (
+      <Screen title="Saved" back={false}>
+        <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>Request saved on your phone</Text>
+        <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
+          You are offline. We will send it the moment you are back online{emergency ? ', but it expires in 20 minutes. If this is urgent, call someone you trust or the emergency number now' : ''}.
+        </Text>
+        <View style={{ marginTop: 24 }}>
+          <Button title="OK" variant="primary" size="lg" onPress={() => router.replace('/(customer)/bookings' as any)} />
+        </View>
+      </Screen>
+    );
+  }
 
   if (catalog.loading && !catalog.data) return <Screen title="Get help" back><LoadingState /></Screen>;
   if (catalog.error && !catalog.data) return <Screen title="Get help" back><ErrorState message={catalog.error} onRetry={catalog.reload} /></Screen>;
@@ -205,7 +237,7 @@ export default function RequestServiceScreen() {
     <Screen footer={footer}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
         <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={{ width: 44, height: 44, justifyContent: 'center' }}>
-          <Ionicons name="arrow-back" size={26} color={theme.colors.textPrimary} />
+          <DirIcon name="arrow-back" size={26} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text variant="bodySmall" weight="semibold" color={emergency ? theme.colors.sos : theme.colors.textSecondary} style={{ flex: 1 }}>
           {emergency ? 'Urgent help' : `Step ${d.step + 1} of ${STEPS.length}`}

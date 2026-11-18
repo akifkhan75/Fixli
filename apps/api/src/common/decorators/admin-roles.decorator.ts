@@ -10,6 +10,7 @@ export type AdminRole =
   | 'Finance'
   | 'Content'
   | 'Analytics'
-  | 'Auditor';
+  | 'Auditor'
+  | 'Compliance';
 
 export const AdminRoles = (...roles: AdminRole[]) => SetMetadata(ADMIN_ROLES_KEY, roles);

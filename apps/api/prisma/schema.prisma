@@ -533,11 +533,17 @@ model Payment {
   jobRequest     JobRequest @relation(fields: [jobRequestId], references: [id])
   method         String // CASH, CARD, WALLET
   amount         Int
-  currency       String     @default("USD")
+  currency       String
   status         String // PENDING, MARKED_BY_WORKER, CONFIRMED, DISPUTED, CAPTURED, REFUNDED
   provider       String?
   providerRef    String?    @unique
   idempotencyKey String?    @unique
+  /// Amount the customer says they actually paid, when they dispute the worker's figure.
+  claimedAmount  Int?
+  confirmedAt    DateTime?
+  autoConfirmed  Boolean    @default(false)
+  /// 0 none, 1 (+2h), 2 (+12h), 3 (+23h) reminders sent to the customer.
+  reminderStage  Int        @default(0)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -550,8 +556,11 @@ model LedgerEntry {
   jobRequest   JobRequest? @relation(fields: [jobRequestId], references: [id])
   type         String // COMMISSION_OWED, COMMISSION_SETTLED, PAYOUT, ADJUSTMENT, REFUND
   amount       Int // signed minor units
-  currency     String      @default("USD")
+  currency     String
   balanceAfter Int
+  /// e.g. `commission:<paymentId>`; makes a repeat write a no-op.
+  idempotencyKey String?   @unique
+  metadata     Json?
   createdById  String?
   createdAt    DateTime    @default(now())
 }
@@ -655,9 +664,15 @@ model Incident {
   type         String // SOS, EMERGENCY, REPORT_PROBLEM
   severity     String // LIFE_THREATENING, PROPERTY_DAMAGE, MODERATE
   description  String?
+  latitude     Float?
+  longitude    Float?
+  /// Device-generated; a retried SOS returns the same incident (and the same emergency job).
+  idempotencyKey String?
   status       String      @default("OPEN") // OPEN, INVESTIGATING, RESOLVED
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
+  @@unique([reporterId, idempotencyKey])
 }
 
 model TrustedContact {
@@ -881,4 +896,23 @@ model Notification {
   @@unique([userId, eventKey])
   @@index([userId, createdAt])
   @@index([userId, readAt])
+}
+
+/// One-time phone code for signup or password reset (doc 27 R5). Only a bcrypt hash of the code is stored.
+model PhoneVerification {
+  id         String    @id @default(cuid())
+  phone      String
+  /// SIGNUP | PASSWORD_RESET
+  purpose    String
+  codeHash   String
+  attempts   Int       @default(0)
+  ip         String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  /// Set when the right code was entered (signup: the signup token may now be used once).
+  verifiedAt DateTime?
+  /// Set when used up, replaced by a newer code, or locked by too many wrong tries.
+  consumedAt DateTime?
+
+  @@index([phone, purpose, createdAt])
 }

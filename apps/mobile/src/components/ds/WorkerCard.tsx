@@ -33,7 +33,7 @@ export const WorkerCard = ({
   const theme = useTheme();
 
   return (
-    <TouchableOpacity
+    <TouchableOpacity accessibilityRole="button"
       activeOpacity={onPress ? 0.7 : 1}
       onPress={onPress}
       style={[
@@ -81,7 +81,7 @@ export const WorkerCard = ({
       </View>
 
       {primaryActionLabel && onPrimaryAction && (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           activeOpacity={0.8}
           onPress={onPrimaryAction}
           style={[styles.primaryButton, { backgroundColor: theme.colors.primary, borderRadius: theme.borderRadius.full }]}

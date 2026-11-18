@@ -11,7 +11,8 @@ describe('AuthService', () => {
   const sessions = { create: jest.fn(), refresh: jest.fn(), revoke: jest.fn(), revokeAllExcept: jest.fn(), list: jest.fn() };
   const config = { get: jest.fn() };
   const audit = { record: jest.fn() };
-  const svc = new AuthService(prisma, sessions as any, config as any, audit as any);
+  const otp = { redeemSignupToken: jest.fn(), issue: jest.fn(), verifySignup: jest.fn(), check: jest.fn(), consume: jest.fn() };
+  const svc = new AuthService(prisma, sessions as any, config as any, audit as any, otp as any);
   const device = { deviceId: 'device-12345' };
 
   beforeEach(() => {
@@ -23,6 +24,49 @@ describe('AuthService', () => {
 
   const signup = (over: any = {}) =>
     svc.signup({ name: 'Ahmed Khan', phone: '0300 1234567', countryCode: 'PK', password: 'blue-Tiger-42', type: 'customer', ...device, ...over });
+
+  describe('signup with OTP required', () => {
+    beforeEach(() => config.get.mockImplementation((k: string) => (k === 'ENABLED_COUNTRIES' ? ['PK'] : k === 'OTP_REQUIRED' ? true : undefined)));
+
+    it('refuses without a valid signup token, before revealing whether the number is taken', async () => {
+      otp.redeemSignupToken.mockRejectedValue(new BadRequestException({ code: 'PHONE_NOT_VERIFIED' }));
+      await expect(signup()).rejects.toMatchObject({ response: { code: 'PHONE_NOT_VERIFIED' } });
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('reveals PHONE_TAKEN only after the token is redeemed', async () => {
+      otp.redeemSignupToken.mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue({ id: 'u0' });
+      await expect(signup({ signupToken: 't' })).rejects.toBeInstanceOf(ConflictException);
+      expect(otp.redeemSignupToken).toHaveBeenCalledWith('t', '+923001234567');
+    });
+  });
+
+  describe('password reset', () => {
+    it('starts silently (no code sent) for an unknown number but answers the same', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      otp.issue.mockResolvedValue({ resendInSeconds: 60, expiresInMinutes: 10 });
+      await svc.forgotPassword({ phone: '0300 1234567', countryCode: 'PK' });
+      expect(otp.issue).toHaveBeenCalledWith('+923001234567', 'PASSWORD_RESET', undefined, false);
+    });
+
+    it('sets the password, clears lockout and signs out every device', async () => {
+      otp.check.mockResolvedValue('v1');
+      otp.consume.mockResolvedValue(true);
+      prisma.user.findUnique.mockResolvedValue({ id: 'u1', status: 'ACTIVE' });
+      await svc.resetPassword({ phone: '0300 1234567', countryCode: 'PK', code: '123456', newPassword: 'blue-Tiger-42' });
+      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ failedLoginAttempts: 0, lockoutUntil: null }) }));
+      expect(sessions.revokeAllExcept).toHaveBeenCalledWith('u1');
+    });
+
+    it('rejects a code that was already used by a parallel request', async () => {
+      otp.check.mockResolvedValue('v1');
+      otp.consume.mockResolvedValue(false);
+      prisma.user.findUnique.mockResolvedValue({ id: 'u1', status: 'ACTIVE' });
+      await expect(svc.resetPassword({ phone: '0300 1234567', countryCode: 'PK', code: '123456', newPassword: 'blue-Tiger-42' })).rejects.toMatchObject({ response: { code: 'INVALID_CODE' } });
+      expect(sessions.revokeAllExcept).not.toHaveBeenCalled();
+    });
+  });
 
   describe('signup', () => {
     it('normalises the phone to E.164, hashes the password and returns tokens', async () => {

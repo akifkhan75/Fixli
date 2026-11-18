@@ -10,6 +10,7 @@ import { Text } from '../../../../src/components/ds/Text';
 import { ErrorState, LoadingState } from '../../../../src/components/ds/EmptyState';
 import { getCatalog } from '../../../../src/services/api';
 import { humanize, localizedName } from '../../../../src/utils/catalog';
+import { DirIcon } from '../../../../src/components/ds/DirIcon';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -38,13 +39,13 @@ export default function CategoryScreen() {
           style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, paddingHorizontal: 16, minHeight: 56, marginBottom: 10, flexDirection: 'row', alignItems: 'center' }}
         >
           <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ flex: 1 }}>{localizedName(issue, locale)}</Text>
-          <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
+          <DirIcon name="chevron-forward" size={20} color={theme.colors.textTertiary} />
         </TouchableOpacity>
       ))}
       <TouchableOpacity onPress={() => start()} accessibilityRole="button" activeOpacity={0.8}
         style={{ borderColor: theme.colors.border, borderWidth: 1.5, borderRadius: theme.borderRadius.xl, paddingHorizontal: 16, minHeight: 56, marginTop: 6, flexDirection: 'row', alignItems: 'center' }}>
         <Text variant="bodyLarge" color={theme.colors.primary} weight="semibold" style={{ flex: 1 }}>Something else</Text>
-        <Ionicons name="chevron-forward" size={20} color={theme.colors.primary} />
+        <DirIcon name="chevron-forward" size={20} color={theme.colors.primary} />
       </TouchableOpacity>
     </Screen>
   );

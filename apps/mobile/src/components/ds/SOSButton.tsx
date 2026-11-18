@@ -5,6 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
 
+/** Hold time to trigger (doc 26 §1.3: 5 seconds). Releasing earlier cancels with no side effects. */
+export const HOLD_MS = 5000;
+
 export interface SOSButtonProps {
   onSOSTriggered: () => void;
 }
@@ -19,7 +22,7 @@ export const SOSButton = ({ onSOSTriggered }: SOSButtonProps) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Animated.timing(progressAnim, {
       toValue: 1,
-      duration: 2000, // 2 seconds to trigger
+      duration: HOLD_MS, // long enough that a pocket press never triggers it
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished) {
@@ -50,7 +53,7 @@ export const SOSButton = ({ onSOSTriggered }: SOSButtonProps) => {
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       accessibilityRole="button"
-      accessibilityLabel="SOS Emergency Button. Press and hold for 2 seconds to trigger."
+      accessibilityLabel="SOS Emergency Button. Press and hold for 5 seconds to open emergency help."
     >
       <View style={[styles.container, { backgroundColor: theme.colors.sos }]}>
         <Animated.View
@@ -65,7 +68,7 @@ export const SOSButton = ({ onSOSTriggered }: SOSButtonProps) => {
         />
         <Ionicons name="warning" size={28} color="#FFF" />
         <Text variant="h3" weight="extrabold" style={{ color: '#FFF' }}>
-          {isPressing ? 'HOLD...' : 'SOS'}
+          {isPressing ? 'KEEP HOLDING…' : 'SOS'}
         </Text>
       </View>
     </TouchableWithoutFeedback>

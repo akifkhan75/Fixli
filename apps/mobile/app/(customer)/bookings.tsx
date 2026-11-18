@@ -9,6 +9,7 @@ import { Text } from '../../src/components/ds/Text';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import { isFinished, statusIcon, statusSentence } from '../../src/utils/jobStatus';
 import * as api from '../../src/services/api';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 export default function MyJobsScreen() {
   const theme = useTheme();
@@ -46,7 +47,7 @@ export default function MyJobsScreen() {
             <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>{statusSentence(job.status, 'customer', job.assignedWorker?.user.name)}</Text>
             <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{new Date(job.createdAt).toLocaleDateString()}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
+          <DirIcon name="chevron-forward" size={20} color={theme.colors.textTertiary} />
         </TouchableOpacity>
       ))}
     </Screen>

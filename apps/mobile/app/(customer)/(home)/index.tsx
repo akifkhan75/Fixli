@@ -29,7 +29,7 @@ export default function CustomerHomeScreen() {
   const catalog = useApi(getCatalog);
 
   const handleSOS = () => {
-    router.push('/(customer)/request-service?isEmergency=true' as any);
+    router.push('/sos' as any);
   };
 
   return (

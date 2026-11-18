@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { useApi, friendlyError } from '../../../src/hooks/useApi';
@@ -34,6 +35,8 @@ export default function WorkerJobScreen() {
   const [creatingChangeOrder, setCreatingChangeOrder] = useState(false);
   const [coReason, setCoReason] = useState('');
   const [coScope, setCoScope] = useState('');
+  const [shutoff, setShutoff] = useState(false);
+  const [ppe, setPpe] = useState(false);
   const [coPriceStr, setCoPriceStr] = useState('');
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector(state => state.auth.currentUser);
@@ -109,7 +112,11 @@ export default function WorkerJobScreen() {
     ) : job.status === 'EN_ROUTE' ? (
       <Button title="I've arrived" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.arriveJob)} />
     ) : job.status === 'ARRIVED' ? (
-      <Button title="Start work" variant="primary" size="lg" loading={busy} disabled={busy} onPress={run(api.startJob)} />
+      <Button
+        title="Start work" variant="primary" size="lg" loading={busy}
+        disabled={busy || (job.isEmergency && !(shutoff && ppe))}
+        onPress={run((jobId) => api.startJob(jobId, undefined, job.isEmergency ? { shutoffVerified: shutoff, protectiveEquipment: ppe } : undefined))}
+      />
     ) : job.status === 'IN_PROGRESS' ? (
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <View style={{ flex: 1 }}><Button title="Change Order" variant="secondary" size="lg" disabled={busy} onPress={() => setCreatingChangeOrder(true)} /></View>
@@ -125,7 +132,7 @@ export default function WorkerJobScreen() {
     setBusy(true);
     setActionError(undefined);
     try {
-      await api.markCashReceived(job.id, job.agreedAmount, job.agreedCurrency || 'USD');
+      await api.markCashReceived(job.id, job.agreedAmount);
       await reload();
     } catch (e) { setActionError(friendlyError(e)); } finally { setBusy(false); }
   };
@@ -179,6 +186,21 @@ export default function WorkerJobScreen() {
         </View>
       ) : null}
       {job.isEmergency ? <Text variant="body" weight="bold" color={theme.colors.error} style={{ marginTop: 20 }}>Emergency</Text> : null}
+      {job.isEmergency && job.status === 'ARRIVED' ? (
+        <View style={{ marginTop: 12, padding: 14, borderRadius: theme.borderRadius.lg, backgroundColor: theme.colors.surface }}>
+          <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>Safety check before you start</Text>
+          {([
+            { on: shutoff, set: setShutoff, label: 'Main power, gas and water shut-off found and verified OFF' },
+            { on: ppe, set: setPpe, label: 'I am wearing protective equipment' },
+          ]).map((c) => (
+            <TouchableOpacity key={c.label} onPress={() => c.set(!c.on)} accessibilityRole="checkbox" accessibilityState={{ checked: c.on }} accessibilityLabel={c.label}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 }}>
+              <Ionicons name={c.on ? 'checkbox' : 'square-outline'} size={26} color={c.on ? theme.colors.success : theme.colors.textTertiary} />
+              <Text variant="body" color={theme.colors.textPrimary} style={{ flex: 1 }}>{c.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
       {actionError ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{actionError}</Text> : null}
       {job.status === 'MATCHES_FOUND' ? (
         <View style={{ marginTop: 28 }}>
@@ -225,6 +247,12 @@ export default function WorkerJobScreen() {
           onSubmitted={reload} 
         />
       )}
+
+      {job.customer && ['ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? (
+        <View style={{ marginTop: 16 }}>
+          <Button title="Report a problem" variant="secondary" onPress={() => router.push({ pathname: '/report-problem', params: { jobId: job.id } } as any)} />
+        </View>
+      ) : null}
 
       <JobHistory events={job.events ?? []} viewer="worker" locale={locale} />
     </Screen>

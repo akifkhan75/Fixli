@@ -7,6 +7,7 @@ jest.mock('expo-secure-store', () => ({
   setItemAsync: jest.fn(async (k: string, v: string) => { mockStore[k] = v; }),
   deleteItemAsync: jest.fn(async (k: string) => { delete mockStore[k]; }),
 }));
+jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn(async () => undefined) } }));
 import { IAuthResponse, IUser, AuthFlowState, UserType } from '@fixli/shared';
 
 describe('authSlice', () => {
