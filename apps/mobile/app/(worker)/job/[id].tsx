@@ -248,6 +248,12 @@ export default function WorkerJobScreen() {
         />
       )}
 
+      {job.customer && ['ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? (
+        <View style={{ marginTop: 16 }}>
+          <Button title="Report a problem" variant="secondary" onPress={() => router.push({ pathname: '/report-problem', params: { jobId: job.id } } as any)} />
+        </View>
+      ) : null}
+
       <JobHistory events={job.events ?? []} viewer="worker" locale={locale} />
     </Screen>
   );

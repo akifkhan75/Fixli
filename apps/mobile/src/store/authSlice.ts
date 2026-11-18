@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
 import type { IUser, AuthFlowState } from '@fixli/shared';
 import * as api from '../services/api';
+import { outbox } from '../services/offline';
 import { saveTokens, clearTokens, getAccessToken } from '../services/session';
 import type { CountryCode } from '@fixli/shared';
 import type { RootState } from './index';
@@ -85,6 +86,8 @@ export const logoutUser = createAsyncThunk<void, void>('auth/logoutUser', async 
     // Offline or already expired: still sign out locally.
   }
   await clearTokens();
+  // Queued messages belong to the person who wrote them: never send them as the next user.
+  await outbox.clear();
 });
 
 function friendlyAuthError(error: unknown): string {

@@ -25,6 +25,29 @@ import { humanize, localizedName } from '../../../src/utils/catalog';
 import * as api from '../../../src/services/api';
 import { useLiveReload } from '../../../src/hooks/useRealtime';
 
+/** Heart toggle: save this worker for next time (or remove them). */
+function SaveWorkerButton({ workerId, name }: { workerId: string; name: string }) {
+  const favourites = useApi(api.getFavorites, [workerId]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | undefined>();
+  const theme = useTheme();
+  const saved = !!favourites.data?.some((f) => f.worker.id === workerId);
+  if (favourites.loading && !favourites.data) return null;
+  const toggle = async () => {
+    setBusy(true); setErr(undefined);
+    try {
+      if (saved) await api.removeFavorite(workerId); else await api.addFavorite(workerId);
+      await favourites.reload();
+    } catch (e) { setErr(friendlyError(e)); } finally { setBusy(false); }
+  };
+  return (
+    <View>
+      <Button title={saved ? `Saved: ${name}` : `Save ${name} for next time`} variant={saved ? 'primary' : 'secondary'} loading={busy} disabled={busy} onPress={toggle} />
+      {err ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 6 }}>{err}</Text> : null}
+    </View>
+  );
+}
+
 // Live tracking, payment and reviews arrive with their phases. Job status and prices update live.
 export default function CustomerJobScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -284,6 +307,13 @@ export default function CustomerJobScreen() {
           onSubmitted={reload} 
         />
       )}
+
+      {job.assignedWorker && ['ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? (
+        <View style={{ marginTop: 16, gap: 10 }}>
+          {job.status === 'COMPLETED' ? <SaveWorkerButton workerId={job.assignedWorker.user.id} name={job.assignedWorker.user.name} /> : null}
+          <Button title="Report a problem" variant="secondary" onPress={() => router.push({ pathname: '/report-problem', params: { jobId: job.id } } as any)} />
+        </View>
+      ) : null}
 
       <JobHistory events={job.events ?? []} viewer="customer" locale={locale} />
     </Screen>

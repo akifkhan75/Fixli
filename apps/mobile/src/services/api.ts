@@ -464,3 +464,49 @@ export interface TrustedContact { id: string; name: string; phone: string; notif
 export const getTrustedContacts = () => request<TrustedContact[]>('/safety/trusted-contacts');
 export const addTrustedContact = (c: { name: string; phone: string; notifyOnSos?: boolean }) => request<TrustedContact>('/safety/trusted-contacts', { method: 'POST', body: JSON.stringify(c) });
 export const removeTrustedContact = (id: string) => request<{ success: boolean }>(`/safety/trusted-contacts/${id}`, { method: 'DELETE' });
+
+// ── Reports (disputes) & saved workers ───────────────────────
+
+export const DISPUTE_CATEGORIES = [
+  { id: 'QUALITY', label: 'Work was not good' },
+  { id: 'NO_SHOW', label: 'Did not show up' },
+  { id: 'PRICE', label: 'Price problem' },
+  { id: 'DAMAGE', label: 'Something was damaged' },
+  { id: 'BEHAVIOUR', label: 'Rude or unsafe behaviour' },
+  { id: 'OTHER', label: 'Something else' },
+] as const;
+export type DisputeCategory = (typeof DISPUTE_CATEGORIES)[number]['id'];
+
+export interface DisputeItem {
+  id: string; jobRequestId: string; category: string; reason: string; description: string | null;
+  status: 'OPEN' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED'; resolution: string | null; createdAt: string;
+}
+export const createDispute = (data: { jobRequestId: string; category: DisputeCategory; reason: string; description?: string }) =>
+  request<DisputeItem>('/disputes', { method: 'POST', body: JSON.stringify(data) });
+export const getMyDisputes = () => request<DisputeItem[]>('/disputes/my-disputes');
+
+export interface FavoriteWorker {
+  workerId: string;
+  worker: { id: string; rating: number | null; user: { name: string; profileImageUrl: string | null }; services?: { category?: { name: string } }[] };
+}
+export const getFavorites = () => request<FavoriteWorker[]>('/users/me/favorites');
+export const addFavorite = (workerId: string) => request<{ success: boolean }>(`/users/me/favorites/${workerId}`, { method: 'POST' });
+export const removeFavorite = (workerId: string) => request<{ success: boolean }>(`/users/me/favorites/${workerId}`, { method: 'DELETE' });
+
+// ── Outbox delivery ──────────────────────────────────────────
+
+/** Sends one queued request and says what to do next. 'sent' also covers "the server already has it" (409). */
+export async function sendQueued(item: { method: string; endpoint: string; body?: unknown }): Promise<'sent' | 'retry' | 'rejected'> {
+  try {
+    await request(item.endpoint, { method: item.method, body: item.body === undefined ? undefined : JSON.stringify(item.body) });
+    return 'sent';
+  } catch (e) {
+    if (!(e instanceof ApiError)) return 'retry';
+    if (e.status === 409) return 'sent';
+    if (e.status === 0 || e.status === 401 || e.status === 408 || e.status === 429 || e.status >= 500) return 'retry';
+    return 'rejected';
+  }
+}
+
+/** True when a failed call means "no connection", i.e. the action can be queued and sent later. */
+export const isOfflineError = (e: unknown) => e instanceof ApiError && e.code === 'OFFLINE';
