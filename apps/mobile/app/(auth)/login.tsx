@@ -69,7 +69,11 @@ export default function LoginScreen() {
           <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text>
         ) : null}
 
-        <View style={{ marginTop: 28 }}>
+        <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password' as any)} accessibilityRole="button" style={{ alignSelf: 'flex-start', marginTop: 12, paddingVertical: 8 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text variant="body" weight="bold" color={theme.colors.primary}>{t('auth.forgot')}</Text>
+        </TouchableOpacity>
+
+        <View style={{ marginTop: 16 }}>
           <Button title={t('auth.signIn')} variant="primary" size="lg" loading={loading} disabled={loading} onPress={onSubmit} />
         </View>
 

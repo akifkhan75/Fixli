@@ -897,3 +897,22 @@ model Notification {
   @@index([userId, createdAt])
   @@index([userId, readAt])
 }
+
+/// One-time phone code for signup or password reset (doc 27 R5). Only a bcrypt hash of the code is stored.
+model PhoneVerification {
+  id         String    @id @default(cuid())
+  phone      String
+  /// SIGNUP | PASSWORD_RESET
+  purpose    String
+  codeHash   String
+  attempts   Int       @default(0)
+  ip         String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  /// Set when the right code was entered (signup: the signup token may now be used once).
+  verifiedAt DateTime?
+  /// Set when used up, replaced by a newer code, or locked by too many wrong tries.
+  consumedAt DateTime?
+
+  @@index([phone, purpose, createdAt])
+}

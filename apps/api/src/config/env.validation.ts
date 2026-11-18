@@ -48,6 +48,8 @@ export interface AppEnv {
   GEMINI_MODEL?: string;
   /** base64 of 32 random bytes; encrypts identity numbers at rest. Required in production. */
   FIELD_ENCRYPTION_KEY?: string;
+  /** Signup needs a verified phone code. Defaults on in production, off elsewhere (dev/tests). */
+  OTP_REQUIRED: boolean;
   LOG_LEVEL: string;
 }
 
@@ -148,6 +150,7 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     GEMINI_API_KEY: str('GEMINI_API_KEY') || undefined,
     GEMINI_MODEL: str('GEMINI_MODEL') || undefined,
     FIELD_ENCRYPTION_KEY: fieldKey || undefined,
+    OTP_REQUIRED: (str('OTP_REQUIRED') || (nodeEnv === 'production' ? 'true' : 'false')) === 'true',
     LOG_LEVEL: str('LOG_LEVEL') || 'info',
   };
 }

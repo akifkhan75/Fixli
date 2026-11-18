@@ -19,7 +19,8 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { SessionService, TokenPair } from './session.service';
-import { AdminLoginDto, ChangePasswordDto, LoginDto, SignupDto } from './dto/auth.dto';
+import { OtpService } from './otp.service';
+import { AdminLoginDto, ChangePasswordDto, LoginDto, ResetPasswordDto, SignupDto, StartPhoneDto, VerifyPhoneDto } from './dto/auth.dto';
 
 const BCRYPT_COST = process.env.NODE_ENV === 'test' ? 4 : 12;
 const MAX_FAILED = 5;
@@ -49,6 +50,7 @@ export class AuthService {
     private readonly sessions: SessionService,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    private readonly otp: OtpService,
   ) {}
 
   private enabledCountries(): string[] {
@@ -87,6 +89,9 @@ export class AuthService {
     const country = this.requireCountry(dto.countryCode);
     const phone = this.normalisePhone(dto.phone, country, true);
     this.assertPassword(dto.password, phone);
+
+    // With OTP on, "taken" is only revealed to someone who proved they own the number.
+    if (this.config.get<boolean>('OTP_REQUIRED')) await this.otp.redeemSignupToken(dto.signupToken, phone);
 
     if (await this.prisma.user.findUnique({ where: { phone }, select: { id: true } })) {
       throw new ConflictException({ code: 'PHONE_TAKEN', message: 'That number is already registered. Try signing in.' });
@@ -131,6 +136,53 @@ export class AuthService {
     const tokens = await this.sessions.create(user, dto);
     await this.audit.record({ actorId: user.id, action: 'auth.signup', entityType: 'User', entityId: user.id, after: { type: dto.type, countryCode: country } });
     return { user, ...tokens };
+  }
+
+  private target(dto: StartPhoneDto) {
+    const country = this.requireCountry(dto.countryCode);
+    return this.normalisePhone(dto.phone, country, true);
+  }
+
+  /** Send a signup code. Same answer whether or not the number already has an account. */
+  async startPhone(dto: StartPhoneDto, ip?: string) {
+    const phone = this.target(dto);
+    const taken = await this.prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (taken) {
+      // Don't reveal it: same limits and response as a real send, but no code goes out.
+      return this.otp.issue(phone, 'SIGNUP', ip, false);
+    }
+    return this.otp.issue(phone, 'SIGNUP', ip);
+  }
+
+  verifyPhone(dto: VerifyPhoneDto) {
+    return this.otp.verifySignup(this.target(dto), dto.code);
+  }
+
+  async forgotPassword(dto: StartPhoneDto, ip?: string) {
+    const phone = this.target(dto);
+    const user = await this.prisma.user.findUnique({ where: { phone }, select: { id: true, status: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return this.otp.issue(phone, 'PASSWORD_RESET', ip, false);
+    }
+    return this.otp.issue(phone, 'PASSWORD_RESET', ip);
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const phone = this.target(dto);
+    this.assertPassword(dto.newPassword, phone);
+    const vid = await this.otp.check(phone, 'PASSWORD_RESET', dto.code);
+    const user = await this.prisma.user.findUnique({ where: { phone }, select: { id: true, status: true } });
+    if (!user || user.status !== 'ACTIVE' || !(await this.otp.consume(vid))) {
+      throw new BadRequestException({ code: 'INVALID_CODE', message: 'That code is wrong or has expired. Ask for a new one.' });
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: await bcrypt.hash(dto.newPassword, BCRYPT_COST), failedLoginAttempts: 0, lockoutUntil: null },
+    });
+    // Whoever had the old password (or a stolen session) is signed out everywhere.
+    await this.sessions.revokeAllExcept(user.id);
+    await this.audit.record({ actorId: user.id, action: 'auth.password_reset', entityType: 'User', entityId: user.id });
+    return { success: true };
   }
 
   async login(dto: LoginDto) {

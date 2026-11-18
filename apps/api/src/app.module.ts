@@ -34,6 +34,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { PaymentsModule } from './payments/payments.module';
 import { SafetyModule } from './safety/safety.module';
+import { SmsModule } from './sms/sms.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { SafetyModule } from './safety/safety.module';
     RecurringJobsModule,
     PaymentsModule,
     SafetyModule,
+    SmsModule,
   ],
   controllers: [AppController, AppConfigController],
   providers: [

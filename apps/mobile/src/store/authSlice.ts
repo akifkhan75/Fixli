@@ -25,7 +25,7 @@ const initialState: AuthState = {
 };
 
 export interface LoginArgs { phone: string; countryCode: CountryCode; password: string }
-export interface SignupArgs extends LoginArgs { name: string; type: 'customer' | 'worker'; locale?: 'en' | 'ar' | 'ur' }
+export interface SignupArgs extends LoginArgs { name: string; type: 'customer' | 'worker'; locale?: 'en' | 'ar' | 'ur'; signupToken?: string }
 
 export const loginUser = createAsyncThunk<
   { user: IUser; token: string },

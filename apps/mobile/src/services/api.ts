@@ -41,7 +41,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 // Credential endpoints must never trigger a refresh-and-retry loop.
-const NO_REFRESH = ['/auth/login', '/auth/signup', '/auth/refresh', '/auth/admin/login'];
+const NO_REFRESH = ['/auth/login', '/auth/signup', '/auth/refresh', '/auth/admin/login', '/auth/phone/start', '/auth/phone/verify', '/auth/password/forgot', '/auth/password/reset'];
 
 async function send(endpoint: string, options: RequestInit, token?: string | null) {
   const authHeaders: Record<string, string> = token === undefined ? await getAuthHeaders() : token ? { Authorization: `Bearer ${token}` } : {};
@@ -112,13 +112,29 @@ export async function getCurrentUser(): Promise<IUser> {
 
 export async function signup(data: {
   name: string; phone: string; countryCode: CountryCode; password: string;
-  type: 'customer' | 'worker'; locale?: 'en' | 'ar' | 'ur';
+  type: 'customer' | 'worker'; locale?: 'en' | 'ar' | 'ur'; signupToken?: string;
 }): Promise<IAuthResponse> {
   return request<IAuthResponse>('/auth/signup', {
     method: 'POST',
     body: JSON.stringify({ ...data, ...(await getDeviceInfo()) }),
   });
 }
+
+export interface OtpStarted { resendInSeconds: number; expiresInMinutes: number }
+
+/** Texts a 6-digit code. Answers the same whether or not the number already has an account. */
+export const startPhoneVerification = (phone: string, countryCode: CountryCode) =>
+  request<OtpStarted>('/auth/phone/start', { method: 'POST', body: JSON.stringify({ phone, countryCode }) });
+
+/** Returns a 15-minute single-use token that signup requires. */
+export const verifyPhoneCode = (phone: string, countryCode: CountryCode, code: string) =>
+  request<{ signupToken: string }>('/auth/phone/verify', { method: 'POST', body: JSON.stringify({ phone, countryCode, code }) });
+
+export const requestPasswordReset = (phone: string, countryCode: CountryCode) =>
+  request<OtpStarted>('/auth/password/forgot', { method: 'POST', body: JSON.stringify({ phone, countryCode }) });
+
+export const resetPassword = (phone: string, countryCode: CountryCode, code: string, newPassword: string) =>
+  request<{ success: boolean }>('/auth/password/reset', { method: 'POST', body: JSON.stringify({ phone, countryCode, code, newPassword }) });
 
 // ── Users ────────────────────────────────────────────────────
 
