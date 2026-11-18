@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { AccountDeletionService } from './account-deletion.service';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 
 describe('UsersController', () => {
@@ -11,7 +12,7 @@ describe('UsersController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: svc }],
+      providers: [{ provide: UsersService, useValue: svc }, { provide: AccountDeletionService, useValue: {} }],
     }).compile();
     controller = module.get(UsersController);
   });

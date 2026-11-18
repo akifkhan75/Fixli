@@ -423,6 +423,11 @@ export const registerPushToken = (token: string) =>
 
 export interface EmergencyNumber { label: string; number: string }
 export interface EmergencyNumbers { country: string; numbers: EmergencyNumber[]; disclaimer: string }
+// ── Account ──────────────────────────────────────────────────
+
+/** Needs the password. 409 DELETION_BLOCKED (with a plain reason) while work or money is unsettled. */
+export const deleteAccount = (password: string) => request<{ success: boolean }>('/users/me', { method: 'DELETE', body: JSON.stringify({ password }) });
+
 export const getEmergencyNumbers = () => request<EmergencyNumbers>('/safety/emergency-numbers');
 
 export type SosKind = 'WATER' | 'ELECTRICAL' | 'GAS';

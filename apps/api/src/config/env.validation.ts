@@ -46,6 +46,8 @@ export interface AppEnv {
   GEMINI_API_KEY?: string;
   /** Model id; configurable so a retired model never needs a code change. */
   GEMINI_MODEL?: string;
+  /** base64 of 32 random bytes; encrypts identity numbers at rest. Required in production. */
+  FIELD_ENCRYPTION_KEY?: string;
   LOG_LEVEL: string;
 }
 
@@ -73,6 +75,10 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   if (nodeEnv === 'production' && !str('FRONTEND_URL')) {
     errors.push('FRONTEND_URL (allowed CORS origin) is required in production');
   }
+
+  const fieldKey = str('FIELD_ENCRYPTION_KEY');
+  if (nodeEnv === 'production' && !fieldKey) errors.push('FIELD_ENCRYPTION_KEY is required in production (openssl rand -base64 32)');
+  if (fieldKey && Buffer.from(fieldKey, 'base64').length !== 32) errors.push('FIELD_ENCRYPTION_KEY must be base64 of exactly 32 bytes (openssl rand -base64 32)');
 
   const refreshDays = Number(str('REFRESH_TOKEN_DAYS') || 30);
   if (!Number.isInteger(refreshDays) || refreshDays < 1 || refreshDays > 365) {
@@ -141,6 +147,7 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     FRONTEND_URL: str('FRONTEND_URL') || undefined,
     GEMINI_API_KEY: str('GEMINI_API_KEY') || undefined,
     GEMINI_MODEL: str('GEMINI_MODEL') || undefined,
+    FIELD_ENCRYPTION_KEY: fieldKey || undefined,
     LOG_LEVEL: str('LOG_LEVEL') || 'info',
   };
 }

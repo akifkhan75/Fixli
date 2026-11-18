@@ -12,6 +12,9 @@ export interface CreateUploadInput {
   size: number;
 }
 
+/** Hard ceiling for signed GET links. */
+export const MAX_SIGNED_URL_TTL_SECONDS = 900;
+
 @Injectable()
 export class StorageService {
   constructor(
@@ -122,8 +125,19 @@ export class StorageService {
     return { bytes: await this.driver.read(upload.key), mime: upload.mime, key: upload.key, purpose: upload.purpose };
   }
 
+  /** Best-effort deletion of stored files (account erasure). One failure never stops the others. */
+  async removeKeys(keys: string[]): Promise<{ removed: number; failed: number }> {
+    let removed = 0;
+    let failed = 0;
+    for (const key of new Set(keys)) {
+      try { await this.driver.remove(key); removed++; } catch { failed++; }
+    }
+    return { removed, failed };
+  }
+
   async signedUrlForKey(key: string, ttlSeconds = 300): Promise<string> {
-    return this.driver.signedGetUrl(key, ttlSeconds);
+    // Private documents: links never live longer than 15 minutes, whatever the caller asks (doc 26 §2.1).
+    return this.driver.signedGetUrl(key, Math.min(Math.max(1, Math.floor(ttlSeconds)), MAX_SIGNED_URL_TTL_SECONDS));
   }
 
   private view(u: { id: string; purpose: UploadPurpose; key: string; status: string }) {

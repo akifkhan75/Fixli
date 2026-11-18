@@ -109,10 +109,12 @@ export async function logout() {
 export interface Stats { users: Record<string, number>; workers: Record<string, number>; jobs: Record<string, number>; openDisputes: number; pendingVerifications: number }
 export const getStats = () => request<Stats>('/admin/v1/stats');
 
-export interface CaseRow { id: string; type: string; status: string; createdAt: string; reference: string | null; worker: { id: string; activationStatus: string; user: { name: string; phone: string | null } } }
+export interface CaseRow { id: string; type: string; status: string; createdAt: string; referenceMasked: string | null; worker: { id: string; activationStatus: string; user: { name: string; phone: string | null } } }
 export const listCases = (status = 'SUBMITTED') => request<{ items: CaseRow[]; nextCursor: string | null }>(`/admin/v1/verification-cases?status=${status}`);
 export interface CaseDetail extends CaseRow { documents: { url: string }[]; worker: CaseRow['worker'] & { verifications: { id: string; type: string; status: string; reason: string | null }[] } }
 export const getCase = (id: string) => request<CaseDetail>(`/admin/v1/verification-cases/${id}`);
+/** Compliance role only; audited server-side. */
+export const revealReference = (id: string) => request<{ id: string; reference: string }>(`/admin/v1/verification-cases/${id}/reveal-reference`, { method: 'POST' });
 export const decideCase = (id: string, decision: 'APPROVE' | 'REJECT' | 'NEEDS_INFO', reason?: string) =>
   request<{ id: string; status: string }>(`/admin/v1/verification-cases/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision, reason }) });
 

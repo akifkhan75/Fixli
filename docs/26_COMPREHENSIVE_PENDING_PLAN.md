@@ -426,7 +426,7 @@ flowchart LR
 
 ### 3.3 App Store Review Compliance (Apple & Google Play)
 * **Account Deletion (App Store Guideline 5.1.1v):**
-  * **Target (not yet implemented — see doc 27 R4):** `DELETE /me` currently only sets status DELETED and blanks phone/email.
+  * Implemented in doc 27 R4 (`DELETE /users/me`, password required, blocked while work/money is unsettled; see doc 27 for exactly what is erased vs kept).
   * Soft-deletes user record, revokes all active auth sessions, cancels open jobs, and anonymizes personal identifiers (name, phone, email, avatar).
 * **Data Safety Declarations:**
   * Location: Used only for service fulfillment and live navigation while active.

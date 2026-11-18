@@ -9,6 +9,7 @@ import {
 import { computeOnboarding, latestCases } from './onboarding';
 import { COUNTRIES, isCountryCode } from '@fixli/shared';
 import { capStatus, commissionConfigFor } from '../common/commission';
+import { encryptField } from '../common/crypto/field-crypto';
 
 // What any signed-in user may see about a worker. Never email, phone, documents or exact base location.
 const PUBLIC_WORKER_SELECT = {
@@ -215,7 +216,7 @@ export class WorkersService {
     }
     await this.prisma.$transaction(async (tx) => {
       const keys = await this.storage.consume(userId, dto.uploadIds, 'VERIFICATION', tx);
-      const verificationCase = await tx.verificationCase.create({ data: { workerId: userId, type: dto.type, documentKeys: keys, reference: dto.reference } });
+      const verificationCase = await tx.verificationCase.create({ data: { workerId: userId, type: dto.type, documentKeys: keys, reference: dto.reference?.trim() ? encryptField(dto.reference.trim()) : undefined } });
       
       this.events.emit('admin.verification_submitted', {
         caseId: verificationCase.id,

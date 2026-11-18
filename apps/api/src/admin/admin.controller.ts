@@ -38,6 +38,13 @@ export class AdminController {
     return this.verification.detail(id, adminId);
   }
 
+  @Post('verification-cases/:id/reveal-reference')
+  @AdminRoles('Compliance')
+  @ApiOperation({ summary: 'Reveal the full ID number (Compliance role; always audited)' })
+  reveal(@Param('id') id: string, @CurrentUser('id') adminId: string) {
+    return this.verification.revealReference(id, adminId);
+  }
+
   @Post('verification-cases/:id/decision')
   @AdminRoles('Verification', 'Operations')
   @ApiOperation({ summary: 'Approve, reject, or ask for more information' })

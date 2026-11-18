@@ -40,16 +40,6 @@ export class UsersService {
     return this.findById(id);
   }
 
-  async deleteMe(id: string) {
-    // In a real system, we'd probably soft-delete or anonymize data to preserve ledger integrity.
-    // Here we'll do a soft delete by changing status to DELETED.
-    await this.prisma.user.update({
-      where: { id },
-      data: { status: 'DELETED', phone: `deleted-${id}`, email: null },
-    });
-    return { success: true };
-  }
-
   async getFavorites(customerId: string) {
     return this.prisma.favoriteWorker.findMany({
       where: { customerId },
