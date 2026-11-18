@@ -3,6 +3,7 @@ import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
+import { DirIcon } from './DirIcon';
 
 export interface ListRowItem {
   id: string;
@@ -47,7 +48,7 @@ export function GroupedList({ items, title }: { items: ListRowItem[]; title?: st
                   {item.hint ? <Text variant="caption" color={theme.colors.textSecondary}>{item.hint}</Text> : null}
                 </View>
                 {item.value ? <Text variant="bodySmall" color={theme.colors.textTertiary} style={{ marginEnd: 8 }}>{item.value}</Text> : null}
-                {item.trailing ?? (item.onPress && !item.destructive ? <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} /> : null)}
+                {item.trailing ?? (item.onPress && !item.destructive ? <DirIcon name="chevron-forward" size={20} color={theme.colors.textTertiary} /> : null)}
               </TouchableOpacity>
               {i < items.length - 1 ? <View style={[styles.sep, { backgroundColor: theme.colors.border, marginStart: item.icon ? 70 : 16 }]} /> : null}
             </View>

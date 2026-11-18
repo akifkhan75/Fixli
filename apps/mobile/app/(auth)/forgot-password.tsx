@@ -14,6 +14,7 @@ import { PasswordField } from '../../src/components/ds/PasswordField';
 import { CountryPicker } from '../../src/components/ds/CountryPicker';
 import { OtpCodeStep } from '../../src/components/ds/OtpCodeStep';
 import * as api from '../../src/services/api';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 /** Forgot password: number -> texted code + new password -> back to sign in (every device is signed out). */
 export default function ForgotPasswordScreen() {
@@ -68,7 +69,7 @@ export default function ForgotPasswordScreen() {
       <ScrollView contentContainerStyle={[styles.scroll, { paddingHorizontal: theme.spacing['2xl'] }]} keyboardShouldPersistTaps="handled">
         {step !== 'done' ? (
           <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={styles.back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="arrow-back" size={28} color={theme.colors.textPrimary} />
+            <DirIcon name="arrow-back" size={28} color={theme.colors.textPrimary} />
           </TouchableOpacity>
         ) : null}
 

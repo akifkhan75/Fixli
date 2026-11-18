@@ -35,7 +35,7 @@ export const ChipChoice = ({ options, selectedIds, onChange, multiSelect = false
       {options.map((option) => {
         const isSelected = selectedIds.includes(option.id);
         return (
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button"
             key={option.id}
             activeOpacity={0.7}
             onPress={() => handlePress(option.id)}

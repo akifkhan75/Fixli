@@ -9,6 +9,7 @@ import { Text } from '../../src/components/ds/Text';
 import { Button } from '../../src/components/ds/Button';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import * as api from '../../src/services/api';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 export default function AddressesScreen() {
   const theme = useTheme();
@@ -38,7 +39,7 @@ export default function AddressesScreen() {
               <Text variant="bodySmall" color={theme.colors.textSecondary}>{[a.buildingDetail, a.streetAddress, a.area, a.city].filter(Boolean).join(', ')}</Text>
               {a.landmark ? <Text variant="caption" color={theme.colors.textTertiary}>{a.landmark}</Text> : null}
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
+            <DirIcon name="chevron-forward" size={20} color={theme.colors.textTertiary} />
           </TouchableOpacity>
         ))
       )}

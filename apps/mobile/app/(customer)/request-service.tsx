@@ -24,6 +24,7 @@ import { useAppSelector } from '../../src/hooks/useRedux';
 import { selectCurrentUser } from '../../src/store/authSlice';
 import { useNotifications } from '../../src/hooks/useNotifications';
 import * as api from '../../src/services/api';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 type When = 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED';
 type Slot = 'MORNING' | 'AFTERNOON' | 'EVENING';
@@ -236,7 +237,7 @@ export default function RequestServiceScreen() {
     <Screen footer={footer}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
         <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={{ width: 44, height: 44, justifyContent: 'center' }}>
-          <Ionicons name="arrow-back" size={26} color={theme.colors.textPrimary} />
+          <DirIcon name="arrow-back" size={26} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text variant="bodySmall" weight="semibold" color={emergency ? theme.colors.sos : theme.colors.textSecondary} style={{ flex: 1 }}>
           {emergency ? 'Urgent help' : `Step ${d.step + 1} of ${STEPS.length}`}

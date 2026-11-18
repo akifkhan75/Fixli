@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "build": "echo 'Mobile build handled by EAS'",
-    "lint": "echo 'No linting configured'",
+    "lint": "oxlint .",
     "test": "jest",
     "test:watch": "jest --watch",
     "clean": "rm -rf .expo node_modules",
@@ -17,6 +17,7 @@
   "dependencies": {
     "@babel/runtime": "^8.0.5",
     "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/noto-nastaliq-urdu": "^0.4.2",
     "@expo/metro-runtime": "^57.0.16",
     "@expo/vector-icons": "^15.1.1",
     "@fixli/shared": "workspace:*",
@@ -73,6 +74,7 @@
     "babel-plugin-module-resolver": "^5.0.3",
     "jest": "^29.7.0",
     "jest-expo": "~57.0.5",
+    "oxlint": "^1.81.0",
     "react-test-renderer": "19.2.3",
     "typescript": "^6.0.3"
   },

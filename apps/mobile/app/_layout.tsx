@@ -73,6 +73,12 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
+import {
+  NotoNastaliqUrdu_400Regular,
+  NotoNastaliqUrdu_500Medium,
+  NotoNastaliqUrdu_600SemiBold,
+  NotoNastaliqUrdu_700Bold,
+} from '@expo-google-fonts/noto-nastaliq-urdu';
 import * as SplashScreen from 'expo-splash-screen';
 
 SplashScreen.preventAutoHideAsync();
@@ -147,6 +153,10 @@ function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
+    NotoNastaliqUrdu_400Regular,
+    NotoNastaliqUrdu_500Medium,
+    NotoNastaliqUrdu_600SemiBold,
+    NotoNastaliqUrdu_700Bold,
   });
 
   if (!fontsLoaded) return null;

@@ -18,6 +18,7 @@ import { useAppDispatch, useAppSelector } from '../../src/hooks/useRedux';
 import * as api from '../../src/services/api';
 import { OtpCodeStep } from '../../src/components/ds/OtpCodeStep';
 import { signupUser, selectAuthError, selectIsAuthLoading, clearAuthError } from '../../src/store/authSlice';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 type Role = 'customer' | 'worker';
 
@@ -124,7 +125,7 @@ export default function SignupScreen() {
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: theme.colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingHorizontal: theme.spacing['2xl'] }]} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={styles.back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Ionicons name="arrow-back" size={28} color={theme.colors.textPrimary} />
+          <DirIcon name="arrow-back" size={28} color={theme.colors.textPrimary} />
         </TouchableOpacity>
 
         {!role ? (
@@ -149,7 +150,7 @@ export default function SignupScreen() {
                   <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{r.title}</Text>
                   <Text variant="bodySmall" color={theme.colors.textSecondary}>{r.sub}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={22} color={theme.colors.textTertiary} />
+                <DirIcon name="chevron-forward" size={22} color={theme.colors.textTertiary} />
               </TouchableOpacity>
             ))}
             <View style={styles.footer}>

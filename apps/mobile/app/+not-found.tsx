@@ -16,7 +16,7 @@ export default function NotFoundScreen() {
           The page you're looking for doesn't exist.
         </Text>
         <Link href="/" asChild>
-          <TouchableOpacity style={StyleSheet.flatten([styles.button, { backgroundColor: theme.primary }])}>
+          <TouchableOpacity accessibilityRole="button" style={StyleSheet.flatten([styles.button, { backgroundColor: theme.primary }])}>
             <Text style={styles.buttonText}>Go Home</Text>
           </TouchableOpacity>
         </Link>

@@ -16,6 +16,7 @@ import { useNotifications } from '../../src/hooks/useNotifications';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
 import { statusSentence } from '../../src/utils/jobStatus';
 import * as api from '../../src/services/api';
+import { DirIcon } from '../../src/components/ds/DirIcon';
 
 export default function TodayScreen() {
   const theme = useTheme();
@@ -115,7 +116,7 @@ export default function TodayScreen() {
           style={{ marginTop: 20, backgroundColor: theme.colors.accent + '15', borderColor: theme.colors.accent, borderWidth: 1, borderRadius: theme.borderRadius.xl, padding: 16, flexDirection: 'row', alignItems: 'center' }}>
           <Ionicons name="notifications" size={24} color={theme.colors.accent} />
           <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary} style={{ flex: 1, marginStart: 14 }}>{jobs.data.offered.length === 1 ? '1 new request near you' : `${jobs.data.offered.length} new requests near you`}</Text>
-          <Ionicons name="chevron-forward" size={20} color={theme.colors.accent} />
+          <DirIcon name="chevron-forward" size={20} color={theme.colors.accent} />
         </TouchableOpacity>
       ) : null}
     </Screen>

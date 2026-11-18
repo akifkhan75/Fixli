@@ -1,0 +1,18 @@
+# Stops at the code screen: the code itself arrives by SMS (or the API log in dev) and cannot be read here.
+# Works whether or not the number is registered, because the API answers the same either way.
+appId: com.fixli.app
+---
+- launchApp:
+    clearState: true
+- tapOn: "Create account"
+- assertVisible: "How will you use Fixli?"
+- tapOn: "I need a service"
+- tapOn: "Full name"
+- inputText: "Maestro Tester"
+- tapOn: "Mobile number"
+- inputText: "03219876543"
+- tapOn: "Create a password"
+- inputText: "blue-Tiger-42"
+- tapOn: "Continue"
+- assertVisible: "Enter the code"
+- assertVisible: "6-digit code"

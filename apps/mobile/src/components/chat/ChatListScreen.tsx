@@ -31,7 +31,7 @@ export function ChatListScreen() {
     const unread = item.unreadCount > 0;
 
     return (
-      <TouchableOpacity
+      <TouchableOpacity accessibilityRole="button"
         style={[styles.itemContainer, { backgroundColor: theme.colors.surface }]}
         onPress={() => {
           // Push to thread screen (assuming thread lives outside tabs at /thread/[id])
