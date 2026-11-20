@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { seedCatalog } from './seed-catalog';
 
 const prisma = new PrismaClient();
@@ -11,24 +11,10 @@ async function main() {
   }
   console.log('🌱 Seeding DEV database (demo accounts, password: password123)...');
 
-  // Clean existing data
-  await prisma.message.deleteMany();
-  await prisma.conversation.deleteMany();
-  await prisma.ledgerEntry.deleteMany();
-  await prisma.payment.deleteMany();
-  await prisma.jobEvidence.deleteMany();
-  await prisma.changeOrder.deleteMany();
-  await prisma.quote.deleteMany();
-  await prisma.jobRequest.deleteMany();
-  await prisma.servicePackage.deleteMany();
-  await prisma.subscriptionPlan.deleteMany();
-  await prisma.workerService.deleteMany();
-  await prisma.worker.deleteMany();
-  await prisma.address.deleteMany();
-  await prisma.review.deleteMany();
-  await prisma.session.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.user.deleteMany();
+  // Clean existing data: every table except the migration history (the catalog is re-created below).
+  // Done generically so this keeps working as the schema grows (a hand-written delete list went stale).
+  const tables = await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
+  if (tables.length) await prisma.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
 
   const hashedPassword = await bcrypt.hash('password123', 10);
 
@@ -36,7 +22,6 @@ async function main() {
   await seedCatalog(prisma);
   const catPlumbing = await prisma.serviceCategory.findUniqueOrThrow({ where: { name: 'PLUMBING' } });
   const catElectrical = await prisma.serviceCategory.findUniqueOrThrow({ where: { name: 'ELECTRICAL' } });
-  const svcLeak = await prisma.service.findFirstOrThrow({ where: { categoryId: catPlumbing.id } });
 
   // Users
   const cust1 = await prisma.user.create({
@@ -50,12 +35,12 @@ async function main() {
   await prisma.user.create({
     data: { id: 'admin1', name: 'Dev Admin', email: 'admin@fixli.dev', password: hashedPassword, type: 'admin', adminRoles: ['Super Admin'] },
   });
-  console.log('Dev logins (password: password123): customer 0300 1234567 · worker 0311 2345678 · admin admin@fixli.dev (sets up an authenticator at first sign-in)');
+  console.log('Dev logins (password: password123): customer 0300 1234567 · worker 0311 2345678 · admin admin@fixli.dev');
 
   // Workers
   await prisma.worker.create({
     data: {
-      id: 'w1', activationStatus: 'ACTIVE', rating: 4.8, isVerified: true, currency: 'PKR',
+      id: 'w1', activationStatus: 'ACTIVE', isOnline: true, rating: 4.8, isVerified: true, currency: 'PKR',
       pricingModel: 'CALLOUT_PLUS_QUOTE', minimumCallOutFee: 150000, serviceLat: 24.8607, serviceLng: 67.0011,
       serviceAreaLabel: 'Karachi', serviceRadius: 10, bio: 'Dev demo plumber and electrician.',
       services: {
@@ -63,19 +48,13 @@ async function main() {
           { categoryId: catPlumbing.id },
           { categoryId: catElectrical.id }
         ]
-      }
+      },
+      // Open every day, all day, so the demo worker is matchable whenever you test.
+      workingHours: { create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMinute: 0, endMinute: 1440 })) },
     },
   });
-
-  // Jobs
-  await prisma.jobRequest.create({
-    data: {
-      id: 'jr1', customerId: 'cust1', customerName: 'Alice Customer',
-      description: 'My kitchen faucet is leaking constantly.',
-      serviceId: svcLeak.id, urgency: 'High', severity: 'Major',
-      estimatedDuration: '1-2 hours', priceEstimate: 'Moderate',
-      status: 'MATCHES_FOUND', location: 'New York, NY'
-    },
+  await prisma.address.create({
+    data: { userId: 'cust1', label: 'Home', streetAddress: 'House 12, Street 4', city: 'Karachi', area: 'Gulshan-e-Iqbal', country: 'PK', latitude: 24.9215, longitude: 67.0925, isDefault: true },
   });
 
   console.log('✅ Database seeded successfully!');

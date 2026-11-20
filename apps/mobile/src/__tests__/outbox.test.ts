@@ -1,147 +1,107 @@
-jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
-jest.mock('../services/socket', () => ({ realtime: { on: jest.fn(() => () => undefined) } }));
-jest.mock('../services/connectivity', () => ({ connectivity: { online: true, subscribe: jest.fn(() => () => undefined) } }));
-import { ApiError } from '../services/api';
-import { backoffMs, Outbox, type OutboxHandler } from '../services/outbox';
+jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() } }));
+import { Outbox, backoffMs, TTL_URGENT_MS, TTL_SCHEDULED_MS, type KeyValueStore, type OutboxItem } from '../services/offline';
 
-const memory = () => {
+const memory = (): KeyValueStore => {
   const m = new Map<string, string>();
-  return { m, getItem: jest.fn(async (k: string) => m.get(k) ?? null), setItem: jest.fn(async (k: string, v: string) => { m.set(k, v); }), removeItem: jest.fn(async (k: string) => { m.delete(k); }) } as any;
+  return { getItem: async (k) => m.get(k) ?? null, setItem: async (k, v) => { m.set(k, v); }, removeItem: async (k) => { m.delete(k); } };
 };
-const offline = () => new ApiError("You're offline.", 0, 'OFFLINE');
+const base = { userId: 'u1', method: 'POST' as const, endpoint: '/x', label: 'thing' };
 
-const made: Outbox[] = [];
-function make(send: OutboxHandler['send'], extra: Partial<OutboxHandler> = {}, storage = memory(), clock = { t: 1_000_000 }) {
-  const box = new Outbox({ job_action: { describe: (p: any) => p.label, send, ...extra } }, storage, () => clock.t);
-  made.push(box);
-  return { box, storage, clock };
-}
+describe('Outbox', () => {
+  let t = 1_000_000;
+  const now = () => t;
+  let box: Outbox;
+  beforeEach(() => { t = 1_000_000; box = new Outbox(memory(), now); });
 
-describe('outbox', () => {
-  afterEach(() => { made.splice(0).forEach((b) => b.dispose()); });
-
-  it('sends in the order things were done', async () => {
-    const order: string[] = [];
-    const { box } = make(async (p: any) => { order.push(p.label); });
-    await box.add('job_action', 'u1', 'job1', { label: 'on my way' });
-    await box.add('job_action', 'u1', 'job1', { label: 'arrived' });
-    await box.flush();
-    expect(order).toEqual(['on my way', 'arrived']);
-    expect(await box.list()).toEqual([]);
+  it('backs off 5s, 15s, then 45s and stays at 45s', () => {
+    expect([1, 2, 3, 4, 9].map(backoffMs)).toEqual([5000, 15000, 45000, 45000, 45000]);
   });
 
-  it('with no connection it keeps everything, in order, and waits with growing delays', async () => {
-    const send = jest.fn(async () => { throw offline(); });
-    const { box, clock } = make(send);
-    await box.add('job_action', 'u1', 'job1', { label: 'a' });
-    await box.add('job_action', 'u1', 'job1', { label: 'b' });
-    await box.flush();
-    expect(send).toHaveBeenCalledTimes(1); // "b" must not overtake "a"
-    const [a] = await box.list();
-    expect(a.attempts).toBe(1);
-    expect(a.nextAttemptAt).toBe(clock.t + 2_000);
-    await box.flush(); // not due yet: nothing is sent
-    expect(send).toHaveBeenCalledTimes(1);
-    clock.t += 2_000;
-    await box.flush();
-    expect(send).toHaveBeenCalledTimes(2);
-    expect((await box.list())[0].nextAttemptAt).toBe(clock.t + 4_000);
-    expect([1, 2, 3, 4, 5, 6, 7, 8].map(backoffMs)).toEqual([2000, 4000, 8000, 16000, 32000, 60000, 60000, 60000]);
-  });
-
-  it('when the connection returns it sends at once, ignoring the wait', async () => {
-    let up = false;
-    const send = jest.fn(async () => { if (!up) throw offline(); return 'ok'; });
-    const { box } = make(send);
-    await box.add('job_action', 'u1', 'job1', { label: 'a' });
-    await box.flush();
+  it('queues once per id, so a double tap cannot send twice', async () => {
+    await box.enqueue({ ...base, id: 'k1', kind: 'JOB', ttlMs: TTL_URGENT_MS });
+    await box.enqueue({ ...base, id: 'k1', kind: 'JOB', ttlMs: TTL_URGENT_MS });
     expect(await box.list()).toHaveLength(1);
-    up = true;
-    await box.flush({ now: true });
+  });
+
+  it('survives a restart (persisted)', async () => {
+    const store = memory();
+    await new Outbox(store, now).enqueue({ ...base, id: 'k1', kind: 'MESSAGE', ttlMs: TTL_SCHEDULED_MS });
+    expect(await new Outbox(store, now).list()).toHaveLength(1);
+  });
+
+  it('sends in order: job before the messages about it, regardless of queue order', async () => {
+    await box.enqueue({ ...base, id: 'm1', kind: 'MESSAGE', ttlMs: TTL_SCHEDULED_MS });
+    await box.enqueue({ ...base, id: 'j1', kind: 'JOB', ttlMs: TTL_SCHEDULED_MS });
+    const order: string[] = [];
+    const r = await box.flush('u1', async (i) => { order.push(i.id); return 'sent'; });
+    expect(order).toEqual(['j1', 'm1']);
+    expect(r.sent).toEqual(['j1', 'm1']);
     expect(await box.list()).toHaveLength(0);
   });
 
-  it('a server "no" is shown as failed, never retried by itself, and holds back later steps of that job only', async () => {
-    const sent: string[] = [];
-    const { box } = make(async (p: any) => {
-      if (p.label === 'bad') throw new ApiError('You are not assigned to this job', 403);
-      sent.push(p.label);
-    });
-    await box.add('job_action', 'u1', 'job1', { label: 'bad' });
-    await box.add('job_action', 'u1', 'job1', { label: 'after bad' });
-    await box.add('job_action', 'u1', 'job2', { label: 'other job' });
-    await box.flush();
-    await box.flush({ now: true });
-    expect(sent).toEqual(['other job']);
-    const items = await box.list();
-    expect(items.find((i) => i.payload.label === 'bad')).toMatchObject({ status: 'failed', error: 'You are not assigned to this job' });
-    expect(items.find((i) => i.payload.label === 'after bad')?.status).toBe('queued');
-    // The person drops the failed one: the next goes.
-    await box.discard(items.find((i) => i.payload.label === 'bad')!.id);
-    await box.flush();
-    expect(sent).toEqual(['other job', 'after bad']);
+  it('a failed item is retried later with backoff; nothing is sent twice after success', async () => {
+    await box.enqueue({ ...base, id: 'j1', kind: 'JOB', ttlMs: TTL_SCHEDULED_MS });
+    const send = jest.fn<Promise<'sent' | 'retry'>, [OutboxItem]>().mockResolvedValueOnce('retry').mockResolvedValue('sent');
+    await box.flush('u1', send);
+    expect(send).toHaveBeenCalledTimes(1);
+    await box.flush('u1', send); // too soon: still backing off
+    expect(send).toHaveBeenCalledTimes(1);
+    t += 6000;
+    await box.flush('u1', send);
+    expect(send).toHaveBeenCalledTimes(2);
+    t += 60_000;
+    await box.flush('u1', send);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(await box.list()).toHaveLength(0);
   });
 
-  it('timeouts, rate limits and server errors are retried, not shown as failed', async () => {
-    for (const status of [408, 429, 500, 503]) {
-      const { box } = make(async () => { throw new ApiError('busy', status); });
-      await box.add('job_action', 'u1', 'job1', { label: 'a' });
-      await box.flush();
-      expect((await box.list())[0]).toMatchObject({ status: 'queued', attempts: 1 });
-    }
+  it('retryNow (connection is back) skips the wait', async () => {
+    await box.enqueue({ ...base, id: 'j1', kind: 'JOB', ttlMs: TTL_SCHEDULED_MS });
+    const send = jest.fn<Promise<'sent' | 'retry'>, [OutboxItem]>().mockResolvedValueOnce('retry').mockResolvedValue('sent');
+    await box.flush('u1', send);
+    await box.retryNow('u1');
+    await box.flush('u1', send);
+    expect(send).toHaveBeenCalledTimes(2);
   });
 
-  it('a repeat the server refuses because it already worked counts as done', async () => {
-    const alreadyDone = jest.fn(async () => true);
-    const { box } = make(async () => { throw new ApiError('Cannot go from EN_ROUTE to EN_ROUTE', 400); }, { alreadyDone });
-    const sent = jest.fn();
-    box.subscribe((e) => { if (e.type === 'sent') sent(); });
-    await box.add('job_action', 'u1', 'job1', { label: 'a' });
-    await box.flush();
-    expect(alreadyDone).toHaveBeenCalled();
-    expect(await box.list()).toEqual([]);
-    expect(sent).toHaveBeenCalledTimes(1);
+  it('a server rejection drops the item and holds back what depended on it', async () => {
+    await box.enqueue({ ...base, id: 'j1', kind: 'JOB', ttlMs: TTL_SCHEDULED_MS });
+    await box.enqueue({ ...base, id: 'm1', kind: 'MESSAGE', dependsOn: ['j1'], ttlMs: TTL_SCHEDULED_MS });
+    const send = jest.fn(async (i: OutboxItem) => (i.id === 'j1' ? ('rejected' as const) : ('sent' as const)));
+    const r = await box.flush('u1', send);
+    expect(r.rejected).toEqual(['j1']);
+    expect(send).toHaveBeenCalledTimes(1); // the message waited, was not sent in the same pass
   });
 
-  it('survives the app closing: a new outbox on the same storage sends what was waiting, with the same id', async () => {
-    const storage = memory();
-    const ids: string[] = [];
-    const first = make(async () => { throw offline(); }, {}, storage);
-    const id = await first.box.add('job_action', 'u1', 'job1', { label: 'a' });
-    await first.box.flush();
-    const second = make(async (_p, ctx) => { ids.push(ctx.id); }, {}, storage);
-    await second.box.flush({ now: true });
-    expect(ids).toEqual([id]);
-    expect(await second.box.list()).toEqual([]);
+  it('urgent items go stale after 20 minutes: not sent, handed back to ask the user', async () => {
+    await box.enqueue({ ...base, id: 'j1', kind: 'JOB', ttlMs: TTL_URGENT_MS });
+    t += TTL_URGENT_MS + 1;
+    const send = jest.fn(async () => 'sent' as const);
+    const r = await box.flush('u1', send);
+    expect(send).not.toHaveBeenCalled();
+    expect(r.expired.map((i) => i.id)).toEqual(['j1']);
+    await box.renew('j1', 'u1', TTL_URGENT_MS);
+    const r2 = await box.flush('u1', send);
+    expect(r2.sent).toEqual(['j1']);
   });
 
-  it('adding the same id twice queues it once (a double tap)', async () => {
-    const { box } = make(async () => { throw offline(); });
-    await box.add('job_action', 'u1', 'job1', { label: 'a' }, 'same');
-    await box.add('job_action', 'u1', 'job1', { label: 'a' }, 'same');
-    expect(await box.list()).toHaveLength(1);
+  it('only sends the signed-in user\'s items', async () => {
+    await box.enqueue({ ...base, userId: 'other', id: 'j1', kind: 'JOB', ttlMs: TTL_SCHEDULED_MS });
+    const send = jest.fn(async () => 'sent' as const);
+    await box.flush('u1', send);
+    expect(send).not.toHaveBeenCalled();
+    expect(await box.list('other')).toHaveLength(1);
   });
 
-  it('an uploaded-photo id is remembered, so a retry does not upload the photos again', async () => {
-    let calls = 0;
-    const { box } = make(async (p: any, ctx) => {
-      calls += 1;
-      if (calls === 1) { await ctx.patch({ evidence: { photoUploadIds: ['up1'] } }); throw offline(); }
-      expect(p.evidence).toEqual({ photoUploadIds: ['up1'] });
-    });
-    await box.add('job_action', 'u1', 'job1', { label: 'start', evidence: { localPhotoUris: ['file://a.jpg'] } });
-    await box.flush();
-    await box.flush({ now: true });
-    expect(calls).toBe(2);
-  });
-
-  it('signing out removes that account\'s items from the phone', async () => {
-    const { box, storage } = make(async () => { throw offline(); });
-    await box.add('job_action', 'u1', 'job1', { label: 'a' });
-    await box.add('job_action', 'u2', 'job9', { label: 'b' });
-    await box.clear('u1');
-    expect((await box.list()).map((i) => i.userId)).toEqual(['u2']);
-    await box.clear();
-    expect(storage.m.size).toBe(0);
+  it('concurrent flushes do not double-send', async () => {
+    await box.enqueue({ ...base, id: 'j1', kind: 'JOB', ttlMs: TTL_SCHEDULED_MS });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const send = jest.fn(async () => { await gate; return 'sent' as const; });
+    const a = box.flush('u1', send);
+    const b = box.flush('u1', send);
+    release();
+    await Promise.all([a, b]);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });

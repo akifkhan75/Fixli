@@ -15,6 +15,8 @@ export type Permission =
   | 'verification.decide'
   /** Signed links to ID documents and selfies. */
   | 'documents.view'
+  /** The full ID number of a worker (decrypted; every reveal is audited). Only Super Admin holds it: no other role. */
+  | 'verification.reveal'
   | 'users.read'
   | 'users.suspend'
   /** Full phone numbers / emails of customers and workers (masked otherwise). */
@@ -46,7 +48,7 @@ export type Permission =
   | 'staff.manage';
 
 export const ALL_PERMISSIONS: Permission[] = [
-  'dashboard.view', 'verification.read', 'verification.decide', 'documents.view', 'users.read', 'users.suspend', 'pii.view',
+  'dashboard.view', 'verification.read', 'verification.decide', 'documents.view', 'verification.reveal', 'users.read', 'users.suspend', 'pii.view',
   'jobs.read', 'jobs.cancel', 'jobs.manage', 'chat.read', 'safety.read', 'safety.manage', 'disputes.read', 'disputes.resolve',
   'finance.read', 'finance.settle', 'finance.adjust', 'catalog.read', 'catalog.edit', 'config.read', 'config.edit',
   'reviews.moderate', 'recurring.manage', 'audit.read', 'staff.manage',

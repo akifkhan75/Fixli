@@ -7,7 +7,7 @@
     "dev": "nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",
-    "lint": "echo 'No linting configured'",
+    "lint": "oxlint .",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -21,7 +21,9 @@
     "db:seed:catalog": "ts-node prisma/seed-catalog.ts",
     "admin:create": "ts-node scripts/create-admin.ts",
     "load": "node load/run.mjs",
-    "seed:e2e": "ts-node scripts/seed-e2e.ts"
+    "seed:e2e": "ts-node scripts/seed-e2e.ts",
+    "db:encrypt-ids": "ts-node prisma/encrypt-id-numbers.ts",
+    "db:rotate-key": "ts-node prisma/rotate-field-key.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3",
@@ -67,6 +69,7 @@
     "@types/supertest": "^6.0.2",
     "jest": "^29.7.0",
     "jest-mock-extended": "3.0.7",
+    "oxlint": "^1.81.0",
     "prisma": "^5.20.0",
     "socket.io-client": "^4.7.0",
     "supertest": "^6.3.3",
@@ -89,6 +92,14 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "coverageThreshold": {
+      "global": {
+        "statements": 69,
+        "branches": 73,
+        "functions": 62,
+        "lines": 70
+      }
+    }
   }
 }

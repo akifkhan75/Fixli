@@ -1,9 +1,0 @@
-{
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ],
-  "name": "SkillBridge - React Native",
-  "description": "React Native version of the BlueCollar application.",
-  "prompt": ""
-}

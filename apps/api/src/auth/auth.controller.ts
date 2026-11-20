@@ -1,8 +1,8 @@
-import { Controller, Post, Get, Delete, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Param, HttpCode, HttpStatus, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { AdminLoginDto, ChangePasswordDto, LoginDto, RefreshDto, SignupDto, TotpActivateDto, TotpSetupDto } from './dto/auth.dto';
+import { AdminLoginDto, ChangePasswordDto, LoginDto, RefreshDto, ResetPasswordDto, SignupDto, StartPhoneDto, TotpActivateDto, TotpSetupDto, VerifyPhoneDto } from './dto/auth.dto';
 import { StaffTwoFactorService } from './staff-two-factor.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -18,6 +18,42 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a customer or worker with phone + password' })
   signup(@Body() dto: SignupDto) {
     return this.authService.signup(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('phone/start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a signup code to a phone (same answer if the number already has an account)' })
+  startPhone(@Body() dto: StartPhoneDto, @Req() req: { ip?: string }) {
+    return this.authService.startPhone(dto, req.ip);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('phone/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check the code; returns a 15-minute single-use signupToken' })
+  verifyPhone(@Body() dto: VerifyPhoneDto) {
+    return this.authService.verifyPhone(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('password/forgot')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a password-reset code (same answer whether or not the account exists)' })
+  forgotPassword(@Body() dto: StartPhoneDto, @Req() req: { ip?: string }) {
+    return this.authService.forgotPassword(dto, req.ip);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('password/reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set a new password with the code; signs out every device' })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 
   @Public()

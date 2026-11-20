@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkPassword, passwordIssueMessage } from '@fixli/shared';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useI18n } from '../../src/hooks/useI18n';
@@ -14,11 +15,15 @@ import { PhoneField } from '../../src/components/ds/PhoneField';
 import { PasswordField } from '../../src/components/ds/PasswordField';
 import { CountryPicker } from '../../src/components/ds/CountryPicker';
 import { useAppDispatch, useAppSelector } from '../../src/hooks/useRedux';
+import * as api from '../../src/services/api';
+import { OtpCodeStep } from '../../src/components/ds/OtpCodeStep';
 import { signupUser, selectAuthError, selectIsAuthLoading, clearAuthError } from '../../src/store/authSlice';
-import { t } from '../../src/i18n';
 import { DirIcon } from '../../src/components/ds/DirIcon';
 
 type Role = 'customer' | 'worker';
+
+// Survives the app being killed while the user fetches the SMS. The password is never stored.
+const DRAFT_KEY = '@signup_draft_v1';
 
 export default function SignupScreen() {
   const theme = useTheme();
@@ -34,6 +39,32 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [step, setStep] = useState<'details' | 'code'>('details');
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [resendSeconds, setResendSeconds] = useState(60);
+  const draftLoaded = useRef(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const d = JSON.parse(raw);
+          if (d.role === 'customer' || d.role === 'worker') setRole(d.role);
+          if (typeof d.name === 'string') setName(d.name);
+          if (typeof d.phone === 'string' && d.phone) phone.onChangeText(d.phone);
+        }
+      } catch { /* a missing draft is fine */ }
+      draftLoaded.current = true;
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!draftLoaded.current) return;
+    AsyncStorage.setItem(DRAFT_KEY, JSON.stringify({ role, name, phone: phone.text })).catch(() => {});
+  }, [role, name, phone.text]);
 
   const passwordIssue = useMemo(
     () => (password ? checkPassword(password, phone.result.e164)[0] : undefined),
@@ -44,26 +75,56 @@ export default function SignupScreen() {
 
   const clearError = () => { if (error) dispatch(clearAuthError()); };
 
+  const sendCode = async () => {
+    setOtpBusy(true);
+    setOtpError(null);
+    try {
+      const r = await api.startPhoneVerification(phone.result.e164!, country);
+      setResendSeconds(r.resendInSeconds);
+      setStep('code');
+    } catch (e: any) {
+      if (e instanceof api.ApiError && e.code === 'OTP_COOLDOWN') {
+        // A code was already sent a moment ago (e.g. the app restarted): go on and enter it.
+        setResendSeconds(Number((e.details as any)?.retryAfterSeconds) || 60);
+        setStep('code');
+      } else {
+        setOtpError(e instanceof api.ApiError ? e.message : t('auth.networkError'));
+      }
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
   const onSubmit = () => {
     setSubmitted(true);
     phone.touch();
     if (!role || name.trim().length < 2 || !phone.isValid || !password || checkPassword(password, phone.result.e164).length) return;
-    dispatch(signupUser({
-      name: name.trim(),
-      phone: phone.result.e164!,
-      countryCode: country,
-      password,
-      type: role,
-      locale,
-    }));
+    sendCode();
   };
 
-  const back = () => (role ? setRole(null) : router.back());
+  const onVerify = async (code: string) => {
+    setOtpBusy(true);
+    setOtpError(null);
+    try {
+      const { signupToken } = await api.verifyPhoneCode(phone.result.e164!, country, code);
+      await dispatch(signupUser({ name: name.trim(), phone: phone.result.e164!, countryCode: country, password, type: role!, locale, signupToken })).unwrap();
+      AsyncStorage.removeItem(DRAFT_KEY).catch(() => {});
+    } catch (e: any) {
+      // A failed signup (e.g. number already registered) has used up the token: back to the form, where the error shows.
+      if (e instanceof api.ApiError) setOtpError(e.message);
+      else if (typeof e === 'string') setStep('details');
+      else setOtpError(t('auth.networkError'));
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const back = () => (step === 'code' ? setStep('details') : role ? setRole(null) : router.back());
 
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: theme.colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingHorizontal: theme.spacing['2xl'] }]} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel={t('authSignup.back')} style={styles.back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel={t('common.back')} style={styles.back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <DirIcon name="arrow-back" size={28} color={theme.colors.textPrimary} />
         </TouchableOpacity>
 
@@ -95,9 +156,24 @@ export default function SignupScreen() {
             <View style={styles.footer}>
               <Text variant="body" color={theme.colors.textSecondary}>{t('auth.haveAccount')} </Text>
               <TouchableOpacity onPress={() => router.replace('/(auth)/login' as any)} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}>
-                <Text variant="body" weight="bold" color={theme.colors.primaryText}>{t('auth.signIn')}</Text>
+                <Text variant="body" weight="bold" color={theme.colors.primary}>{t('auth.signIn')}</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        ) : step === 'code' ? (
+          <View>
+            <Text variant="h1" weight="extrabold" color={theme.colors.textPrimary} style={{ marginBottom: 8 }}>{t('auth.otpTitle')}</Text>
+            <OtpCodeStep
+              phoneLabel={phone.text}
+              resendSeconds={resendSeconds}
+              loading={otpBusy || loading}
+              error={otpError}
+              submitLabel={t('auth.otpVerify')}
+              onSubmit={onVerify}
+              onResend={sendCode}
+              onChangeNumber={() => setStep('details')}
+              onChangeCode={() => setOtpError(null)}
+            />
           </View>
         ) : (
           <View>
@@ -107,7 +183,6 @@ export default function SignupScreen() {
             ) : <View style={{ height: 12 }} />}
 
             <TextInput
-              testID="name-input"
               label={t('auth.fullName')}
               value={name}
               onChangeText={(v) => { clearError(); setName(v); }}
@@ -130,6 +205,7 @@ export default function SignupScreen() {
             />
             <View style={{ height: 16 }} />
             <PasswordField
+              isNew
               label={t('auth.createPassword')}
               value={password}
               onChangeText={(v) => { clearError(); setPassword(v); }}
@@ -139,12 +215,12 @@ export default function SignupScreen() {
             />
             {!passwordError ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 6 }}>{t('auth.passwordHint')}</Text> : null}
 
-            {error ? (
-              <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text>
+            {error || otpError ? (
+              <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error || otpError}</Text>
             ) : null}
 
             <View style={{ marginTop: 28 }}>
-              <Button title={t('auth.signUp')} variant="primary" size="lg" loading={loading} disabled={loading} onPress={onSubmit} />
+              <Button title={t('auth.continue')} variant="primary" size="lg" loading={loading || otpBusy} disabled={loading || otpBusy} onPress={onSubmit} />
             </View>
           </View>
         )}

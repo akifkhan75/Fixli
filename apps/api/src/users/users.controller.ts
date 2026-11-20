@@ -3,6 +3,8 @@ import { Body, Controller, Get, HttpCode, NotFoundException, Param, Patch, Post,
 import { IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
+import { DataExportService } from './data-export.service';
+import { Throttle } from '@nestjs/throttler';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -16,7 +18,7 @@ class DeleteAccountDto {
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService, private readonly dataExport: DataExportService) {}
 
   @Get()
   @Roles('admin')
@@ -31,6 +33,13 @@ export class UsersController {
   @ApiOperation({ summary: 'Own profile' })
   me(@CurrentUser('id') id: string) {
     return this.usersService.findById(id);
+  }
+
+  @Get('me/export')
+  @Throttle({ default: { limit: 3, ttl: 3_600_000 } })
+  @ApiOperation({ summary: 'Download my own data as JSON (access request). Limited to 3 per hour.' })
+  exportMyData(@CurrentUser('id') id: string) {
+    return this.dataExport.export(id);
   }
 
   @Patch('me')

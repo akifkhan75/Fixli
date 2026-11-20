@@ -46,7 +46,7 @@ export default function Verifications() {
           {detail ? (
             <>
               <p className="text-muted">
-                Phone {detail.worker.user.phone ?? '—'}{detail.reference ? ` · ID number ${detail.reference}` : ''} · submitted {new Date(detail.createdAt).toLocaleString()}
+                Phone {detail.worker.user.phone ?? '—'}{detail.referenceMasked ? ` · ID number ${detail.referenceMasked}` : ''} · submitted {new Date(detail.createdAt).toLocaleString()}
               </p>
               <p className="text-muted">Other documents: {detail.worker.verifications.map((v) => `${TYPE_LABEL[v.type] ?? v.type} (${v.status.toLowerCase().replace('_', ' ')})`).join(', ')}</p>
               <div className="detail-grid" style={{ margin: '1rem 0' }}>

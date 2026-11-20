@@ -24,6 +24,7 @@ dist/
 
 # Testing
 coverage/
+test-results/
 
 # Logs
 logs/
@@ -52,3 +53,10 @@ apps/mobile/android/
 /scratch_login.tsx
 /screenshot.png
 *.prisma.bak
+# Scratch / legacy artifacts
+*.bak
+scratch_*
+/screenshot.png
+/metadata.json
+Prolivo_*.zip
+venv/

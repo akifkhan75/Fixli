@@ -15,6 +15,12 @@ import { connectivity } from '../src/services/connectivity';
 import { analytics } from '../src/services/analytics';
 import { clearCache } from '../src/services/cache';
 import { OutboxBar } from '../src/components/ds/OutboxBar';
+import { AnalyticsService } from '../src/services/productAnalytics';
+
+// Product-funnel events only flow while the person has agreed to analytics (preferences screen).
+AnalyticsService.consentGate = () => analytics.hasConsent;
+import { startOutbox } from '../src/services/outboxRunner';
+import { OutboxBanner } from '../src/components/ds/OutboxBanner';
 import { NotificationsProvider } from '../src/hooks/useNotifications';
 import { useWorkerLocationTracker } from '../src/hooks/useWorkerLocationTracker';
 import * as Sentry from '@sentry/react-native';
@@ -23,6 +29,24 @@ import { initSentry } from '../src/observability/sentry';
 initSentry();
 
 registerOutboxHandlers();
+
+/** Sends queued work (offline requests and messages) whenever the connection allows. */
+/** Analytics: starts once, and ties events to the pseudonymous user id (never phone or name). */
+function AnalyticsHandler() {
+  const currentUser = useAppSelector(selectCurrentUser);
+  useEffect(() => { void AnalyticsService.init().then(() => AnalyticsService.track('app_open')); }, []);
+  useEffect(() => {
+    if (currentUser && (currentUser.type === 'customer' || currentUser.type === 'worker')) AnalyticsService.identify(currentUser.id, currentUser.type);
+    else AnalyticsService.reset();
+  }, [currentUser?.id, currentUser?.type]);
+  return null;
+}
+
+function OutboxHandler() {
+  const currentUser = useAppSelector(selectCurrentUser);
+  useEffect(() => (currentUser?.id ? startOutbox(currentUser.id) : undefined), [currentUser?.id]);
+  return currentUser?.id ? <OutboxBanner userId={currentUser.id} /> : null;
+}
 
 function SocketHandler() {
   const currentUser = useAppSelector(selectCurrentUser);
@@ -73,6 +97,12 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
+import {
+  NotoNastaliqUrdu_400Regular,
+  NotoNastaliqUrdu_500Medium,
+  NotoNastaliqUrdu_600SemiBold,
+  NotoNastaliqUrdu_700Bold,
+} from '@expo-google-fonts/noto-nastaliq-urdu';
 import * as SplashScreen from 'expo-splash-screen';
 
 SplashScreen.preventAutoHideAsync();
@@ -129,6 +159,8 @@ function RootLayoutInner() {
         <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
           <SessionGate>
             <SocketHandler />
+            <OutboxHandler />
+            <AnalyticsHandler />
             <LocationTrackerHandler />
             <OutboxBar />
             <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
@@ -156,6 +188,10 @@ function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
+    NotoNastaliqUrdu_400Regular,
+    NotoNastaliqUrdu_500Medium,
+    NotoNastaliqUrdu_600SemiBold,
+    NotoNastaliqUrdu_700Bold,
   });
 
   if (!fontsLoaded) return null;

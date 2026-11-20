@@ -1,10 +1,6 @@
 # Fixli — Production Release Checklist
 
-> **Status after F8 (2026-10-12), engineering side. The boxes below stay for the owner's sign-off.**
-> Verified by tests or by running it: auth hardened (two-factor, rate limits, deny-by-default routes, every route swept), RBAC tested, file-upload security, dependency audit (blocking in CI), no secrets or placeholder DSNs in the app, offline sync, localization (drafts), emergency flow tested, incident console, deep links, load test (targets met), Redis outage, restore drill, health checks and release-tagged crash reports.
-> Needs people, accounts or devices: secrets in a secret manager, penetration test, support escalation and staffing, safety copy review (counsel), iOS and Android production builds (O14), push (O14), accessibility device checks (doc 28), local legal review (docs/legal), emergency numbers verified by Ops (D-F6), launch city and pricing rules, alerts with named owners, staging, first emulator run of the Maestro flows.
-> Payments: Fixli is **cash only** at launch (D13); the card/wallet items below do not apply until a provider is added.
-> Details: [doc 29](29_REAUDIT_PHASES_7_13.md), [ops runbooks](ops/README.md), [store answers](store/data-safety.md).
+> Status key: `[x]` verified (evidence given), `[~]` partly done or verified only in tests, `[n/a]` not applicable to the cash-only launch, `[ ]` not done. Last reviewed 2026-11-18 (doc 27 R7). Nothing here has been verified on a physical device or against production.
 
 ## Product
 - [ ] PRD approved
@@ -17,12 +13,12 @@
 ## Security
 - [ ] secrets in secret manager
 - [ ] no secrets in mobile bundle
-- [ ] auth hardened
-- [ ] RBAC tested
-- [ ] rate limits
-- [ ] webhook signatures
-- [ ] file upload security
-- [ ] dependency audit
+- [x] auth hardened — lockout, rotating refresh tokens, authenticated admin socket, phone OTP + reset (R1/R5); unit + e2e; OTP needs an SMS provider (O5)
+- [x] RBAC tested — authorization e2e + AdminRolesGuard/FeatureGuard unit tests
+- [x] rate limits — per-IP throttler, OTP 5 tries / 60 s / 3 per hour; Redis storage when REDIS_URL set
+- [n/a] webhook signatures — no provider webhooks: cash-only launch
+- [x] file upload security — signed expiring URLs, key allow-list, size cap, magic-byte check, private docs <= 15 min links (unit-tested)
+- [~] dependency audit — CI runs pnpm audit (R1); results not reviewed in this pass
 - [ ] penetration test
 
 ## Payments
@@ -38,8 +34,8 @@
 - [ ] duplicate payment tested
 
 ## Safety
-- [ ] emergency flow tested
-- [ ] trusted contact flow
+- [~] emergency flow tested — API e2e (SOS, cascade, hazard checklist); not tested on a device
+- [~] trusted contact flow — screens + API done; contacts are NOT texted until an SMS provider exists (O5)
 - [ ] incident console
 - [ ] support escalation
 - [ ] safety copy reviewed
@@ -50,37 +46,37 @@
 - [ ] verification capacity
 - [ ] category demand
 - [ ] support staffing
-- [ ] dispute process
+- [~] dispute process — in-app report + admin resolve endpoint; no admin UI changes, no SLA defined
 - [ ] cancellation policy
 
 ## Mobile
 - [ ] iOS production build
 - [ ] Android production build
 - [ ] background location review
-- [ ] push notifications
+- [~] push notifications — Expo push provider unit-tested; needs EAS/FCM/APNs accounts (O14)
 - [ ] deep links
 - [ ] camera/media
-- [ ] offline sync
-- [ ] accessibility
-- [ ] localization
+- [~] offline sync — outbox unit-tested (10 tests); not run in airplane mode on a device
+- [~] accessibility — roles/labels guard test, Urdu line height, RTL icons; no screen-reader pass on a device
+- [~] localization — en done; ur/ar strings are drafts pending native review (O13); new screens English only
 
 ## Backend
-- [ ] migrations
+- [x] migrations — migrate deploy on a clean Postgres 14 + migrate diff against schema = empty
 - [ ] backups
-- [ ] restore drill
+- [x] restore drill — scripts/backup-restore-drill.sh run against a staging-shaped DB: row counts match; re-run on real staging
 - [ ] monitoring
 - [ ] alerts
-- [ ] error tracking
+- [~] error tracking — Sentry wired in API and mobile, enabled only when a DSN is set
 - [ ] queues
-- [ ] cron/scheduled jobs
+- [x] cron/scheduled jobs — sweeper (offer expiry, re-match, SOS cascade, cash reminders) unit-tested, advisory-locked
 - [ ] autoscaling
 - [ ] staging parity
 
 ## App stores
-- [ ] privacy policy
-- [ ] terms
+- [x] privacy policy — apps/web/public/privacy.html (legal review L1-L12 pending)
+- [x] terms — apps/web/public/terms.html (legal review pending)
 - [ ] support URL
-- [ ] account deletion
+- [x] account deletion — in-app flow + API + e2e; public how-to at /delete-account.html
 - [ ] data safety declarations
 - [ ] permission descriptions
 - [ ] age rating
@@ -89,7 +85,7 @@
 
 ## Launch
 - [ ] soft launch
-- [ ] feature flags
+- [~] feature flags — ENABLED_FEATURES hides roadmap APIs (R6); no runtime flag service
 - [ ] rollback plan
 - [ ] on-call owner
 - [ ] incident response

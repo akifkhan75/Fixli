@@ -165,8 +165,10 @@ describe('Auth & public endpoints (e2e)', () => {
   });
 
   describe('public catalog', () => {
-    it('/api/service-packages is public', () =>
-      http().get('/api/service-packages').expect(200).expect((res) => expect(Array.isArray(res.body)).toBe(true)));
+    it('roadmap APIs are hidden (404) until their feature is enabled', async () => {
+      await http().get('/api/service-packages').expect(404);
+      await http().get('/api/subscription-plans').expect(404);
+    });
     it('/api/workers needs a token', () => http().get('/api/workers').expect(401));
   });
 });

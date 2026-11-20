@@ -1,0 +1,19 @@
+# Seeded customer (apps/api: pnpm db:seed): 0300 1234567 / password123
+appId: com.fixli.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Welcome back"
+- tapOn: "Mobile number"
+- inputText: "03001234567"
+- tapOn: "Password"
+- inputText: "password123"
+- tapOn: "Sign In"
+- assertVisible: "Hello,"
+- tapOn: "Account"
+- assertVisible: "Saved workers"
+- tapOn: "My reports"
+- assertVisible: "My reports"
+- back
+- tapOn: "Log out"
+- assertVisible: "Welcome back"

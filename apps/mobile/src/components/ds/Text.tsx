@@ -1,6 +1,20 @@
 import React from 'react';
 import { Text as RNText, TextProps as RNTextProps, StyleSheet } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
+import { getLocale } from '../../i18n';
+
+/**
+ * Nastaliq stacks its marks tall: at a normal line height Urdu lines collide. Text in Urdu uses
+ * the Noto Nastaliq Urdu face (it has four weights) at 1.7x line height; other languages keep Inter.
+ */
+export const URDU_LINE_HEIGHT = 1.7;
+const URDU_FONT: Record<string, string> = {
+  normal: 'NotoNastaliqUrdu_400Regular',
+  medium: 'NotoNastaliqUrdu_500Medium',
+  semibold: 'NotoNastaliqUrdu_600SemiBold',
+  bold: 'NotoNastaliqUrdu_700Bold',
+  extrabold: 'NotoNastaliqUrdu_700Bold',
+};
 
 export type TextVariant =
   | 'h1'
@@ -14,6 +28,7 @@ export type TextVariant =
 export interface TextProps extends RNTextProps {
   variant?: TextVariant;
   color?: string; // Optional hex or theme key (handled internally)
+  /** Leave unset to follow the reading direction (right edge in Urdu/Arabic). */
   align?: 'left' | 'center' | 'right' | 'justify';
   weight?: 'normal' | 'medium' | 'semibold' | 'bold' | 'extrabold';
 }
@@ -21,7 +36,7 @@ export interface TextProps extends RNTextProps {
 export const Text = ({
   variant = 'body',
   color,
-  align = 'left',
+  align,
   weight,
   style,
   children,
@@ -79,14 +94,19 @@ export const Text = ({
       break;
   }
 
+  const urdu = getLocale() === 'ur';
+  if (urdu) fontFamily = URDU_FONT[activeWeight] ?? URDU_FONT.normal;
+
   return (
     <RNText
       style={[
         {
           fontSize,
           color: textColor,
-          textAlign: align,
+          // 'auto' follows the text's own direction, so Urdu/Arabic align right without every screen asking.
+          textAlign: align ?? 'auto',
           fontFamily,
+          ...(urdu ? { lineHeight: Math.round(fontSize * URDU_LINE_HEIGHT) } : {}),
         },
         style,
       ]}

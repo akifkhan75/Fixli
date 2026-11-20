@@ -18,7 +18,7 @@ const APPS = /\b(?:whats\s?app|wa\.me|telegram|signal|imo|viber|insta(?:gram)?|s
  * Prices ("Rs 1,500.00"), times ("3.5 hours") and short codes stay well below that.
  */
 function hasPhone(text: string): boolean {
-  const runs = normaliseDigits(text).match(/\+?\d[\d\s().-]{8,}\d/g) ?? [];
+  const runs = normaliseDigits(text).match(/\+?\d[\d\s().-]{8,}\d/g) ?? ([] as string[]);
   return runs.some((r) => {
     if (/\d\.\d{1,2}(?!\d)/.test(r) && !/\s|-/.test(r)) return false; // a decimal amount
     const digits = r.replace(/\D/g, '');

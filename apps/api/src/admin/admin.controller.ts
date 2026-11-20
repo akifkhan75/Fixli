@@ -50,6 +50,13 @@ export class AdminController {
     return this.verification.detail(id, adminId);
   }
 
+  @Post('verification-cases/:id/reveal-reference')
+  @RequirePermission('verification.reveal')
+  @ApiOperation({ summary: 'Reveal the full ID number (always audited)' })
+  reveal(@Param('id') id: string, @CurrentUser('id') adminId: string) {
+    return this.verification.revealReference(id, adminId);
+  }
+
   @Post('verification-cases/:id/decision')
   @RequirePermission('verification.decide')
   @ApiOperation({ summary: 'Approve, reject, or ask for more information' })

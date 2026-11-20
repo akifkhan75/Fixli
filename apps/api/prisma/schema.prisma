@@ -576,6 +576,10 @@ model Payment {
 
   /// One payment per job per method: marking cash twice returns the same row.
   @@unique([jobRequestId, method])
+  /// Amount the customer says they actually paid, when they dispute the worker's figure.
+  claimedAmount  Int?
+  /// 0 none, 1 (+2h), 2 (+12h), 3 (+23h) reminders sent to the customer.
+  reminderStage  Int        @default(0)
 }
 
 model LedgerEntry {
@@ -714,6 +718,8 @@ model Incident {
   /// SOS kind: LIFE_THREATENING, WATER, ELECTRIC, GAS, IN_JOB
   kind                String?
   description         String?
+  latitude            Float?
+  longitude           Float?
   /// Trusted-contact alert outcome: SENT, PARTLY_SENT, NO_PROVIDER, NO_CONTACTS, FAILED (null = not an alerting incident)
   contactsAlertStatus String?
   contactsAlerted     Int            @default(0)
@@ -1058,4 +1064,23 @@ model FeatureFlag {
   value       Json
   updatedById String?
   updatedAt   DateTime @updatedAt
+}
+
+/// One-time phone code for signup or password reset (doc 27 R5). Only a bcrypt hash of the code is stored.
+model PhoneVerification {
+  id         String    @id @default(cuid())
+  phone      String
+  /// SIGNUP | PASSWORD_RESET
+  purpose    String
+  codeHash   String
+  attempts   Int       @default(0)
+  ip         String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  /// Set when the right code was entered (signup: the signup token may now be used once).
+  verifiedAt DateTime?
+  /// Set when used up, replaced by a newer code, or locked by too many wrong tries.
+  consumedAt DateTime?
+
+  @@index([phone, purpose, createdAt])
 }

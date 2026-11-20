@@ -39,6 +39,10 @@ export class SignupDto extends DeviceDto {
   @ApiPropertyOptional({ enum: ['en', 'ar', 'ur'] })
   @IsOptional() @IsIn(['en', 'ar', 'ur'])
   locale?: 'en' | 'ar' | 'ur';
+
+  @ApiPropertyOptional({ description: 'From POST /auth/phone/verify; required when OTP is on' })
+  @IsOptional() @IsString() @MaxLength(2000)
+  signupToken?: string;
 }
 
 export class LoginDto extends DeviceDto {
@@ -91,5 +95,27 @@ export class ChangePasswordDto {
   currentPassword: string;
 
   @ApiProperty() @IsString() @MaxLength(200)
+  newPassword: string;
+}
+
+export class StartPhoneDto {
+  @ApiProperty({ example: '0300 1234567' })
+  @IsString() @IsNotEmpty() @MaxLength(32)
+  phone: string;
+
+  @ApiProperty({ example: 'PK' })
+  @IsString() @Length(2, 2)
+  countryCode: string;
+}
+
+export class VerifyPhoneDto extends StartPhoneDto {
+  @ApiProperty({ example: '123456' })
+  @IsString() @Length(6, 6)
+  code: string;
+}
+
+export class ResetPasswordDto extends VerifyPhoneDto {
+  @ApiProperty()
+  @IsString() @MaxLength(200)
   newPassword: string;
 }

@@ -37,9 +37,11 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { PaymentsModule } from './payments/payments.module';
-import { MoneyModule } from './money/money.module';
 import { BlocksModule } from './blocks/blocks.module';
 import { SafetyModule } from './safety/safety.module';
+import { MoneyModule } from './money/money.module';
+import { SmsModule } from './sms/sms.module';
+import { FeatureGuard } from './common/features/feature.guard';
 
 @Module({
   imports: [
@@ -81,10 +83,11 @@ import { SafetyModule } from './safety/safety.module';
     ServiceCatalogModule,
     PropertiesModule,
     RecurringJobsModule,
-    MoneyModule,
     BlocksModule,
     PaymentsModule,
     SafetyModule,
+    MoneyModule,
+    SmsModule,
   ],
   controllers: [AppController, AppConfigController],
   providers: [
@@ -94,6 +97,7 @@ import { SafetyModule } from './safety/safety.module';
     { provide: APP_GUARD, useClass: RolesGuard },
     // Staff routes: one permission each, deny by default (common/auth/permissions.ts).
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_GUARD, useClass: FeatureGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

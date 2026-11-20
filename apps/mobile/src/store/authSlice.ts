@@ -2,6 +2,8 @@ import { analytics } from '../services/analytics';
 import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
 import type { IUser, AuthFlowState } from '@fixli/shared';
 import * as api from '../services/api';
+import { outbox } from '../services/offline';
+import { AnalyticsService } from '../services/productAnalytics';
 import { saveTokens, clearTokens, getAccessToken } from '../services/session';
 import type { CountryCode } from '@fixli/shared';
 import type { RootState } from './index';
@@ -27,7 +29,7 @@ const initialState: AuthState = {
 };
 
 export interface LoginArgs { phone: string; countryCode: CountryCode; password: string }
-export interface SignupArgs extends LoginArgs { name: string; type: 'customer' | 'worker'; locale?: 'en' | 'ar' | 'ur' }
+export interface SignupArgs extends LoginArgs { name: string; type: 'customer' | 'worker'; locale?: 'en' | 'ar' | 'ur'; signupToken?: string }
 
 export const loginUser = createAsyncThunk<
   { user: IUser; token: string },
@@ -53,6 +55,7 @@ export const signupUser = createAsyncThunk<
     const res = await api.signup(args);
     void analytics.track('sign_up_completed', { role: args.type });
     await saveTokens(res.token, res.refreshToken);
+    AnalyticsService.track(args.type === 'worker' ? 'professional_signup' : 'customer_signup');
     return { user: res.user, token: res.token };
   } catch (error: any) {
     return rejectWithValue(friendlyAuthError(error));
@@ -88,6 +91,8 @@ export const logoutUser = createAsyncThunk<void, void>('auth/logoutUser', async 
     // Offline or already expired: still sign out locally.
   }
   await clearTokens();
+  // Queued messages belong to the person who wrote them: never send them as the next user.
+  await outbox.clear();
 });
 
 function friendlyAuthError(error: unknown): string {

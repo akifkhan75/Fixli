@@ -12,11 +12,15 @@ import { hasKey, t } from '../i18n';
 import { API_URL } from '../config';
 import { getAccessToken, getDeviceInfo, refreshAccessToken } from './session';
 import type { CountryListItem, CountryCode } from '@fixli/shared';
+import { AnalyticsService } from './productAnalytics';
 
 // ── HTTP Client ──────────────────────────────────────────────
 
 /** No answer from the server at all (as opposed to a server "no"): safe to retry later. */
 export const isOffline = (e: unknown) => e instanceof ApiError && e.code === 'OFFLINE';
+/** Fire an analytics event after a call succeeds. Never carries personal data (see services/analytics). */
+const tracked = <T,>(call: Promise<T>, event: string, props?: Record<string, unknown>): Promise<T> =>
+  call.then((r) => { AnalyticsService.track(event, props); return r; });
 
 export class ApiError extends Error {
   /** The sentence to show: translated when we know the error code, else the server's own words. */
@@ -50,7 +54,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 // Credential endpoints must never trigger a refresh-and-retry loop.
-const NO_REFRESH = ['/auth/login', '/auth/signup', '/auth/refresh', '/auth/admin/login'];
+const NO_REFRESH = ['/auth/login', '/auth/signup', '/auth/refresh', '/auth/admin/login', '/auth/phone/start', '/auth/phone/verify', '/auth/password/forgot', '/auth/password/reset'];
 
 async function send(endpoint: string, options: RequestInit, token?: string | null) {
   const authHeaders: Record<string, string> = token === undefined ? await getAuthHeaders() : token ? { Authorization: `Bearer ${token}` } : {};
@@ -120,13 +124,29 @@ export async function getCurrentUser(): Promise<IUser> {
 
 export async function signup(data: {
   name: string; phone: string; countryCode: CountryCode; password: string;
-  type: 'customer' | 'worker'; locale?: 'en' | 'ar' | 'ur';
+  type: 'customer' | 'worker'; locale?: 'en' | 'ar' | 'ur'; signupToken?: string;
 }): Promise<IAuthResponse> {
   return request<IAuthResponse>('/auth/signup', {
     method: 'POST',
     body: JSON.stringify({ ...data, ...(await getDeviceInfo()) }),
   });
 }
+
+export interface OtpStarted { resendInSeconds: number; expiresInMinutes: number }
+
+/** Texts a 6-digit code. Answers the same whether or not the number already has an account. */
+export const startPhoneVerification = (phone: string, countryCode: CountryCode) =>
+  request<OtpStarted>('/auth/phone/start', { method: 'POST', body: JSON.stringify({ phone, countryCode }) });
+
+/** Returns a 15-minute single-use token that signup requires. */
+export const verifyPhoneCode = (phone: string, countryCode: CountryCode, code: string) =>
+  request<{ signupToken: string }>('/auth/phone/verify', { method: 'POST', body: JSON.stringify({ phone, countryCode, code }) });
+
+export const requestPasswordReset = (phone: string, countryCode: CountryCode) =>
+  request<OtpStarted>('/auth/password/forgot', { method: 'POST', body: JSON.stringify({ phone, countryCode }) });
+
+export const resetPassword = (phone: string, countryCode: CountryCode, code: string, newPassword: string) =>
+  request<{ success: boolean }>('/auth/password/reset', { method: 'POST', body: JSON.stringify({ phone, countryCode, code, newPassword }) });
 
 // ── Users ────────────────────────────────────────────────────
 
@@ -198,7 +218,8 @@ export interface OfferCard {
   worker: { id: string; name: string; profileImageUrl: string | null; rating: number; ratingCount: number; jobsCompleted: number; isVerified: boolean; experienceYears: number; distanceKm: number | null };
 }
 export const listOffers = (jobId: string) => request<OfferCard[]>(`/job-requests/${jobId}/offers`);
-export const acceptOffer = (offerId: string) => request<{ jobId: string; status: string }>(`/offers/${offerId}/accept`, { method: 'POST' });
+export const acceptOffer = (offerId: string) =>
+  tracked(request<{ jobId: string; status: string }>(`/offers/${offerId}/accept`, { method: 'POST' }), 'booking_confirmed');
 
 export interface FeedItem {
   id: string; title: string | null; description: string; area: string | null; city: string | null; urgency: string | null; isEmergency: boolean;
@@ -207,7 +228,7 @@ export interface FeedItem {
 }
 export const getWorkerFeed = () => request<FeedItem[]>('/workers/me/requests');
 export const submitOffer = (jobId: string, amount: number, etaMinutes?: number, note?: string) =>
-  request<MyOffer>(`/job-requests/${jobId}/offers`, { method: 'POST', body: JSON.stringify({ amount, etaMinutes, note }) });
+  tracked(request<MyOffer>(`/job-requests/${jobId}/offers`, { method: 'POST', body: JSON.stringify({ amount, etaMinutes, note }) }), 'job_accepted');
 export const withdrawOffer = (jobId: string) => request<{ success: boolean }>(`/job-requests/${jobId}/offers/mine`, { method: 'DELETE' });
 export const notInterested = (jobId: string) => request<{ success: boolean }>(`/job-requests/${jobId}/not-interested`, { method: 'POST' });
 
@@ -313,7 +334,12 @@ export const removeFavorite = (workerId: string) => request<{ success: boolean }
 
 /** Delete my account (password required). Refused during an active job or with commission owed. */
 export const deleteAccount = (password: string) => request<{ success: boolean }>('/users/me/delete', { method: 'POST', body: JSON.stringify({ password }) });
-
+export interface LedgerSummary {
+  /** Minor units; negative = you owe Fixli fees. */
+  balance: number; owed: number; currency: string;
+  status: 'OK' | 'WARN' | 'BLOCKED'; softLimit: number; hardLimit: number; settleDays: number;
+  history: { id: string; type: string; amount: number; createdAt: string }[];
+}
 // ── AI ─────────────────────────────────────────────────────
 
 export async function generateQuoteDraft(jobDescription: string, workerNotes: string): Promise<string> {
@@ -439,7 +465,8 @@ export const setWorkerHours = (days: { weekday: number; startMinute: number; end
 export const addPortfolioItem = (title: string, uploadIds: string[], description?: string) => request<WorkerMe>('/workers/me/portfolio', { method: 'POST', body: JSON.stringify({ title, uploadIds, description }) });
 export const removePortfolioItem = (id: string) => request<WorkerMe>(`/workers/me/portfolio/${id}`, { method: 'DELETE' });
 export const submitWorkerDocument = (type: VerificationType, uploadIds: string[], reference?: string) => request<WorkerMe>('/workers/me/verification', { method: 'POST', body: JSON.stringify({ type, uploadIds, reference }) });
-export const submitWorkerForReview = () => request<WorkerMe>('/workers/me/submit', { method: 'POST' });
+export const submitWorkerForReview = () =>
+  tracked(request<WorkerMe>('/workers/me/submit', { method: 'POST' }), 'verification_completed');
 
 export interface PublicWorker {
   id: string; rating: number; ratingCount: number; jobsCompleted: number; bio: string | null; experienceYears: number;
@@ -480,3 +507,57 @@ export interface TrustedContact { id: string; name: string; phone: string; notif
 export const getTrustedContacts = () => request<TrustedContact[]>('/safety/trusted-contacts');
 export const addTrustedContact = (name: string, phone: string) => request<TrustedContact>('/safety/trusted-contacts', { method: 'POST', body: JSON.stringify({ name, phone }) });
 export const removeTrustedContact = (id: string) => request<{ success: boolean }>(`/safety/trusted-contacts/${id}`, { method: 'DELETE' });
+
+// ── Safety & SOS ─────────────────────────────────────────────
+
+export interface EmergencyNumber { label: string; number: string }
+export interface EmergencyNumbers { country: string; numbers: EmergencyNumber[]; disclaimer: string }
+export interface IncidentInput {
+  type: 'SOS' | 'EMERGENCY' | 'REPORT_PROBLEM';
+  severity: 'LIFE_THREATENING' | 'PROPERTY_DAMAGE' | 'MODERATE';
+  description?: string; latitude?: number; longitude?: number;
+  sosKind?: SosKind; addressId?: string; idempotencyKey?: string;
+}
+export interface IncidentResult {
+  jobId: string | null; replay: boolean; country: string; disclaimer: string;
+  emergencyNumbers: EmergencyNumber[];
+  trustedContacts: { total: number; notified: number; smsConfigured: boolean };
+}
+export const reportIncident = (data: IncidentInput) =>
+  tracked(request<IncidentResult>('/safety/incidents', { method: 'POST', body: JSON.stringify(data) }), 'incident_created', { type: data.type, severity: data.severity });
+
+// ── Reports (disputes) & saved workers ───────────────────────
+
+export const DISPUTE_CATEGORIES = [
+  { id: 'QUALITY', label: 'Work was not good' },
+  { id: 'NO_SHOW', label: 'Did not show up' },
+  { id: 'PRICE', label: 'Price problem' },
+  { id: 'DAMAGE', label: 'Something was damaged' },
+  { id: 'BEHAVIOUR', label: 'Rude or unsafe behaviour' },
+  { id: 'OTHER', label: 'Something else' },
+] as const;
+export interface DisputeItem {
+  id: string; jobRequestId: string; category: string; reason: string; description: string | null;
+  status: 'OPEN' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED'; resolution: string | null; createdAt: string;
+}
+export const createDispute = (data: { jobRequestId: string; category: DisputeCategory; reason: string; description?: string }) =>
+  request<DisputeItem>('/disputes', { method: 'POST', body: JSON.stringify(data) });
+export const getMyDisputes = () => request<DisputeItem[]>('/disputes/my-disputes');
+
+// ── Outbox delivery ──────────────────────────────────────────
+
+/** Sends one queued request and says what to do next. 'sent' also covers "the server already has it" (409). */
+export async function sendQueued(item: { method: string; endpoint: string; body?: unknown }): Promise<'sent' | 'retry' | 'rejected'> {
+  try {
+    await request(item.endpoint, { method: item.method, body: item.body === undefined ? undefined : JSON.stringify(item.body) });
+    return 'sent';
+  } catch (e) {
+    if (!(e instanceof ApiError)) return 'retry';
+    if (e.status === 409) return 'sent';
+    if (e.status === 0 || e.status === 401 || e.status === 408 || e.status === 429 || e.status >= 500) return 'retry';
+    return 'rejected';
+  }
+}
+
+/** True when a failed call means "no connection", i.e. the action can be queued and sent later. */
+export const isOfflineError = (e: unknown) => e instanceof ApiError && e.code === 'OFFLINE';

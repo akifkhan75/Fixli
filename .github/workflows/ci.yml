@@ -74,7 +74,7 @@ jobs:
         run: pnpm lint
 
       - name: API unit tests
-        run: pnpm --filter @fixli/api test
+        run: pnpm --filter @fixli/api exec jest --coverage --runInBand # coverage thresholds in apps/api/package.json (70% lines)
 
       # Boots the real AppModule: catches dependency-injection errors that mocked unit tests can't.
       - name: API e2e tests
@@ -88,7 +88,7 @@ jobs:
           pnpm --filter web build
 
       - name: Mobile tests
-        run: pnpm --filter @fixli/mobile test
+        run: pnpm --filter @fixli/mobile exec jest --coverage # coverage floor in apps/mobile/package.json
 
       - name: Mobile bundle (Android)
         working-directory: apps/mobile

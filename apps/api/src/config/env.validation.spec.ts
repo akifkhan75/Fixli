@@ -46,4 +46,15 @@ describe('validateEnv', () => {
   it('requires FRONTEND_URL in production', () => {
     expect(() => validateEnv({ ...base, NODE_ENV: 'production' })).toThrow(/FRONTEND_URL/);
   });
+
+  describe('FIELD_ENCRYPTION_KEY', () => {
+    const good = Buffer.alloc(32, 1).toString('base64');
+    const prod = { ...base, NODE_ENV: 'production', FRONTEND_URL: 'https://x.test', PUBLIC_API_URL: 'https://api.x.test/api', S3_BUCKET: 'b', STORAGE_PUBLIC_BASE_URL: 'https://cdn.x.test', TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64') };
+    it('is required in production', () => expect(() => validateEnv(prod)).toThrow(/FIELD_ENCRYPTION_KEY is required/));
+    it('must decode to 32 bytes', () => {
+      expect(() => validateEnv({ ...base, FIELD_ENCRYPTION_KEY: Buffer.alloc(16).toString('base64') })).toThrow(/32 bytes/);
+      expect(validateEnv({ ...prod, FIELD_ENCRYPTION_KEY: good }).FIELD_ENCRYPTION_KEY).toBe(good);
+    });
+    it('is optional in development', () => expect(validateEnv(base).FIELD_ENCRYPTION_KEY).toBeUndefined());
+  });
 });

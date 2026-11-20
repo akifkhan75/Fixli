@@ -61,6 +61,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-fixli}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fixli}?schema=public
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env (openssl rand -base64 48)}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 3002
       NODE_ENV: ${NODE_ENV:-development}

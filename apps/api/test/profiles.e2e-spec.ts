@@ -277,7 +277,10 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
 
       const detail = await http().get(`/api/admin/v1/verification-cases/${idCaseId}`).set(as('admin')).expect(200);
       expect(detail.body.documents).toHaveLength(2);
-      expect(detail.body.reference).toBe('42101-1234567-1');
+      expect(detail.body.reference).toBeUndefined(); // never in a detail view
+      expect(detail.body.referenceMasked).toMatch(/\*+.*1$/);
+      const revealed = await http().post(`/api/admin/v1/verification-cases/${idCaseId}/reveal-reference`).set(as('admin')).expect(201);
+      expect(revealed.body.reference).toBe('42101-1234567-1');
       expect(JSON.stringify(detail.body)).not.toMatch(/"documentKeys"/);
       await http().get(pathOf(detail.body.documents[0].url)).expect(200);
       const audit = await prisma.auditLog.findFirst({ where: { action: 'verification.documents_viewed', entityId: idCaseId } });

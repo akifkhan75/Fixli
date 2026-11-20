@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
 import * as bcrypt from 'bcryptjs';
 import { AppModule } from '../src/app.module';
+import { encryptField } from '../src/common/crypto/field-crypto';
 import { PrismaService } from '../src/database/prisma.service';
 import { NotificationService } from '../src/notifications/notifications.service';
 import { seedCatalog } from '../prisma/seed-catalog';
@@ -284,6 +285,11 @@ describe('Admin console (doc 27 F6, e2e)', () => {
     await user('temp', 'admin', ['Support']);
     const vc = await prisma.verificationCase.create({ data: { workerId: ids.pro3, type: 'ID', documentKeys: [] } });
     await http().post(`/api/admin/v1/verification-cases/${vc.id}/decision`).set(as('super')).send({ decision: 'NEEDS_INFO', reason: 'The photo is blurry' }).expect(201);
+    // The full ID number is an audited reveal, and only for the role that holds verification.reveal.
+    const withId = await prisma.verificationCase.create({ data: { workerId: ids.pro3, type: 'ID', documentKeys: [], reference: encryptField('42101-1234567-1') } });
+    await http().post(`/api/admin/v1/verification-cases/${withId.id}/reveal-reference`).set(as('content')).expect(403);
+    expect((await http().post(`/api/admin/v1/verification-cases/${withId.id}/reveal-reference`).set(as('super')).expect(201)).body.reference).toBe('42101-1234567-1');
+    expect(await audited('verification.reference_revealed', withId.id)).toBe(1);
 
     await http().patch(`/api/admin/v1/staff/${ids.temp}/roles`).set(as('super')).send({ roles: ['Analytics'] }).expect(200);
     await prisma.user.update({ where: { id: ids.temp }, data: { totpEnabledAt: new Date() } });

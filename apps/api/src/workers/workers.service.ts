@@ -7,6 +7,9 @@ import {
   CreatePortfolioDto, SetHoursDto, SetSkillsDto, SubmitVerificationDto, UpdateWorkerDto, WorkerQueryDto,
 } from './dto/update-worker.dto';
 import { computeOnboarding, latestCases } from './onboarding';
+import { COUNTRIES, isCountryCode } from '@fixli/shared';
+import { capStatus, commissionConfigFor } from '../common/commission';
+import { encryptField } from '../common/crypto/field-crypto';
 
 // What any signed-in user may see about a worker. Never email, phone, documents or exact base location.
 const PUBLIC_WORKER_SELECT = {
@@ -66,9 +69,7 @@ export class WorkersService {
   }
 
   async findPublicById(id: string, viewer?: { id: string; type: string }) {
-    const isSelfOrAdmin = viewer?.id === id || viewer?.type === 'admin';
-    const where: Prisma.WorkerWhereInput = isSelfOrAdmin ? { id } : { id, activationStatus: 'ACTIVE' };
-    const worker = await this.prisma.worker.findFirst({ where, select: PUBLIC_WORKER_SELECT });
+    const worker = await this.prisma.worker.findFirst({ where: { id, activationStatus: 'ACTIVE' }, select: PUBLIC_WORKER_SELECT });
     if (!worker) throw new NotFoundException('Worker not found');
     return this.toPublic(worker, viewer);
   }
@@ -140,6 +141,15 @@ export class WorkersService {
     if (dto.isOnline === true && worker.activationStatus !== 'ACTIVE') {
       throw new ForbiddenException({ code: 'WORKER_NOT_ACTIVE', message: 'You can go online once your documents are approved.' });
     }
+    if (dto.isOnline === true) {
+      const { owed, cfg } = await this.owedAndConfig(userId);
+      if (capStatus(owed, cfg) === 'BLOCKED') {
+        throw new ForbiddenException({
+          code: 'COMMISSION_CAP_EXCEEDED',
+          message: 'You owe Fixli fees above the limit. Settle your balance to go online. Jobs already booked are not affected.',
+        });
+      }
+    }
     if ((dto.serviceLat != null) !== (dto.serviceLng != null) && (worker.serviceLat == null || worker.serviceLng == null)) {
       throw new BadRequestException('Send both latitude and longitude');
     }
@@ -204,12 +214,15 @@ export class WorkersService {
     if (['SUSPENDED', 'REJECTED'].includes(worker.activationStatus)) {
       throw new ForbiddenException('Your account cannot submit documents. Please contact support.');
     }
-    const verificationCase = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const keys = await this.storage.consume(userId, dto.uploadIds, 'VERIFICATION', tx);
-      return tx.verificationCase.create({ data: { workerId: userId, type: dto.type, documentKeys: keys, reference: dto.reference } });
+      const verificationCase = await tx.verificationCase.create({ data: { workerId: userId, type: dto.type, documentKeys: keys, reference: dto.reference?.trim() ? encryptField(dto.reference.trim()) : undefined } });
+      
+      this.events.emit('admin.verification_submitted', {
+        caseId: verificationCase.id,
+        workerId: userId,
+      });
     });
-    // After commit, so staff never open a case that was rolled back.
-    this.events.emit('admin.verification_submitted', { caseId: verificationCase.id, workerId: userId });
     await this.audit.record({ actorId: userId, action: 'verification.submitted', entityType: 'Worker', entityId: userId, after: { type: dto.type } });
     return this.findOwn(userId);
   }
@@ -226,5 +239,57 @@ export class WorkersService {
     await this.prisma.worker.update({ where: { id: userId }, data: { activationStatus: 'PENDING_REVIEW' } });
     await this.audit.record({ actorId: userId, action: 'worker.submitted_for_review', entityType: 'Worker', entityId: userId });
     return this.findOwn(userId);
+  }
+
+  /** Commission the worker owes (positive minor units) and the rules for their country. */
+  private async owedAndConfig(userId: string) {
+    const [{ _sum }, user] = await Promise.all([
+      this.prisma.ledgerEntry.aggregate({ where: { workerId: userId }, _sum: { amount: true } }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { countryCode: true } }),
+    ]);
+    const code = (user?.countryCode ?? 'PK').toUpperCase();
+    return { owed: Math.max(0, -(_sum.amount ?? 0)), cfg: commissionConfigFor(code), currency: COUNTRIES[isCountryCode(code) ? code : 'PK'].currency.code };
+  }
+
+  async getEarnings(userId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [{ owed, cfg, currency }, ledgerCount, todayEntries, history] = await Promise.all([
+      this.owedAndConfig(userId),
+      this.prisma.ledgerEntry.count({ where: { workerId: userId } }),
+      this.prisma.ledgerEntry.findMany({ where: { workerId: userId, createdAt: { gte: today } }, select: { type: true, amount: true } }),
+      this.prisma.ledgerEntry.findMany({ where: { workerId: userId }, orderBy: { createdAt: 'desc' }, take: 30, select: { id: true, type: true, amount: true, createdAt: true } }),
+    ]);
+    return {
+      /** Negative = the worker owes the platform (kept for existing clients). */
+      currentBalance: -owed,
+      /** Same number under the name the app reads; negative = owed. */
+      balance: -owed,
+      history,
+      owed,
+      currency,
+      status: capStatus(owed, cfg),
+      softLimit: cfg.softLimitMinor,
+      hardLimit: cfg.hardLimitMinor,
+      settleDays: cfg.settleDays,
+      /** Commission charged today (not income); kept under its old name for existing clients. */
+      todayEarnings: todayEntries.filter((e) => e.type === 'COMMISSION_OWED').reduce((acc, e) => acc + Math.abs(e.amount), 0),
+      totalEntries: ledgerCount,
+    };
+  }
+
+  async getLedger(userId: string, skip: number = 0, take: number = 50) {
+    const [entries, total] = await Promise.all([
+      this.prisma.ledgerEntry.findMany({
+        where: { workerId: userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.ledgerEntry.count({ where: { workerId: userId } }),
+    ]);
+
+    return { entries, total };
   }
 }

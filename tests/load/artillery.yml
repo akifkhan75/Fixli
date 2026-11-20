@@ -1,0 +1,114 @@
+# Load profile for the API (doc 27 R7). Targets from doc 26: P95 <= 250 ms, P99 <= 750 ms.
+#
+#   pnpm --filter @fixli/api build && node apps/api/dist/main     # with a seeded catalog (db:seed:catalog)
+#   npx artillery@2 run -e full  tests/load/artillery.yml         # 5 min profile (3 -> 25 new users/s)
+#   npx artillery@2 run -e smoke tests/load/artillery.yml         # 30 s sanity check
+#
+# Run against a staging stack, never production. NODE_ENV must not be "production" (OTP signup would
+# need real SMS codes). Socket fan-out is not covered here: artillery's socket.io engine needs a
+# separate scenario once a staging stack with Redis exists.
+config:
+  target: "http://localhost:3002"
+  processor: "./processor.js"
+  # No top-level phases: pick one with -e smoke | full | staging (artillery appends, not replaces, if both exist).
+  environments:
+    smoke:
+      phases:
+        - { duration: 30, arrivalRate: 3, name: "Smoke" }
+    full:
+      phases:
+        - { duration: 60,  arrivalRate: 3,  name: "Warm up" }
+        - { duration: 120, arrivalRate: 10, rampTo: 25, name: "Ramp" }
+        - { duration: 120, arrivalRate: 25, name: "Sustained" }
+    staging:
+      target: "https://staging-api.fixli.pk"
+      phases:
+        - { duration: 60,  arrivalRate: 3,  name: "Warm up" }
+        - { duration: 120, arrivalRate: 10, rampTo: 25, name: "Ramp" }
+        - { duration: 120, arrivalRate: 25, name: "Sustained" }
+  plugins:
+    ensure: {}
+    metrics-by-endpoint: {}
+  ensure:
+    thresholds:
+      - http.response_time.p95: 250
+      - http.response_time.p99: 750
+    # Any failed virtual user (a 429 from rate limiting, a 5xx, a missing capture) fails the run.
+    maxErrorRate: 0
+
+scenarios:
+  - name: "Customer: sign up, post a request, look at offers"
+    weight: 6
+    flow:
+      - function: "newPerson"
+      - post:
+          url: "/api/auth/signup"
+          beforeRequest: "addIp"
+          json: { name: "Load Customer", phone: "{{ phone }}", countryCode: "PK", password: "{{ password }}", type: "customer", deviceId: "{{ deviceId }}" }
+          capture: { json: "$.token", as: "token" }
+      - get:
+          url: "/api/service-catalog/categories"
+          beforeRequest: "addIp"
+          capture: { json: "$[0].id", as: "categoryId" }
+      - post:
+          url: "/api/addresses"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+          json: { label: "Home", streetAddress: "House 12, Street 4", city: "Karachi", area: "Gulshan", country: "PK", latitude: 24.9215, longitude: 67.0925 }
+          capture: { json: "$.id", as: "addressId" }
+      - post:
+          url: "/api/job-requests"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+          json: { categoryId: "{{ categoryId }}", addressId: "{{ addressId }}", when: "TODAY", description: "Load test request", idempotencyKey: "{{ idemKey }}" }
+          capture: { json: "$.id", as: "jobId" }
+      # Same key again: must be the same job, cheaply.
+      - post:
+          url: "/api/job-requests"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+          json: { categoryId: "{{ categoryId }}", addressId: "{{ addressId }}", when: "TODAY", description: "Load test request", idempotencyKey: "{{ idemKey }}" }
+      - get:
+          url: "/api/job-requests/{{ jobId }}/offers"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+      - get:
+          url: "/api/job-requests"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+      - get:
+          url: "/api/auth/me"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+      - get:
+          url: "/api/notifications"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+
+  - name: "Worker: sign up, open the feed and earnings"
+    weight: 3
+    flow:
+      - function: "newPerson"
+      - post:
+          url: "/api/auth/signup"
+          beforeRequest: "addIp"
+          json: { name: "Load Worker", phone: "{{ phone }}", countryCode: "PK", password: "{{ password }}", type: "worker", deviceId: "{{ deviceId }}" }
+          capture: { json: "$.token", as: "token" }
+      - get:
+          url: "/api/workers/me/requests"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+      - get:
+          url: "/api/workers/me/earnings"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+      - get:
+          url: "/api/auth/me"
+          beforeRequest: "addIp"
+          headers: { Authorization: "Bearer {{ token }}" }
+
+  - name: "Anonymous: config and health"
+    weight: 1
+    flow:
+      - get: { url: "/api/config/countries", beforeRequest: "addIp" }
+      - get: { url: "/api/health", beforeRequest: "addIp" }

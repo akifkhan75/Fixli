@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
+import { OtpService } from './otp.service';
 import { SessionService } from './session.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -25,7 +26,7 @@ import { SecretBox } from '../common/auth/secret-box';
   ],
   controllers: [AuthController],
   providers: [
-    AuthService, SessionService, JwtStrategy, StaffTwoFactorService,
+    AuthService, OtpService, SessionService, JwtStrategy, StaffTwoFactorService,
     {
       provide: STAFF_SECURITY,
       inject: [ConfigService],

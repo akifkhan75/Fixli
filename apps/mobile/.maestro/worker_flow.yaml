@@ -1,0 +1,16 @@
+# Seeded worker: 0311 2345678 / password123
+appId: com.fixli.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Welcome back"
+- tapOn: "Mobile number"
+- inputText: "03112345678"
+- tapOn: "Password"
+- inputText: "password123"
+- tapOn: "Sign In"
+- assertVisible: "Today"
+- tapOn: "Earnings"
+- tapOn: "Account"
+- tapOn: "Log out"
+- assertVisible: "Welcome back"
