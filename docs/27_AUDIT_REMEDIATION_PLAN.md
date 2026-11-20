@@ -231,10 +231,14 @@ Specs for code that was replaced were deleted rather than rewritten: `sweeper.se
 `admin-roles.guard.spec`, `jobs.transitions.spec`, `admin-verification.service.spec` (the masking behaviour
 is covered by `profiles.e2e` and `privacy.e2e`), `admin.service.spec`, `rules.sos.spec` and
 `templates.spec` (both were already failing on the PR), main's `safety`/`payments` e2e, the mobile SOS tests.
-**API unit coverage fell from 70 % to about 53 % lines** because the PR's large modules (money, admin console,
-SOS, tracking) are covered by e2e, not unit tests. The CI coverage gate (70 %) therefore **fails until either
-unit tests are added for those modules or the threshold is deliberately lowered. That decision is open**; it
-was not made silently.
+**API unit coverage fell from 70 % to about 53 % lines** because the PR's large modules (money, admin
+console, SOS, tracking) were covered only by e2e. **Fixed with real tests, not a lower bar**: the thresholds are
+unchanged (statements 69, branches 73, functions 62, lines 70) and are now met (about 74 / 75 / 67 / 75). New
+unit specs: admin console, admin and verification services, staff 2FA, settlements, ledger, country config,
+earnings, disputes, SOS dispatch, both sweepers, live location, catalogue, notification templates (every type
+in en/ur/ar), the permissions guard, lease, request-shape (DTO) validation and the thin controllers.
+Still thin: `jobs.service` (about 65 % of branches), `chat.service`, `s3.driver`, `main.ts`/`app.module.ts`
+(bootstrap) and the admin/disputes controllers (covered by e2e and the route sweep).
 
 ### Changed on purpose while merging
 * ID numbers: lists/details show `referenceMasked`; the full value needs the new `verification.reveal`
