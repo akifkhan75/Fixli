@@ -257,3 +257,9 @@ Still thin: `jobs.service` (about 65 % of branches), `chat.service`, `s3.driver`
 API typecheck clean; unit 422 pass; mobile typecheck clean, 124 tests pass; shared 36 pass; admin and web
 build. API e2e on a clean Postgres 14: see the PR description for the run. **Not run**: Redis outage e2e
 (no Redis here), Maestro/device flows, admin Playwright, mobile Android bundle.
+
+### Accepted dependency advisory
+* **GHSA-mrhx-c7xc-m3w5 (zod < 4.6.6, memory exhaustion on oversized collections), ignored in `package.json` on purpose.**
+  Fixed only in zod 4; every path to it is `@expo/cli` (build tooling on developer and CI machines, never shipped in the
+  app or the API), and nothing in this repo imports zod. **Remove the ignore when Expo moves to zod 4.** The other
+  transitive advisories (follow-redirects, body-parser, decode-uri-component, node-forge) are patched through overrides.
