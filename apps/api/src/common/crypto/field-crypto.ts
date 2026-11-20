@@ -38,7 +38,7 @@ export function parseKey(base64: string): Buffer {
 
 export function encryptField(plain: string, withKey: Buffer = key()): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', withKey, iv);
+  const cipher = createCipheriv('aes-256-gcm', withKey, iv, { authTagLength: 16 });
   const ct = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
   return `${PREFIX}${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${ct.toString('base64url')}`;
 }
@@ -48,7 +48,7 @@ export function decryptField(stored: string, withKey?: Buffer): string {
   if (!isEncrypted(stored)) return stored;
   const [iv, tag, ct] = stored.slice(PREFIX.length).split(':');
   if (!iv || !tag || !ct) throw new Error('Malformed encrypted field');
-  const decipher = createDecipheriv('aes-256-gcm', withKey ?? key(), Buffer.from(iv, 'base64url'));
+  const decipher = createDecipheriv('aes-256-gcm', withKey ?? key(), Buffer.from(iv, 'base64url'), { authTagLength: 16 });
   decipher.setAuthTag(Buffer.from(tag, 'base64url'));
   return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
 }

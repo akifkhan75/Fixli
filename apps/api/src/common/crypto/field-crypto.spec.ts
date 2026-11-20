@@ -25,6 +25,11 @@ describe('field-crypto', () => {
     const flipped = Buffer.from(ct, 'base64url'); flipped[0] ^= 1;
     expect(() => decryptField([p, iv, tag, flipped.toString('base64url')].join(':'))).toThrow();
   });
+  it('refuses a shortened authentication tag (GCM must use the full 16 bytes)', () => {
+    const [p, iv, tag, ct] = encryptField('secret-id').split(':');
+    const short = Buffer.from(tag, 'base64url').subarray(0, 4).toString('base64url');
+    expect(() => decryptField([p, iv, short, ct].join(':'))).toThrow();
+  });
   it('fails with the wrong key', () => {
     const enc = encryptField('abc');
     process.env.FIELD_ENCRYPTION_KEY = OTHER;
