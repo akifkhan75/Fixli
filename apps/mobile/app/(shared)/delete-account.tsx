@@ -1,65 +1,55 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { useAppDispatch } from '../../src/hooks/useRedux';
-import { logoutUser } from '../../src/store/authSlice';
 import { useTheme } from '../../src/hooks/useTheme';
 import { friendlyError } from '../../src/hooks/useApi';
+import { useAppDispatch } from '../../src/hooks/useRedux';
+import { sessionExpired } from '../../src/store/authSlice';
+import { clearTokens } from '../../src/services/session';
 import { Screen } from '../../src/components/ds/Screen';
 import { Text } from '../../src/components/ds/Text';
 import { Button } from '../../src/components/ds/Button';
 import { PasswordField } from '../../src/components/ds/PasswordField';
 import * as api from '../../src/services/api';
+import { t } from '../../src/i18n';
 
-const ERASED = [
-  'Your name, phone number, email and photo',
-  'Your saved addresses, trusted contacts and notifications',
-  'Your documents, ID number and portfolio photos',
-  'Your sign-in on every device',
-];
-const KEPT = [
-  'Payment and fee records, without your name (the law requires them)',
-  'Reviews you gave, without your comment',
-  'Jobs you did with other people, shown as "Deleted user"',
-];
-
+/** Delete my account (store requirement). Explains what happens, asks for the password. */
 export default function DeleteAccountScreen() {
   const theme = useTheme();
   const dispatch = useAppDispatch();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
-  const [confirming, setConfirming] = useState(false);
 
-  const erase = async () => {
-    setBusy(true); setError(undefined);
+  const remove = async () => {
+    setBusy(true);
+    setError(undefined);
     try {
       await api.deleteAccount(password);
-      await dispatch(logoutUser()); // clears tokens and returns to the login screen
-    } catch (e) {
-      setError(friendlyError(e)); // e.g. "You have a job in progress. Finish or cancel it first."
-      setConfirming(false);
-    } finally { setBusy(false); }
+      await clearTokens();
+      dispatch(sessionExpired());
+    } catch (e) { setError(friendlyError(e)); setBusy(false); }
   };
 
   return (
-    <Screen
-      title="Delete my account" back
-      footer={confirming
-        ? <View style={{ gap: 10 }}>
-            <Text variant="body" weight="bold" color={theme.colors.error} style={{ textAlign: 'center' }}>This cannot be undone. Delete everything now?</Text>
-            <Button title="Yes, delete my account" variant="danger" size="lg" loading={busy} disabled={busy} onPress={erase} />
-            <Button title="No, keep my account" variant="secondary" size="lg" disabled={busy} onPress={() => setConfirming(false)} />
-          </View>
-        : <Button title="Delete my account" variant="danger" size="lg" disabled={!password || busy} onPress={() => setConfirming(true)} />}
-    >
-      <Text variant="body" color={theme.colors.textSecondary}>Deleting your account is permanent. Jobs that have not started are cancelled and the other person is told.</Text>
-      <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary} style={{ marginTop: 20 }}>WE ERASE</Text>
-      {ERASED.map((t) => <Text key={t} variant="body" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>• {t}</Text>)}
-      <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary} style={{ marginTop: 16 }}>WE KEEP</Text>
-      {KEPT.map((t) => <Text key={t} variant="body" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>• {t}</Text>)}
-      <View style={{ marginTop: 24 }}>
-        <PasswordField label="Your password" value={password} onChangeText={(v) => { setPassword(v); setError(undefined); }} />
-        {error ? <Text variant="body" weight="semibold" color={theme.colors.error} style={{ marginTop: 8 }}>{error}</Text> : null}
+    <Screen title={t('customerProfile.deleteAccount')} back>
+      <Text variant="body" color={theme.colors.textPrimary}>{t('sharedDeleteAccount.deletingYourAccount')}</Text>
+      <View style={{ gap: 6, marginTop: 8 }}>
+        {[
+          'signs you out on every phone',
+          'removes your name, number, photo, addresses and saved professionals',
+          'cancels requests that are still open',
+          'keeps payment records (without your name) for as long as the law requires',
+        ].map((t) => <Text key={t} variant="body" color={theme.colors.textSecondary}>• {t}</Text>)}
+      </View>
+      <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 12 }}>
+        {t('sharedDeleteAccount.youCantDeleteIt')}
+      </Text>
+      <View style={{ marginTop: 20 }}>
+        <PasswordField label={t('sharedDeleteAccount.yourPassword')} value={password} onChangeText={setPassword} />
+      </View>
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{error}</Text> : null}
+      <View style={{ marginTop: 20 }}>
+        <Button title={t('sharedDeleteAccount.deleteMyAccount')} variant="danger" size="lg" loading={busy} disabled={busy || !password} onPress={remove} />
       </View>
     </Screen>
   );

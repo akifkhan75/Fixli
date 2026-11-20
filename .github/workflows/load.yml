@@ -1,0 +1,50 @@
+name: Load test
+
+# Not on every push: it starts two API instances and drives about 3,500 calls and 1,200 socket messages
+# (doc 27 F8.1). Run it by hand before a release, and weekly to catch a slowdown early.
+on:
+  workflow_dispatch:
+    inputs:
+      customers:
+        description: Customers (journeys)
+        default: '200'
+  schedule:
+    - cron: '0 3 * * 1'
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: fixli, POSTGRES_PASSWORD: fixli, POSTGRES_DB: fixli_load }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fixli" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      DATABASE_URL: postgresql://fixli:fixli@localhost:5432/fixli_load?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-load-secret-ci-only-load-secret-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fixli/shared build
+      - name: Build and prepare the database
+        working-directory: apps/api
+        run: |
+          pnpm exec prisma generate
+          pnpm exec prisma migrate deploy
+          pnpm db:seed:catalog
+          pnpm build
+      - name: Load test (fails if a target is missed)
+        working-directory: apps/api
+        env:
+          CUSTOMERS: ${{ github.event.inputs.customers || '200' }}
+        run: node load/run.mjs

@@ -1,3 +1,4 @@
+import { RequirePermission } from '../common/auth/permissions';
 import { Controller, Get, Post, Body, Param, Patch } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { RecurringJobsService } from './recurring-jobs.service';
@@ -40,6 +41,7 @@ export class RecurringJobsController {
 
   @Get('system/due')
   @Roles('admin')
+  @RequirePermission('recurring.manage')
   @ApiOperation({ summary: 'All due recurring jobs (admin/system)' })
   getDueJobs() {
     return this.recurringJobsService.getDueJobs();

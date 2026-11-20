@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
+import { StaffTwoFactorService } from './staff-two-factor.service';
 import { AuthService } from './auth.service';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
 
@@ -13,7 +14,7 @@ describe('AuthController', () => {
   beforeEach(async () => {
     const mod = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: svc }],
+      providers: [{ provide: AuthService, useValue: svc }, { provide: StaffTwoFactorService, useValue: {} }],
     }).compile();
     controller = mod.get(AuthController);
   });
@@ -21,7 +22,7 @@ describe('AuthController', () => {
 
   it('only the credential endpoints are public', () => {
     const isPublic = (fn: Function) => Reflect.getMetadata(IS_PUBLIC_KEY, fn) === true;
-    for (const fn of ['signup', 'login', 'adminLogin', 'refresh'] as const) {
+    for (const fn of ['signup', 'login', 'adminLogin', 'refresh', 'beginTotp', 'activateTotp'] as const) {
       expect(isPublic(AuthController.prototype[fn])).toBe(true);
     }
     for (const fn of ['logout', 'me', 'sessions', 'revokeSession', 'changePassword'] as const) {

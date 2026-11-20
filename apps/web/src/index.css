@@ -290,3 +290,7 @@ body {
     display: none;
   }
 }
+
+.site-footer { padding: 32px 0 48px; color: var(--text-secondary); font-size: 14px; }
+.site-footer .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+.site-footer a { color: inherit; text-decoration: underline; }

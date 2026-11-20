@@ -1,13 +1,14 @@
 import { ChatGateway } from './chat.gateway';
 
 describe('ChatGateway (socket security)', () => {
-  const chat = { sendMessage: jest.fn(), requireThread: jest.fn() };
+  const chat = { typing: jest.fn() };
   const jwt = { verify: jest.fn() };
   const prisma = { session: { findFirst: jest.fn() }, jobRequest: { findFirst: jest.fn() }, conversation: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() } as any };
   const emit = jest.fn();
   let revoked: ((p: { sessionIds: string[] }) => void) | undefined;
   const events = { on: jest.fn((_: string, fn: any) => { revoked = fn; return () => undefined; }) };
   const disconnectSockets = jest.fn();
+  const location = { accept: jest.fn() };
   let gateway: ChatGateway;
 
   const client = (over: any = {}) => ({
@@ -20,7 +21,7 @@ describe('ChatGateway (socket security)', () => {
   });
 
   beforeEach(() => {
-    gateway = new ChatGateway(chat as any, jwt as any, prisma as any, events as any);
+    gateway = new ChatGateway(chat as any, jwt as any, prisma as any, events as any, { attach: jest.fn() } as any, location as any);
     gateway.server = { to: jest.fn().mockReturnValue({ emit }), in: jest.fn().mockReturnValue({ disconnectSockets }) } as any;
   });
   afterEach(() => { jest.resetAllMocks(); events.on.mockImplementation((_: string, fn: any) => { revoked = fn; return () => undefined; }); });
@@ -59,43 +60,30 @@ describe('ChatGateway (socket security)', () => {
     expect(disconnectSockets).toHaveBeenCalledWith(true);
   });
 
-  it('delivers messages to conversation participants', async () => {
-    chat.sendMessage.mockResolvedValue({ id: 'm1' });
-    prisma.conversation = {
-      findUnique: jest.fn().mockResolvedValue({
-        participants: [{ id: 'u1' }, { id: 'u2' }]
-      })
-    };
-    
+  it('messages are not sent over the socket (REST only); typing goes through the throttled service', async () => {
+    expect((gateway as any).handleMessage).toBeUndefined();
     const c = client({ data: { userId: 'u1', userType: 'customer' } });
-    await gateway.handleMessage(c as any, { threadId: 't1', text: 'hi', receiverId: 'attacker' });
-    // extra fields are rejected by payload validation
-    expect(chat.sendMessage).not.toHaveBeenCalled();
-    
-    await gateway.handleMessage(c as any, { threadId: 't1', text: 'hi' });
-    expect(gateway.server.to).toHaveBeenCalledWith('user:u2');
-    expect(emit).toHaveBeenCalledWith('message.created', { id: 'm1' });
+    await gateway.handleTyping(c as any, { threadId: 't1' });
+    expect(chat.typing).toHaveBeenCalledWith('u1', 't1');
+    await gateway.handleTyping(c as any, { threadId: 't1', extra: 'x' });
+    expect(chat.typing).toHaveBeenCalledTimes(1);
   });
 
-  it('only a worker can send location, and only to the customer of their own active job', async () => {
+  it('only a worker can send location; the server decides the receiver from the job', async () => {
     const payload = { jobId: 'j1', latitude: 24.8, longitude: 67.0 };
     await gateway.handleLocationUpdate(client({ data: { userId: 'c1', userType: 'customer' } }) as any, payload);
-    expect(prisma.jobRequest.findFirst).not.toHaveBeenCalled();
+    expect(location.accept).not.toHaveBeenCalled();
 
-    prisma.jobRequest.findFirst.mockResolvedValue({ customerId: 'c9' });
+    location.accept.mockResolvedValue({ customerId: 'c9', update: { jobId: 'j1', etaMinutes: 7 } });
     await gateway.handleLocationUpdate(client({ data: { userId: 'w1', userType: 'worker' } }) as any, payload);
-    expect(prisma.jobRequest.findFirst.mock.calls[0][0].where).toMatchObject({
-      id: 'j1', assignedWorkerId: 'w1',
-    });
+    expect(location.accept).toHaveBeenCalledWith('w1', payload);
     expect(gateway.server.to).toHaveBeenCalledWith('user:c9');
+    expect(emit).toHaveBeenCalledWith('locationUpdate', { jobId: 'j1', etaMinutes: 7 });
   });
 
-  it('drops location for a job the worker is not assigned to', async () => {
-    prisma.jobRequest.findFirst.mockResolvedValue(null);
-    await gateway.handleLocationUpdate(
-      client({ data: { userId: 'w1', userType: 'worker' } }) as any,
-      { jobId: 'other', latitude: 1, longitude: 1 },
-    );
+  it('drops location the service refuses (not assigned, not on the way, too frequent)', async () => {
+    location.accept.mockResolvedValue(null);
+    await gateway.handleLocationUpdate(client({ data: { userId: 'w1', userType: 'worker' } }) as any, { jobId: 'other', latitude: 1, longitude: 1 });
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -104,6 +92,6 @@ describe('ChatGateway (socket security)', () => {
       client({ data: { userId: 'w1', userType: 'worker' } }) as any,
       { jobId: 'j1', latitude: 999, longitude: 1 },
     );
-    expect(prisma.jobRequest.findFirst).not.toHaveBeenCalled();
+    expect(location.accept).not.toHaveBeenCalled();
   });
 });

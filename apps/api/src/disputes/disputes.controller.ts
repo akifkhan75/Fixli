@@ -1,3 +1,4 @@
+import { RequirePermission } from '../common/auth/permissions';
 import { Controller, Get, Post, Body, Patch, Param } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { DisputesService } from './disputes.service';
@@ -26,6 +27,7 @@ export class DisputesController {
 
   @Get('all')
   @Roles('admin')
+  @RequirePermission('disputes.read')
   @ApiOperation({ summary: 'All disputes (admin)' })
   getAllDisputes() {
     return this.disputesService.getAllDisputes();
@@ -39,6 +41,7 @@ export class DisputesController {
 
   @Patch(':id/resolve')
   @Roles('admin')
+  @RequirePermission('disputes.resolve')
   @ApiOperation({ summary: 'Update/resolve a dispute (admin)' })
   updateDisputeStatus(
     @Param('id') id: string,

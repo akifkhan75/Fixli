@@ -1,18 +1,35 @@
-import { IsString, IsNotEmpty, MaxLength, IsOptional, IsBoolean, IsIn, IsNumber, Min, Max, Length, Matches } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export const SOS_KINDS = ['WATER', 'ELECTRICAL', 'GAS'] as const;
+export const SOS_KINDS = ['LIFE_THREATENING', 'WATER', 'ELECTRIC', 'GAS', 'IN_JOB'] as const;
 export type SosKind = (typeof SOS_KINDS)[number];
+export const PROPERTY_KINDS: SosKind[] = ['WATER', 'ELECTRIC', 'GAS'];
+
+export class SosDto {
+  @IsIn(SOS_KINDS)
+  kind: SosKind;
+
+  /** Property emergencies: where (default address if omitted). */
+  @IsOptional() @IsString() @MaxLength(64)
+  addressId?: string;
+
+  /** In-job SOS: the job you're on. */
+  @IsOptional() @IsString() @MaxLength(64)
+  jobRequestId?: string;
+
+  @IsOptional() @IsString() @MaxLength(500)
+  note?: string;
+
+  /** Client-generated so a double tap or a retry doesn't create two emergencies. */
+  @IsString() @MaxLength(64)
+  idempotencyKey: string;
+}
 
 export class ReportIncidentDto {
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(['SOS', 'EMERGENCY', 'REPORT_PROBLEM'])
-  type: string;
+  @IsIn(['REPORT_PROBLEM'])
+  type: 'REPORT_PROBLEM';
 
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(['LIFE_THREATENING', 'PROPERTY_DAMAGE', 'MODERATE'])
-  severity: string;
+  @IsIn(['MODERATE', 'PROPERTY_DAMAGE'])
+  severity: 'MODERATE' | 'PROPERTY_DAMAGE';
 
   @IsOptional() @IsString() @MaxLength(64)
   targetId?: string;
@@ -20,41 +37,18 @@ export class ReportIncidentDto {
   @IsOptional() @IsString() @MaxLength(64)
   jobRequestId?: string;
 
-  @IsOptional() @IsString() @MaxLength(2000)
-  description?: string;
-
-  /** Where the person is, if the phone could tell (never required). */
-  @IsOptional() @IsNumber() @Min(-90) @Max(90)
-  latitude?: number;
-
-  @IsOptional() @IsNumber() @Min(-180) @Max(180)
-  longitude?: number;
-
-  /** Property emergencies only: what kind of hazard (chooses the trade). */
-  @IsOptional() @IsIn(SOS_KINDS as unknown as string[])
-  sosKind?: SosKind;
-
-  /** Property emergencies only: one of the customer's saved addresses. */
-  @IsOptional() @IsString() @MaxLength(64)
-  addressId?: string;
-
-  /** Generated once per SOS on the device; a retry returns the same incident and job. */
-  @IsOptional() @IsString() @Length(8, 64)
-  idempotencyKey?: string;
+  @IsString() @IsNotEmpty() @MaxLength(2000)
+  description: string;
 }
 
 export class AddTrustedContactDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
+  @IsString() @IsNotEmpty() @MaxLength(100)
   name: string;
 
-  /** International format, e.g. +923001234567. */
-  @IsString()
-  @Matches(/^\+[1-9]\d{7,14}$/, { message: 'Phone must be in international format, e.g. +923001234567' })
+  /** Any format the person types; normalised to E.164 for their country. */
+  @IsString() @IsNotEmpty() @MaxLength(30)
   phone: string;
 
-  @IsOptional()
-  @IsBoolean()
+  @IsOptional() @IsBoolean()
   notifyOnSos?: boolean;
 }

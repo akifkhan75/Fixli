@@ -1,0 +1,29 @@
+# A new professional creates an account and is taken to the profile checklist (documents come next,
+# and a person approves them in the admin portal: that part is checked in apps/admin/e2e).
+appId: com.fixli.app
+env:
+  API: http://10.0.2.2:3002/api
+---
+- evalScript: ${output.national = '3018' + String(Date.now()).slice(-6)}
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 20000
+- tapOn: "Create account"
+- tapOn: "I fix things.*"
+- assertVisible: "Your details"
+- tapOn:
+    id: "name-input"
+- inputText: "Maestro Newpro"
+- tapOn:
+    id: "phone-input"
+- inputText: ${output.national}
+- tapOn:
+    id: "password-input"
+- inputText: "Blue-Tiger-4242"
+- hideKeyboard
+- tapOn: "Create account"
+- extendedWaitUntil:
+    visible: "Set up your profile"
+    timeout: 20000

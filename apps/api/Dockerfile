@@ -1,6 +1,6 @@
 # Build context is the repository root:
 #   docker build -f apps/api/Dockerfile -t fixli-api .
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 RUN corepack enable && apk add --no-cache openssl
 WORKDIR /repo
 
@@ -19,7 +19,7 @@ RUN pnpm --filter @fixli/api deploy --prod /out \
  && cp -r apps/api/prisma /out/prisma \
  && cd /out && npx prisma generate
 
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 RUN apk add --no-cache openssl tini
 ENV NODE_ENV=production
 WORKDIR /app

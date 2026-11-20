@@ -1,4 +1,5 @@
-import { COUNTRIES, currencyExponent } from './countries';
+import { COUNTRIES } from './countries';
+import { currencyExponent } from './money';
 
 describe('currencyExponent', () => {
   it('uses the country config, not the runtime', () => {

@@ -14,6 +14,7 @@ import { TextInput } from '../../src/components/ds/TextInput';
 import { PhotoButtons } from '../../src/components/ds/PhotoButtons';
 import * as api from '../../src/services/api';
 import { formatPhoneDisplay } from '@fixli/shared';
+import { t } from '../../src/i18n';
 
 export default function EditProfileScreen() {
   const theme = useTheme();
@@ -50,23 +51,23 @@ export default function EditProfileScreen() {
 
   return (
     <Screen
-      title="Edit profile"
+      title={t('customerProfile.editProfile')}
       back
-      footer={<Button title="Save" size="lg" variant="primary" loading={saving} disabled={!dirty || !!nameError || saving} onPress={save} />}
+      footer={<Button title={t('sharedEditProfile.save')} size="lg" variant="primary" loading={saving} disabled={!dirty || !!nameError || saving} onPress={save} />}
     >
       <View style={{ alignItems: 'center', marginBottom: 24 }}>
         <Avatar name={name || user?.name} imageUrl={photo?.localUri ?? user?.profileImageUrl} size="xl" />
       </View>
-      <PhotoButtons onPick={pick} busy={upload.busy} error={upload.error} denied={upload.denied} takeLabel="Take a new photo" />
+      <PhotoButtons onPick={pick} busy={upload.busy} error={upload.error} denied={upload.denied} takeLabel={t('sharedEditProfile.takeANewPhoto')} />
 
       <View style={{ marginTop: 28 }}>
-        <TextInput label="Full name" value={name} onChangeText={setName} autoCapitalize="words" autoComplete="name" textContentType="name" error={dirty ? nameError : undefined} />
+        <TextInput label={t('sharedEditProfile.fullName')} value={name} onChangeText={setName} autoCapitalize="words" autoComplete="name" textContentType="name" error={dirty ? nameError : undefined} />
         <View style={{ height: 16 }} />
-        <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary}>Mobile number</Text>
+        <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary}>{t('sharedEditProfile.mobileNumber')}</Text>
         <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 6 }}>{formatPhoneDisplay(user?.phone)}</Text>
-        <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 4 }}>Your number is your login. Changing it needs a code, which is coming soon.</Text>
+        <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 4 }}>{t('sharedEditProfile.yourNumberIsYour')}</Text>
       </View>
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
     </Screen>
   );
 }

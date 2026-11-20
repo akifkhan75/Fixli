@@ -124,7 +124,7 @@ export default function SignupScreen() {
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: theme.colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingHorizontal: theme.spacing['2xl'] }]} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel="Back" style={styles.back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <TouchableOpacity onPress={back} accessibilityRole="button" accessibilityLabel={t('common.back')} style={styles.back} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <DirIcon name="arrow-back" size={28} color={theme.colors.textPrimary} />
         </TouchableOpacity>
 

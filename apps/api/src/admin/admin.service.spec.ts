@@ -1,93 +1,97 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { AdminService } from './admin.service';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { AdminService, maskEmail, maskPhone } from './admin.service';
+
+describe('masking', () => {
+  it('phones keep the first 3 and last 3 digits', () => {
+    expect(maskPhone('+92 300 1234567')).toBe('+92•••••••567');
+    expect(maskPhone('12345')).toBe('•••');
+    expect(maskPhone(null)).toBeNull();
+  });
+  it('emails keep the first letter and the domain', () => {
+    expect(maskEmail('ali@example.com')).toBe('a•••@example.com');
+    expect(maskEmail(undefined)).toBeNull();
+  });
+});
 
 describe('AdminService', () => {
   const prisma: any = {
-    user: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
-    jobRequest: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
-    auditLog: { findMany: jest.fn() }, incident: { findMany: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() }, payment: { findMany: jest.fn() },
+    user: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    jobRequest: { findMany: jest.fn() }, auditLog: { findMany: jest.fn() }, incident: { findMany: jest.fn() }, payment: { findMany: jest.fn() },
     serviceCategory: { findMany: jest.fn() }, countryConfig: { findMany: jest.fn() }, review: { findMany: jest.fn() },
   };
   const audit = { record: jest.fn() };
-  const svc = new AdminService(prisma, audit as any);
+  const sessions = { revokeAllExcept: jest.fn() };
+  const svc = new AdminService(prisma, audit as any, sessions as any);
   beforeEach(() => jest.resetAllMocks());
 
-  it('searches name, phone and email, capped at 50 and without passwords', async () => {
-    await svc.searchUsers('ali');
-    const a = prisma.user.findMany.mock.calls[0][0];
-    expect(a.where.OR).toHaveLength(3);
-    expect(a.take).toBe(50);
-    expect(a.select).not.toHaveProperty('password');
+  it('search needs two characters, matches phones by their last digits, and masks unless allowed', async () => {
+    expect(await svc.searchUsers('a', false)).toEqual([]);
+    prisma.user.findMany.mockResolvedValue([{ id: 'u', phone: '+923001234567', email: 'ali@x.com' }]);
+    const masked = await svc.searchUsers('0300 123 4567', false);
+    expect(masked[0].phone).toContain('•');
+    expect(prisma.user.findMany.mock.calls[0][0].where.OR.some((c: any) => c.phone)).toBe(true);
+    const full = await svc.searchUsers('ali', true);
+    expect(full[0].phone).toBe('+923001234567');
   });
 
-  describe('suspendUser', () => {
-    it('404 for an unknown user', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
-      await expect(svc.suspendUser('u', 'adm', 'spam')).rejects.toBeInstanceOf(NotFoundException);
-      expect(prisma.user.update).not.toHaveBeenCalled();
-    });
-    it('suspends and writes the reason to the audit log', async () => {
-      prisma.user.findUnique.mockResolvedValue({ id: 'u' }); prisma.user.update.mockResolvedValue({ id: 'u', status: 'SUSPENDED' });
-      await svc.suspendUser('u', 'adm', 'spam');
-      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'u' }, data: { status: 'SUSPENDED' } });
-      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ actorId: 'adm', action: 'user.suspended', after: { status: 'SUSPENDED', reason: 'spam' } }));
-    });
+  it('opening a user is audited; unknown user is 404', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'u' });
+    await svc.userDetail('u', 'a');
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'user.contact_viewed' }));
+    prisma.user.findUnique.mockResolvedValue(null);
+    await expect(svc.userDetail('x', 'a')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  describe('cancelJob', () => {
-    it('404 for an unknown job', async () => {
-      prisma.jobRequest.findUnique.mockResolvedValue(null);
-      await expect(svc.cancelJob('j', 'adm', 'r')).rejects.toBeInstanceOf(NotFoundException);
-    });
-    it.each(['COMPLETED', 'CANCELLED'])('refuses to rewrite a %s job', async (status) => {
-      prisma.jobRequest.findUnique.mockResolvedValue({ status });
-      await expect(svc.cancelJob('j', 'adm', 'r')).rejects.toBeInstanceOf(ConflictException);
-      expect(prisma.jobRequest.update).not.toHaveBeenCalled();
-    });
-    it('cancels an open job and audits it', async () => {
-      prisma.jobRequest.findUnique.mockResolvedValue({ status: 'IN_PROGRESS' }); prisma.jobRequest.update.mockResolvedValue({ id: 'j', status: 'CANCELLED' });
-      await svc.cancelJob('j', 'adm', 'fraud');
-      expect(prisma.jobRequest.update).toHaveBeenCalledWith({ where: { id: 'j' }, data: { status: 'CANCELLED' } });
-      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'job.cancelled', after: { status: 'CANCELLED', reason: 'fraud' } }));
-    });
+  it('suspend: signs them out everywhere, audits, refuses self and unknown', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'u', status: 'ACTIVE', type: 'customer' });
+    await expect(svc.suspendUser('a', 'a', 'x')).rejects.toBeInstanceOf(BadRequestException);
+    expect(await svc.suspendUser('u', 'a', 'abuse')).toEqual({ id: 'u', status: 'SUSPENDED' });
+    expect(sessions.revokeAllExcept).toHaveBeenCalledWith('u');
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'user.suspended' }));
+    prisma.user.findUnique.mockResolvedValue(null);
+    await expect(svc.suspendUser('x', 'a', 'r')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  describe('updateIncident', () => {
-    it('resolving needs a note about what was done', async () => {
-      await expect(svc.updateIncident('i1', 'adm', 'RESOLVED', '  ')).rejects.toBeInstanceOf(BadRequestException);
-      expect(prisma.incident.findUnique).not.toHaveBeenCalled();
-    });
-    it('404 for an unknown incident; a resolved one is final', async () => {
-      prisma.incident.findUnique.mockResolvedValueOnce(null);
-      await expect(svc.updateIncident('i1', 'adm', 'INVESTIGATING')).rejects.toBeInstanceOf(NotFoundException);
-      prisma.incident.findUnique.mockResolvedValueOnce({ status: 'RESOLVED' });
-      await expect(svc.updateIncident('i1', 'adm', 'INVESTIGATING')).rejects.toMatchObject({ response: { code: 'INCIDENT_RESOLVED' } });
-    });
-    it('is conditional on the status it read (two staff cannot clobber each other)', async () => {
-      prisma.incident.findUnique.mockResolvedValue({ status: 'OPEN' });
-      prisma.incident.updateMany.mockResolvedValue({ count: 0 });
-      await expect(svc.updateIncident('i1', 'adm', 'INVESTIGATING')).rejects.toMatchObject({ response: { code: 'INCIDENT_CHANGED' } });
-      expect(prisma.incident.updateMany).toHaveBeenCalledWith({ where: { id: 'i1', status: 'OPEN' }, data: { status: 'INVESTIGATING' } });
-      expect(audit.record).not.toHaveBeenCalled();
-    });
-    it('updates and audits who, from what, to what and the note', async () => {
-      prisma.incident.findUnique.mockResolvedValue({ status: 'INVESTIGATING' });
-      prisma.incident.updateMany.mockResolvedValue({ count: 1 });
-      await expect(svc.updateIncident('i1', 'adm', 'RESOLVED', ' called 15, all safe ')).resolves.toEqual({ id: 'i1', status: 'RESOLVED' });
-      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ actorId: 'adm', action: 'incident.resolved', before: { status: 'INVESTIGATING' }, after: { status: 'RESOLVED', note: 'called 15, all safe' } }));
-    });
+  it('job list hides location and masks phones unless allowed', async () => {
+    const job = { id: 'j', location: 'home', latitude: 1, longitude: 2, customer: { name: 'C', phone: '+923001234567' }, assignedWorker: { user: { name: 'W', phone: '+923007654321' } } };
+    prisma.jobRequest.findMany.mockResolvedValue([job, { id: 'k', customer: null, assignedWorker: null }]);
+    const masked: any[] = await svc.getJobsList('CREATED', 0, 10, false);
+    expect(masked[0]).toMatchObject({ location: null, latitude: null });
+    expect(masked[0].customer.phone).toContain('•');
+    expect(masked[0].assignedWorker.user.phone).toContain('•');
+    expect(masked[1].customer).toBeNull();
+    expect(prisma.jobRequest.findMany.mock.calls[0][0].where).toEqual({ status: 'CREATED' });
+    const full: any[] = await svc.getJobsList(undefined, 0, 10, true);
+    expect(full[0].location).toBe('home');
   });
 
-  it('lists with filters and paging defaults', async () => {
-    await svc.getJobsList('COMPLETED', 5, 10);
-    expect(prisma.jobRequest.findMany.mock.calls[0][0]).toMatchObject({ where: { status: 'COMPLETED' }, skip: 5, take: 10 });
-    await svc.getJobsList();
-    expect(prisma.jobRequest.findMany.mock.calls[1][0]).toMatchObject({ where: {}, skip: 0, take: 50 });
-    await svc.getAuditLogs(); await svc.getIncidents('OPEN'); await svc.getIncidents(); await svc.getPayments();
-    await svc.getCatalog(); await svc.getCountryConfigs(); await svc.getReportedReviews();
-    expect(prisma.auditLog.findMany.mock.calls[0][0].take).toBe(100);
+  it('plain lists delegate', async () => {
+    await svc.getAuditLogs(); await svc.getIncidents('OPEN'); await svc.getIncidents(); await svc.getPayments(); await svc.getCatalog();
+    await svc.getCountryConfigs(); await svc.getReportedReviews(); await svc.listStaff();
     expect(prisma.incident.findMany.mock.calls[0][0].where).toEqual({ status: 'OPEN' });
-    expect(prisma.incident.findMany.mock.calls[1][0].where).toEqual({});
-    expect(prisma.review.findMany.mock.calls[0][0].where).toEqual({ rating: 1 });
+    expect(prisma.user.findMany.mock.calls[0][0].where).toEqual({ type: 'admin' });
+  });
+
+  describe('staff', () => {
+    it('roles: de-duplicated; cannot demote yourself; others are signed out to re-authorise', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'u', adminRoles: ['Support'] });
+      expect(await svc.setRoles('u', 'a', ['Finance', 'Finance'] as any)).toEqual({ id: 'u', roles: ['Finance'] });
+      expect(sessions.revokeAllExcept).toHaveBeenCalledWith('u');
+      await expect(svc.setRoles('a', 'a', ['Support'] as any)).rejects.toBeInstanceOf(ForbiddenException);
+      sessions.revokeAllExcept.mockClear();
+      await svc.setRoles('a', 'a', ['Super Admin'] as any);
+      expect(sessions.revokeAllExcept).not.toHaveBeenCalled();
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(svc.setRoles('x', 'a', [] as any)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('2FA reset wipes the secret and codes, signs them out, audits', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'u' });
+      expect(await svc.resetTwoFactor('u', 'a', 'lost phone')).toEqual({ id: 'u', twoFactor: 'reset' });
+      expect(prisma.user.update.mock.calls[0][0].data).toMatchObject({ totpSecret: null, totpEnabledAt: null, totpRecoveryHashes: [] });
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'staff.2fa_reset' }));
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(svc.resetTwoFactor('x', 'a', 'r')).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 });

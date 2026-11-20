@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { assertTransition, JOB_TRANSITIONS, JobStatus } from './job-state-machine';
+import { assertTransition, BUSY_STATUSES, canTransition, IN_FLIGHT_STATUSES, JOB_TRANSITIONS, JobActor, JobStatus } from './job-state-machine';
 
 describe('job state machine', () => {
   it('allows the happy path in order', () => {
@@ -32,5 +32,36 @@ describe('job state machine', () => {
 
   it('does not let a customer cancel once work has started', () => {
     expect(() => assertTransition('IN_PROGRESS', 'CANCELLED', 'customer')).toThrow(ForbiddenException);
+  });
+
+  it('only the customer, an admin, or the system (auto-confirm) completes a job; never the worker', () => {
+    expect(canTransition('AWAITING_CONFIRMATION', 'COMPLETED', 'worker')).toBe(false);
+    expect(canTransition('AWAITING_CONFIRMATION', 'COMPLETED', 'customer')).toBe(true);
+    expect(canTransition('AWAITING_CONFIRMATION', 'COMPLETED', 'system')).toBe(true);
+    expect(canTransition('IN_PROGRESS', 'COMPLETED', 'worker')).toBe(false);
+    // COMPLETED is reachable only from AWAITING_CONFIRMATION.
+    const into = (Object.keys(JOB_TRANSITIONS) as JobStatus[]).filter((f) => JOB_TRANSITIONS[f].some((r) => r.to === 'COMPLETED'));
+    expect(into).toEqual(['AWAITING_CONFIRMATION']);
+  });
+
+  it('a customer can cancel until the work starts (on the way / arrived count as late)', () => {
+    for (const s of ['CREATED', 'MATCHES_FOUND', 'AWAITING_WORKER', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED'] as JobStatus[]) expect(canTransition(s, 'CANCELLED', 'customer')).toBe(true);
+    for (const s of ['IN_PROGRESS', 'AWAITING_CONFIRMATION'] as JobStatus[]) expect(canTransition(s, 'CANCELLED', 'customer')).toBe(false);
+  });
+
+  it('every rule names a known status and actor (no typos in the table)', () => {
+    const statuses = Object.keys(JOB_TRANSITIONS);
+    const actors: JobActor[] = ['customer', 'worker', 'admin', 'system'];
+    for (const rules of Object.values(JOB_TRANSITIONS)) {
+      for (const r of rules) {
+        expect(statuses).toContain(r.to);
+        r.actors.forEach((a) => expect(actors).toContain(a));
+      }
+    }
+  });
+
+  it('a worker on the way, on site or working is busy; a finished job awaiting confirmation blocks its time window', () => {
+    expect(IN_FLIGHT_STATUSES).toEqual(['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS']);
+    expect(BUSY_STATUSES).toEqual(expect.arrayContaining(['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION']));
   });
 });

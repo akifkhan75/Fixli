@@ -1,0 +1,84 @@
+# Customer: ask for help -> receive a price -> book -> chat -> work done -> confirm cash -> review.
+# A helper plays the professional through the real API at the right moments (helpers/api.js).
+appId: com.fixli.app
+env:
+  API: http://10.0.2.2:3002/api
+---
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: catalog
+- runFlow:
+    file: subflows_login.yaml
+    env:
+      PHONE: "3009990001"
+- extendedWaitUntil:
+    visible: "Bookings"
+    timeout: 20000
+
+# 1. Ask for help (opens the request screen with the trade and problem already chosen).
+- openLink: fixli:///request-service?categoryId=${output.categoryId}&issue=${output.issue}
+- assertVisible: "What needs fixing?"
+- tapOn: "Continue"
+- assertVisible: "Show us"
+- tapOn: "Skip for now"
+- assertVisible: "When do you need help?"
+- tapOn: "Continue"
+- assertVisible: "Where?"
+- tapOn: "House 12, Street 4.*"
+- tapOn: "Continue"
+- assertVisible: "Check and send"
+- tapOn: "Send request"
+- extendedWaitUntil:
+    visible: "Your request"
+    timeout: 20000
+
+# 2. A professional sends a price: it appears by itself (live), no refresh.
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: workerOffers
+- extendedWaitUntil:
+    visible: "Prices from professionals"
+    timeout: 20000
+- tapOn: "Choose Maestro"
+- assertVisible: "Book Maestro Worker for.*"
+- tapOn: "Book"
+- extendedWaitUntil:
+    visible: "Maestro Worker is booked"
+    timeout: 20000
+
+# 3. Chat with the professional.
+- tapOn: "Message the professional"
+- tapOn:
+    id: "chat-input"
+- inputText: "The tap is in the kitchen, thank you"
+- tapOn: "Send"
+- assertVisible: "The tap is in the kitchen, thank you"
+- back
+
+# 4. The professional does the job and says they were paid in cash.
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: workerCompletes
+- extendedWaitUntil:
+    visible: "Maestro Worker has finished.*"
+    timeout: 20000
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: workerMarksCash
+- extendedWaitUntil:
+    visible: "Did you pay.*"
+    timeout: 20000
+- tapOn: "Yes, I paid"
+
+# 5. Confirm the work and review it.
+- tapOn: "Confirm Work is Done"
+- extendedWaitUntil:
+    visible: "How was it with Maestro Worker?"
+    timeout: 20000
+- tapOn: "5 stars"
+- tapOn: "Send review"
+- assertNotVisible: "Send review"

@@ -22,7 +22,7 @@ describe('OffersService', () => {
   const config = { get: jest.fn((k: string) => ({ OFFER_TTL_MINUTES: 10, MAX_OFFERS_SHOWN: 2 } as any)[k]) };
   const notifications = { notify: jest.fn() };
   const realtime = { emitToUsers: jest.fn() };
-  const svc = new OffersService(prisma, config as any, notifications as any, realtime as any);
+  const svc = new OffersService(prisma, config as any, notifications as any, realtime as any, { between: jest.fn(async () => false), isBlocked: jest.fn(async () => false), blockedIds: jest.fn(async () => []) } as any);
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -31,7 +31,7 @@ describe('OffersService', () => {
   });
 
   const openMatch = (over: any = {}) => ({ declinedAt: null, jobRequest: { id: 'j1', status: 'MATCHES_FOUND', customerId: 'c1', assignedWorkerId: null }, ...over });
-  const activeWorker = { activationStatus: 'ACTIVE', currency: 'PKR' };
+  const activeWorker = { activationStatus: 'ACTIVE', currency: 'PKR', balanceBlocked: false };
 
   describe('submit', () => {
     it('404 when the worker was never matched to the request', async () => {

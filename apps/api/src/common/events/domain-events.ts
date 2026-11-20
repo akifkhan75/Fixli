@@ -5,7 +5,9 @@ import { EventEmitter } from 'events';
 export interface DomainEventMap {
   /** These sessions were signed out: their live connections must drop now. */
   'sessions.revoked': { sessionIds: string[] };
-  'payment.recorded': { jobId: string };
+  'admin.settlement_reported': { settlementId: string; workerId: string };
+  /** A worker answered a direct request (accepted or declined). SOS dispatch listens. */
+  'job.direct_answered': { jobId: string; workerId: string; accepted: boolean };
   'admin.verification_submitted': { caseId: string; workerId: string };
   'admin.dispute_opened': { disputeId: string; jobId: string };
   'admin.incident_reported': { incidentId: string; type: string };

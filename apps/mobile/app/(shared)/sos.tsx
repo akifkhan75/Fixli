@@ -1,170 +1,152 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, TouchableOpacity, Linking } from 'react-native';
-import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
+import { analytics } from '../../src/services/analytics';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, TouchableOpacity, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { routes } from '@fixli/shared';
 import { useTheme } from '../../src/hooks/useTheme';
+import { friendlyError } from '../../src/hooks/useApi';
+import { useAppSelector } from '../../src/hooks/useRedux';
+import { selectCurrentUser } from '../../src/store/authSlice';
 import { Screen } from '../../src/components/ds/Screen';
 import { Text } from '../../src/components/ds/Text';
 import { Button } from '../../src/components/ds/Button';
+import { SOS_COPY as C } from '../../src/safety/copy';
+import { loadEmergencyNumbers, type EmergencyNumber } from '../../src/services/emergencyNumbers';
+import { newClientId } from '../../src/services/chatOutbox';
 import * as api from '../../src/services/api';
-import { friendlyError } from '../../src/hooks/useApi';
-import { FALLBACK_NUMBERS, SOS_ADVICE, SOS_CHOICES, SosChoice, describeContacts, pickAddress, telUrl } from '../../src/utils/sos';
-import { AnalyticsService } from '../../src/services/analytics';
+import { t } from '../../src/i18n';
 
-const NUMBERS_KEY = 'sos.numbers.v1';
-const COUNTDOWN_S = 10;
-const newKey = () => `sos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
-
-type Step = 'choose' | 'countdown' | 'sending' | 'done';
+type Step = 'countdown' | 'choose' | 'life' | 'steps' | 'inJob';
+type Property = 'WATER' | 'ELECTRIC' | 'GAS';
+const COUNTDOWN = 5;
 
 /**
- * SOS. The emergency numbers are ALWAYS on screen and dial straight from the phone, with or without
- * internet. Life-threatening: show the numbers, alert trusted contacts, never send a worker.
- * Property hazard: 10 s to cancel a false alarm, then an urgent request goes to the nearest professional.
+ * SOS (doc 22 §5.1, doc 27 F5). Works with no payment method. Life-threatening never sends a
+ * professional; it shows the country's emergency numbers (cached for offline use) and tells the
+ * safety team and trusted contacts. Water/electric/gas: safety steps, then the nearest free pro.
  */
 export default function SosScreen() {
-  useEffect(() => { AnalyticsService.track('emergency_opened'); }, []);
+  const { jobId } = useLocalSearchParams<{ jobId?: string }>();
   const theme = useTheme();
-  const [numbers, setNumbers] = useState<api.EmergencyNumber[]>(FALLBACK_NUMBERS);
-  const [disclaimer, setDisclaimer] = useState('Fixli SOS is an emergency coordination tool. It does NOT replace government emergency services. In danger to life, call the emergency numbers directly.');
-  const [step, setStep] = useState<Step>('choose');
-  const [choice, setChoice] = useState<SosChoice | null>(null);
-  const [left, setLeft] = useState(COUNTDOWN_S);
+  const me = useAppSelector(selectCurrentUser);
+  const [step, setStep] = useState<Step>(jobId ? 'inJob' : 'countdown');
+  const [left, setLeft] = useState(COUNTDOWN);
+  const [kind, setKind] = useState<Property | null>(null);
+  const [numbers, setNumbers] = useState<EmergencyNumber[]>([]);
+  const [result, setResult] = useState<api.SosResult | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
-  const [result, setResult] = useState<api.IncidentResult | null>(null);
-  const [offline, setOffline] = useState(false);
-  const keyRef = useRef(newKey()); // one key per SOS: a retry can never dispatch twice
+  const key = useRef(newClientId()).current; // one emergency per visit, even if sent twice
 
-  // Numbers: last good copy first (works offline), then refresh from the server.
+  useEffect(() => { void loadEmergencyNumbers((me as any)?.countryCode).then(setNumbers); }, [me]);
+
   useEffect(() => {
-    let alive = true;
-    AsyncStorage.getItem(NUMBERS_KEY).then((raw) => { if (alive && raw) try { setNumbers(JSON.parse(raw)); } catch { /* ignore */ } }).catch(() => undefined);
-    api.getEmergencyNumbers().then((r) => {
-      if (!alive) return;
-      setNumbers(r.numbers); setDisclaimer(r.disclaimer);
-      AsyncStorage.setItem(NUMBERS_KEY, JSON.stringify(r.numbers)).catch(() => undefined);
-    }).catch(() => undefined);
-    return () => { alive = false; };
-  }, []);
-
-  const dial = (n: api.EmergencyNumber) => Linking.openURL(telUrl(n)).catch(() => undefined);
-
-  const send = useCallback(async (c: SosChoice) => {
-    setStep('sending'); setError(undefined); setOffline(false);
-    try {
-      let coords: { latitude?: number; longitude?: number } = {};
-      try { // only if permission was already granted; SOS never stops to ask
-        const perm = await Location.getForegroundPermissionsAsync();
-        if (perm.granted) {
-          const p = (await Location.getLastKnownPositionAsync()) ?? undefined;
-          if (p) coords = { latitude: p.coords.latitude, longitude: p.coords.longitude };
-        }
-      } catch { /* location is a bonus */ }
-
-      if (c === 'LIFE') {
-        setResult(await api.reportIncident({ type: 'SOS', severity: 'LIFE_THREATENING', idempotencyKey: keyRef.current, ...coords }));
-      } else {
-        const addresses = await api.getAddresses();
-        const addressId = pickAddress(addresses);
-        if (!addressId) { setStep('choose'); setError('Save your address first so we can send someone. If it is dangerous, call the emergency numbers above now.'); return; }
-        setResult(await api.reportIncident({ type: 'SOS', severity: 'PROPERTY_DAMAGE', sosKind: c, addressId, idempotencyKey: keyRef.current, ...coords }));
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-      setStep('done');
-    } catch (e) {
-      const msg = friendlyError(e);
-      setOffline(/internet|network|connection/i.test(msg));
-      setError(msg);
-      setStep('choose');
-    }
-  }, []);
-
-  // 10-second cancel window for property emergencies.
-  useEffect(() => {
-    if (step !== 'countdown' || !choice) return;
-    if (left <= 0) { void send(choice); return; }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => undefined);
-    const t = setTimeout(() => setLeft((x) => x - 1), 1000);
+    if (step !== 'countdown') return undefined;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+    if (left === 0) { setStep('choose'); return undefined; }
+    const t = setTimeout(() => setLeft((s) => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [step, left, choice, send]);
+  }, [step, left]);
 
-  const pick = (c: SosChoice) => {
-    setChoice(c); setError(undefined);
-    if (c === 'LIFE') { void send(c); } else { setLeft(COUNTDOWN_S); setStep('countdown'); }
+  const send = async (k: api.SosKind) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      if (k !== 'IN_JOB') void analytics.track('emergency_opened', { kind: k.toLowerCase() as 'life_threatening' | 'water' | 'electric' | 'gas' });
+      const r = await api.raiseSos({ kind: k, idempotencyKey: key, ...(k === 'IN_JOB' ? { jobRequestId: jobId } : {}) });
+      setResult(r);
+      if (r.emergencyNumbers?.length) setNumbers(r.emergencyNumbers);
+      if (r.jobRequestId) router.replace(routes.customerJob(r.jobRequestId) as any);
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally { setBusy(false); }
   };
-  const cancel = () => { setStep('choose'); setChoice(null); setLeft(COUNTDOWN_S); };
 
-  const dialPanel = (
-    <View style={{ gap: 10 }} accessibilityRole="summary">
-      <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>CALL EMERGENCY SERVICES NOW</Text>
+  const callButtons = useMemo(() => (
+    <View style={{ gap: 10, marginTop: 16 }}>
       {numbers.map((n) => (
-        <TouchableOpacity key={n.number} onPress={() => dial(n)} accessibilityRole="button" accessibilityLabel={`Call ${n.label} ${n.number}`}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 18, borderRadius: theme.borderRadius.xl, backgroundColor: theme.colors.error }}>
-          <Ionicons name="call" size={26} color="#FFF" />
-          <Text variant="h3" weight="extrabold" style={{ color: '#FFF', flex: 1 }}>{n.label}</Text>
-          <Text variant="h2" weight="extrabold" style={{ color: '#FFF' }}>{n.number}</Text>
+        <TouchableOpacity key={n.number} onPress={() => { void analytics.track('emergency_call_initiated'); void Linking.openURL(`tel:${n.number}`); }} accessibilityRole="button" accessibilityLabel={`${C.callNow}: ${n.label} ${n.number}`}
+          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.error, borderRadius: theme.borderRadius.xl, padding: 18, gap: 14 }}>
+          <Ionicons name="call" size={26} color="#FFFFFF" />
+          <View style={{ flex: 1 }}>
+            <Text variant="h3" weight="bold" color="#FFFFFF">{n.label}</Text>
+            <Text variant="bodyLarge" color="#FFFFFF">{n.number}</Text>
+          </View>
+          <Text variant="body" weight="semibold" color="#FFFFFF">{C.callNow}</Text>
         </TouchableOpacity>
       ))}
     </View>
-  );
-  const note = <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 16 }}>{disclaimer}</Text>;
+  ), [numbers, theme]);
 
-  if (step === 'done' && result) {
-    const contacts = describeContacts(result);
-    const hazard = choice && choice !== 'LIFE' ? SOS_ADVICE[choice] : null;
+  if (step === 'countdown') {
     return (
-      <Screen title="Emergency help" back footer={result.jobId ? <Button title="See your request" size="lg" variant="primary" onPress={() => router.replace(`/(customer)/job/${result.jobId}` as any)} /> : <Button title="Done" size="lg" variant="secondary" onPress={() => router.back()} />}>
-        {result.jobId ? (
-          <>
-            <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>We are finding someone near you</Text>
-            <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 6 }}>Your urgent request was sent to the nearest professional. If nobody answers in a few minutes we alert more of them. You will get a notification when a price arrives.</Text>
-          </>
-        ) : (
-          <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>Call for help now</Text>
-        )}
-        {hazard ? <Text variant="bodyLarge" weight="semibold" color={theme.colors.error} style={{ marginTop: 14 }}>{hazard}</Text> : null}
-        <View style={{ marginTop: 18 }}>{dialPanel}</View>
-        {contacts ? <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 16 }}>{contacts}</Text> : null}
-        {note}
-      </Screen>
-    );
-  }
-
-  if (step === 'countdown' && choice && choice !== 'LIFE') {
-    return (
-      <Screen title="Emergency help" scroll={false} footer={<Button title="Cancel: false alarm" size="lg" variant="secondary" onPress={cancel} />}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} accessibilityLiveRegion="polite">
-          <Text variant="h1" weight="extrabold" color={theme.colors.error} style={{ fontSize: 96, lineHeight: 110 }}>{left}</Text>
-          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ textAlign: 'center' }}>Sending an urgent request…</Text>
-          <Text variant="body" color={theme.colors.textSecondary} style={{ textAlign: 'center', marginTop: 8 }}>Tap Cancel if this was a mistake.</Text>
+      <Screen title={C.holdTitle} back>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 }}>
+          <View style={{ width: 160, height: 160, borderRadius: 80, backgroundColor: theme.colors.error, alignItems: 'center', justifyContent: 'center' }}>
+            <Text variant="h1" weight="extrabold" color="#FFFFFF" accessibilityLiveRegion="assertive">{left}</Text>
+          </View>
+          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginTop: 24 }}>{C.countdown(left)}</Text>
+          <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 6 }}>{C.countdownHint}</Text>
+          <View style={{ width: '100%', marginTop: 32 }}><Button title={C.cancel} variant="secondary" size="lg" onPress={() => { void analytics.track('safety_cancel'); router.back(); }} /></View>
         </View>
       </Screen>
     );
   }
 
+  if (step === 'choose') {
+    return (
+      <Screen title={C.chooseTitle} back>
+        {(['LIFE_THREATENING', 'WATER', 'ELECTRIC', 'GAS'] as const).map((k) => (
+          <TouchableOpacity key={k} accessibilityRole="button" accessibilityLabel={C.kinds[k].label}
+            onPress={() => { if (k === 'LIFE_THREATENING') { setStep('life'); void send('LIFE_THREATENING'); } else { setKind(k); setStep('steps'); } }}
+            style={{ backgroundColor: k === 'LIFE_THREATENING' ? theme.colors.error : theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 18, marginBottom: 12 }}>
+            <Text variant="h3" weight="bold" color={k === 'LIFE_THREATENING' ? '#FFFFFF' : theme.colors.textPrimary}>{C.kinds[k].label}</Text>
+            <Text variant="body" color={k === 'LIFE_THREATENING' ? '#FFFFFF' : theme.colors.textSecondary}>{C.kinds[k].sub}</Text>
+          </TouchableOpacity>
+        ))}
+        {callButtons}
+      </Screen>
+    );
+  }
+
+  if (step === 'life' || step === 'inJob') {
+    const sent = !!result;
+    return (
+      <Screen title={step === 'life' ? C.lifeTitle : C.inJobTitle} back>
+        <Text variant="body" color={theme.colors.textPrimary}>{step === 'life' ? C.lifeBody : C.inJobBody}</Text>
+        {callButtons}
+        {step === 'life' ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 12 }}>{C.noWorker}</Text> : null}
+        {step === 'inJob' && !sent ? <View style={{ marginTop: 20 }}><Button title={C.inJobSend} variant="danger" size="lg" loading={busy} disabled={busy} onPress={() => void send('IN_JOB')} /></View> : null}
+        {step === 'inJob' && sent ? <Text variant="body" weight="semibold" color={theme.colors.textPrimary} style={{ marginTop: 16 }}>{C.inJobSent}</Text> : null}
+        {result?.contacts ? (
+          <Text variant="body" color={result.contacts.status === 'SENT' ? theme.colors.textPrimary : theme.colors.warningText} style={{ marginTop: 12 }} accessibilityRole="alert">{result.contacts.message}</Text>
+        ) : null}
+        {error ? <Text variant="body" color={theme.colors.errorText} style={{ marginTop: 12 }} accessibilityRole="alert">{`${error} ${C.offline}`}</Text> : null}
+        {step === 'life' && error ? <View style={{ marginTop: 12 }}><Button title={t('sharedSos.tryAgain')} variant="secondary" onPress={() => void send('LIFE_THREATENING')} /></View> : null}
+        <View style={{ marginTop: 16 }}><Button title={t('sharedSos.trustedContacts')} variant="ghost" onPress={() => router.push('/trusted-contacts' as any)} /></View>
+      </Screen>
+    );
+  }
+
+  // Property emergency: safety first, then find someone.
+  const k = kind!;
   return (
-    <Screen title="Emergency help" back>
-      {dialPanel}
-      {offline ? (
-        <Text variant="bodyLarge" weight="bold" color={theme.colors.error} style={{ marginTop: 14 }}>No internet connection. Use the buttons above to call emergency services now.</Text>
-      ) : null}
-      <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>OR LET FIXLI SEND HELP</Text>
-      {SOS_CHOICES.map((c) => (
-        <TouchableOpacity key={c.id} disabled={step === 'sending'} onPress={() => pick(c.id)} accessibilityRole="button" accessibilityLabel={`${c.label}. ${c.hint}`}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 10, borderRadius: theme.borderRadius.xl, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, opacity: step === 'sending' ? 0.5 : 1 }}>
-          <Ionicons name={c.icon as any} size={28} color={c.id === 'LIFE' ? theme.colors.error : theme.colors.primary} />
-          <View style={{ flex: 1 }}>
-            <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{c.label}</Text>
-            <Text variant="bodySmall" color={theme.colors.textSecondary}>{c.hint}</Text>
+    <Screen title={C.kinds[k].label} back footer={<Button title={busy ? C.sendingRequest : C.sendRequest} variant="danger" size="lg" loading={busy} disabled={busy} onPress={() => void send(k)} />}>
+      <Text variant="h3" weight="bold" color={theme.colors.textPrimary}>{t('sharedSos.doThisFirst')}</Text>
+      <View style={{ gap: 10, marginTop: 10 }}>
+        {C.steps[k].map((s, i) => (
+          <View key={s} style={{ flexDirection: 'row', gap: 10 }}>
+            <Text variant="bodyLarge" weight="bold" color={theme.colors.errorText}>{i + 1}.</Text>
+            <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ flex: 1 }}>{s}</Text>
           </View>
-        </TouchableOpacity>
-      ))}
-      {step === 'sending' ? <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>Sending…</Text> : null}
-      {error ? <Text variant="body" weight="semibold" color={theme.colors.error} style={{ marginTop: 8 }}>{error}</Text> : null}
-      {note}
+        ))}
+      </View>
+      <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 16 }}>{t('sharedSos.ifAnyoneIsHurt')}</Text>
+      {callButtons}
+      {error ? <Text variant="body" color={theme.colors.errorText} style={{ marginTop: 12 }} accessibilityRole="alert">{error}</Text> : null}
+      {error && /address/i.test(error) ? <View style={{ marginTop: 8 }}><Button title={t('sharedSos.addAddress')} variant="secondary" onPress={() => router.push('/address-edit' as any)} /></View> : null}
     </Screen>
   );
 }

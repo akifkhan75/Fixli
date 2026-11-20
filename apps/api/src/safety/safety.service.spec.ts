@@ -1,98 +1,99 @@
-import { BadRequestException } from '@nestjs/common';
-import { SafetyService, SOS_CATEGORY } from './safety.service';
-
-function build(smsDelivered = true, configured = true) {
-  const prisma: any = {
-    user: { findUnique: jest.fn().mockResolvedValue({ countryCode: 'PK', name: 'Sana' }) },
-    incident: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockImplementation(async ({ data }: any) => ({ id: 'i1', ...data })),
-      update: jest.fn(),
-      findUniqueOrThrow: jest.fn(),
-    },
-    serviceCategory: { findFirst: jest.fn().mockResolvedValue({ id: 'cat-plumbing' }) },
-    trustedContact: { findMany: jest.fn().mockResolvedValue([{ name: 'Ali', phone: '+923001112223' }, { name: 'Bo', phone: '+923004445556' }]), count: jest.fn(), findUnique: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() },
-  };
-  const jobs = { create: jest.fn().mockResolvedValue({ id: 'job1' }) };
-  const events = { emit: jest.fn() };
-  const audit = { record: jest.fn() };
-  const sms = { configured, send: jest.fn().mockResolvedValue({ delivered: smsDelivered }) };
-  return { svc: new SafetyService(prisma, jobs as any, events as any, audit as any, sms as any), prisma, jobs, events, sms };
-}
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { SafetyService } from './safety.service';
 
 describe('SafetyService', () => {
-  it('emergency numbers come from shared country config, not hard-coded 115/16', async () => {
-    const { svc } = build();
-    const r = await svc.getEmergencyNumbers('u1');
-    expect(r.country).toBe('PK');
-    expect(r.numbers).toEqual([{ label: 'Police', number: '15' }, { label: 'Rescue', number: '1122' }]);
-    expect(r.disclaimer).toMatch(/does NOT replace/);
+  const tx: any = { $queryRaw: jest.fn(), trustedContact: { findUnique: jest.fn(), count: jest.fn(), upsert: jest.fn() } };
+  const prisma: any = {
+    user: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn() },
+    incident: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), create: jest.fn(), update: jest.fn(), count: jest.fn() },
+    jobRequest: { findFirst: jest.fn() },
+    address: { findFirst: jest.fn() },
+    serviceCategory: { findUnique: jest.fn() },
+    trustedContact: { findMany: jest.fn() },
+    $transaction: jest.fn((fn: any) => fn(tx)),
+  };
+  const jobs = { create: jest.fn() };
+  const sos = { start: jest.fn() };
+  const events = { emit: jest.fn() };
+  const audit = { record: jest.fn() };
+  const countries = { get: jest.fn(async () => ({ countryCode: 'PK', emergencyNumbers: [{ label: 'Rescue', number: '1122' }] })) };
+  const sms = { name: 'fake', configured: true, send: jest.fn(async () => ({ ok: true })) };
+  const make = (s: any = sms) => new SafetyService(prisma, jobs as any, sos as any, events as any, audit as any, countries as any, s as any);
+  const customer = { id: 'c1', type: 'customer' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma.$transaction.mockImplementation((fn: any) => fn(tx));
+    prisma.user.findUnique.mockResolvedValue({ countryCode: 'PK' });
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ name: 'Ayesha', locale: 'en', countryCode: 'PK', phone: '+923001112222' });
+    prisma.incident.findUnique.mockResolvedValue(null);
+    prisma.incident.create.mockImplementation(async ({ data }: any) => ({ id: 'i1', ...data }));
+    prisma.incident.findUniqueOrThrow.mockImplementation(async () => ({ id: 'i1', kind: prisma.incident.create.mock.calls[0]?.[0].data.kind, jobRequestId: 'j1', contactsAlertStatus: prisma.incident.update.mock.calls[0]?.[0].data.contactsAlertStatus ?? null, contactsAlerted: prisma.incident.update.mock.calls[0]?.[0].data.contactsAlerted ?? 0 }));
+    prisma.address.findFirst.mockResolvedValue({ id: 'a1', area: 'Gulshan', city: 'Karachi' });
+    prisma.trustedContact.findMany.mockResolvedValue([{ phone: '+923001234567' }, { phone: '+923009876543' }]);
   });
 
-  describe('life-threatening', () => {
-    it('NEVER creates a job; alerts trusted contacts; returns the numbers; says nothing about authorities', async () => {
-      const { svc, jobs, sms } = build();
-      const r = await svc.reportIncident('u1', 'customer', { type: 'SOS', severity: 'LIFE_THREATENING', latitude: 24.9, longitude: 67.1 });
-      expect(jobs.create).not.toHaveBeenCalled();
-      expect(sms.send).toHaveBeenCalledTimes(2);
-      expect(sms.send.mock.calls[0][1]).toMatch(/maps\.google\.com\/\?q=24\.9,67\.1/);
-      expect(sms.send.mock.calls[0][1]).toMatch(/not contacted the authorities/);
-      expect(r.jobId).toBeNull();
-      expect(r.emergencyNumbers.length).toBeGreaterThan(0);
-      expect(r.trustedContacts).toEqual({ total: 2, notified: 2, smsConfigured: true });
-    });
-    it('is honest when no SMS provider is configured: notified = 0', async () => {
-      const { svc } = build(false, false);
-      const r = await svc.reportIncident('u1', 'customer', { type: 'SOS', severity: 'LIFE_THREATENING' });
-      expect(r.trustedContacts).toEqual({ total: 2, notified: 0, smsConfigured: false });
-    });
-    it('a failing SMS provider never fails the SOS', async () => {
-      const { svc, sms } = build();
-      sms.send.mockRejectedValue(new Error('gateway down'));
-      await expect(svc.reportIncident('u1', 'customer', { type: 'SOS', severity: 'LIFE_THREATENING' })).resolves.toBeTruthy();
-    });
+  it('life-threatening: numbers + safety team + contacts texted, and NO job or worker', async () => {
+    const r = await make().raiseSos(customer, { kind: 'LIFE_THREATENING', idempotencyKey: 'k1' });
+    expect(jobs.create).not.toHaveBeenCalled();
+    expect(sos.start).not.toHaveBeenCalled();
+    expect(prisma.incident.create.mock.calls[0][0].data).toMatchObject({ type: 'SOS', kind: 'LIFE_THREATENING', severity: 'LIFE_THREATENING', idempotencyKey: 'sos:c1:k1' });
+    expect(events.emit).toHaveBeenCalledWith('admin.incident_reported', { incidentId: 'i1', type: 'SOS' });
+    expect(sms.send).toHaveBeenCalledTimes(2);
+    const text = (sms.send.mock.calls as any[])[0][1] as string;
+    expect(text).toMatch(/Ayesha pressed the SOS button/);
+    expect(text).toMatch(/Approximate area: Gulshan, Karachi/);
+    expect(text).not.toMatch(/police|ambulance has been/i); // never claims anyone was called
+    expect(r).toMatchObject({ emergencyNumbers: [{ number: '1122' }], contacts: { status: 'SENT', alerted: 2 } });
   });
 
-  describe('property emergency', () => {
-    const dto = { type: 'SOS', severity: 'PROPERTY_DAMAGE', sosKind: 'WATER' as const, addressId: 'a1', idempotencyKey: 'sos-key-0001' };
-    it('creates an urgent job through the normal path, links it, and chooses the trade by hazard', async () => {
-      const { svc, jobs, prisma } = build();
-      const r = await svc.reportIncident('u1', 'customer', dto);
-      const [user, job] = jobs.create.mock.calls[0];
-      expect(user).toMatchObject({ id: 'u1', type: 'customer' });
-      expect(job).toMatchObject({ categoryId: 'cat-plumbing', addressId: 'a1', when: 'NOW', isEmergency: true, idempotencyKey: 'sos:sos-key-0001' });
-      expect(prisma.serviceCategory.findFirst.mock.calls[0][0].where.name).toBe(SOS_CATEGORY.WATER);
-      expect(prisma.incident.update).toHaveBeenCalledWith({ where: { id: 'i1' }, data: { jobRequestId: 'job1' } });
-      expect(r.jobId).toBe('job1');
-    });
-    it('needs hazard kind, address and an idempotency key', async () => {
-      const { svc, jobs } = build();
-      await expect(svc.reportIncident('u1', 'customer', { type: 'SOS', severity: 'PROPERTY_DAMAGE' })).rejects.toMatchObject({ response: { code: 'SOS_DETAILS_REQUIRED' } });
-      expect(jobs.create).not.toHaveBeenCalled();
-    });
-    it('a retry returns the same incident and does NOT dispatch twice', async () => {
-      const { svc, jobs, prisma } = build();
-      prisma.incident.findUnique.mockResolvedValue({ id: 'i1', severity: 'PROPERTY_DAMAGE', jobRequestId: 'job1' });
-      const r = await svc.reportIncident('u1', 'customer', dto);
-      expect(r.replay).toBe(true);
-      expect(r.jobId).toBe('job1');
-      expect(jobs.create).not.toHaveBeenCalled();
-      expect(prisma.incident.create).not.toHaveBeenCalled();
-    });
-    it('a worker reporting property damage is recorded but never dispatches a job', async () => {
-      const { svc, jobs } = build();
-      await svc.reportIncident('w1', 'worker', { type: 'REPORT_PROBLEM', severity: 'PROPERTY_DAMAGE' });
-      expect(jobs.create).not.toHaveBeenCalled();
-    });
+  it('without an SMS provider it says so honestly: contacts NOT told', async () => {
+    const r = await make({ name: 'none', configured: false, send: jest.fn() }).raiseSos(customer, { kind: 'LIFE_THREATENING', idempotencyKey: 'k2' });
+    expect(r.contacts).toMatchObject({ status: 'NO_PROVIDER', alerted: 0, message: expect.stringMatching(/NOT told/) });
   });
 
-  it('limits trusted contacts to 5 (but allows editing an existing one)', async () => {
-    const { svc, prisma } = build();
-    prisma.trustedContact.findUnique.mockResolvedValue(null);
-    prisma.trustedContact.count.mockResolvedValue(5);
-    await expect(svc.addTrustedContact('u1', { name: 'X', phone: '+923001112223' })).rejects.toBeInstanceOf(BadRequestException);
-    prisma.trustedContact.findUnique.mockResolvedValue({ id: 't1' });
-    prisma.trustedContact.upsert.mockResolvedValue({});
-    await expect(svc.addTrustedContact('u1', { name: 'X', phone: '+923001112223' })).resolves.toBeDefined();
+  it('a double tap returns the same emergency', async () => {
+    prisma.incident.findUnique.mockResolvedValue({ id: 'i0' });
+    prisma.incident.findUniqueOrThrow.mockResolvedValue({ id: 'i0', kind: 'LIFE_THREATENING', contactsAlertStatus: 'SENT', contactsAlerted: 2 });
+    await expect(make().raiseSos(customer, { kind: 'LIFE_THREATENING', idempotencyKey: 'k1' })).resolves.toMatchObject({ incidentId: 'i0' });
+    expect(prisma.incident.create).not.toHaveBeenCalled();
+    expect(sms.send).not.toHaveBeenCalled();
+  });
+
+  it('water/electric/gas: an urgent job (no normal matching yet) handed to SOS dispatch', async () => {
+    prisma.serviceCategory.findUnique.mockResolvedValue({ id: 'cat-plumb' });
+    jobs.create.mockResolvedValue({ id: 'j1' });
+    const r = await make().raiseSos(customer, { kind: 'WATER', idempotencyKey: 'k3' });
+    expect(jobs.create.mock.calls[0][1]).toMatchObject({ categoryId: 'cat-plumb', addressId: 'a1', when: 'NOW', isEmergency: true });
+    expect(jobs.create.mock.calls[0][2]).toEqual({ skipMatching: true });
+    expect(sos.start).toHaveBeenCalledWith('j1', 'i1');
+    expect(r.jobRequestId).toBe('j1');
+  });
+
+  it('in-job SOS must be about your own job; the other person is recorded', async () => {
+    prisma.jobRequest.findFirst.mockResolvedValue(null);
+    await expect(make().raiseSos(customer, { kind: 'IN_JOB', jobRequestId: 'x', idempotencyKey: 'k4' })).rejects.toThrow(NotFoundException);
+    prisma.jobRequest.findFirst.mockResolvedValue({ id: 'j1', customerId: 'c1', assignedWorkerId: 'w1' });
+    await make().raiseSos(customer, { kind: 'IN_JOB', jobRequestId: 'j1', idempotencyKey: 'k5' });
+    expect(prisma.incident.create.mock.calls.at(-1)[0].data).toMatchObject({ targetId: 'w1', jobRequestId: 'j1', severity: 'LIFE_THREATENING' });
+  });
+
+  it('reports: only about your own job and its other party; rate-limited', async () => {
+    prisma.jobRequest.findFirst.mockResolvedValue({ customerId: 'c1', assignedWorkerId: 'w1' });
+    await expect(make().reportIncident('c1', { type: 'REPORT_PROBLEM', severity: 'MODERATE', jobRequestId: 'j1', targetId: 'someone-else', description: 'x' })).rejects.toThrow(BadRequestException);
+    await expect(make().reportIncident('c1', { type: 'REPORT_PROBLEM', severity: 'MODERATE', targetId: 'w1', description: 'x' })).rejects.toThrow(BadRequestException);
+    prisma.incident.count.mockResolvedValue(5);
+    await expect(make().reportIncident('c1', { type: 'REPORT_PROBLEM', severity: 'MODERATE', jobRequestId: 'j1', description: 'x' })).rejects.toMatchObject({ status: 429 });
+  });
+
+  it('trusted contacts: number normalised for the country; at most 5; not your own number', async () => {
+    tx.trustedContact.findUnique.mockResolvedValue(null);
+    tx.trustedContact.count.mockResolvedValue(0);
+    tx.trustedContact.upsert.mockImplementation(async ({ create }: any) => create);
+    await expect(make().addTrustedContact('c1', { name: 'Sister', phone: '0300 1234567' })).resolves.toMatchObject({ phone: '+923001234567' });
+    await expect(make().addTrustedContact('c1', { name: 'Me', phone: '0300 1112222' })).rejects.toThrow(BadRequestException);
+    await expect(make().addTrustedContact('c1', { name: 'Bad', phone: '12' })).rejects.toThrow(BadRequestException);
+    tx.trustedContact.count.mockResolvedValue(5);
+    await expect(make().addTrustedContact('c1', { name: 'Sixth', phone: '0301 7654321' })).rejects.toMatchObject({ response: { code: 'TOO_MANY_CONTACTS' } });
   });
 });

@@ -6,7 +6,6 @@ import { formatMoney } from '../common/money';
 
 export type NotificationType =
   | 'job.request'
-  | 'job.emergency_request'
   | 'job.direct_request'
   | 'offer.received'
   | 'offer.accepted'
@@ -21,11 +20,26 @@ export type NotificationType =
   | 'verification.needs_fix'
   | 'worker.activated'
   | 'chat.message'
-  | 'payment.confirm_request'
-  | 'payment.confirm_reminder'
+  | 'job.en_route'
+  | 'job.arrived'
+  | 'job.awaiting_confirmation'
+  | 'job.confirmed'
+  | 'job.auto_confirmed'
+  | 'change_order.created'
+  | 'change_order.approved'
+  | 'change_order.declined'
+  | 'payment.cash_marked'
+  | 'payment.confirmed'
   | 'payment.auto_confirmed'
-  | 'worker.commission_warning'
-  | 'worker.commission_blocked';
+  | 'payment.disputed'
+  | 'settlement.confirmed'
+  | 'settlement.rejected'
+  | 'balance.paused'
+  | 'dispute.opened'
+  | 'dispute.updated'
+  | 'job.sos_request'
+  | 'sos.searching_wider'
+  | 'job.reassigned';
 
 type Locale = 'en' | 'ur' | 'ar';
 export type Money = { minor: number; currency: string };
@@ -33,7 +47,26 @@ type P = Record<string, string | number | Money | undefined>;
 type T = (p: P) => { title: string; body: string };
 
 const en: Record<NotificationType, T> = {
-  'job.emergency_request': (p) => ({ title: 'EMERGENCY near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. A customer needs urgent help. Send your price now.` }),
+  'job.reassigned': (p) => ({ title: 'Finding you another professional', body: `${p.worker} can no longer do "${p.title}". We're asking others near you now.` }),
+  'job.sos_request': (p) => ({ title: 'Emergency near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. Can you go now? Answer within ${p.minutes} minutes.` }),
+  'sos.searching_wider': (p) => ({ title: 'Still finding help', body: `Nobody nearby could come straight away. We sent "${p.title}" to more professionals; prices will arrive shortly.` }),
+  'payment.cash_marked': (p) => ({ title: 'Did you pay in cash?', body: `The professional says you paid ${p.price} for "${p.title}". Confirm, or tell us if that's wrong.` }),
+  'payment.confirmed': (p) => ({ title: 'Cash payment confirmed', body: `${p.price} for "${p.title}". Fixli's fee: ${p.commission}.` }),
+  'payment.auto_confirmed': (p) => ({ title: 'Cash payment confirmed', body: `${p.price} for "${p.title}" was confirmed automatically. Fixli's fee: ${p.commission}.` }),
+  'payment.disputed': (p) => ({ title: 'The customer questioned a payment', body: `For "${p.title}". Fixli support will look into it; no fee is charged meanwhile.` }),
+  'settlement.confirmed': (p) => ({ title: 'Payment received', body: `We received ${p.price}. Thank you!` }),
+  'settlement.rejected': (p) => ({ title: "We couldn't find your payment", body: `${p.price}: ${p.reason ?? 'please check the reference and send it again.'}` }),
+  'balance.paused': () => ({ title: 'New jobs paused', body: 'Please settle what you owe Fixli to get new requests again. See Earnings.' }),
+  'dispute.opened': (p) => ({ title: 'A problem was reported', body: `About "${p.title}". Fixli support will contact you.` }),
+  'dispute.updated': (p) => ({ title: 'Update on a reported problem', body: `About "${p.title}": ${p.status}.` }),
+  'job.en_route': (p) => ({ title: `${p.worker} is on the way`, body: `For "${p.title}". You can follow them on the job screen.` }),
+  'job.arrived': (p) => ({ title: `${p.worker} has arrived`, body: `For "${p.title}".` }),
+  'job.awaiting_confirmation': (p) => ({ title: 'Please check the work', body: `${p.worker} finished "${p.title}". Confirm it's done, or report a problem.` }),
+  'job.confirmed': (p) => ({ title: 'Job confirmed', body: `The customer confirmed "${p.title}" is done.` }),
+  'job.auto_confirmed': (p) => ({ title: 'Job completed', body: `"${p.title}" was completed automatically because it wasn't confirmed in time.` }),
+  'change_order.created': (p) => ({ title: 'Extra work needs your OK', body: `New total for "${p.title}": ${p.price}. Approve or decline in the app.` }),
+  'change_order.approved': (p) => ({ title: 'Extra work approved', body: `New total for "${p.title}": ${p.price}.` }),
+  'change_order.declined': (p) => ({ title: 'Extra work declined', body: `The customer kept the original price for "${p.title}".` }),
   'job.direct_request': (p) => ({ title: 'A customer asked for you', body: `"${p.title}". Accept or decline in the app.` }),
   'job.request': (p) => ({ title: 'New request near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. Send your price.` }),
   'offer.received': (p) => ({ title: 'You got a price', body: `${p.worker} can do it for ${p.price}.` }),
@@ -48,16 +81,30 @@ const en: Record<NotificationType, T> = {
   'verification.approved': (p) => ({ title: 'Document approved', body: `Your ${p.doc} was approved.` }),
   'verification.needs_fix': (p) => ({ title: 'Please fix a document', body: `Your ${p.doc} needs a new photo. ${p.reason ?? ''}`.trim() }),
   'worker.activated': () => ({ title: "You're approved!", body: 'Go online on the Today tab to start getting jobs.' }),
-  'chat.message': (p) => ({ title: `New message from ${p.sender}`, body: `${p.text}` }),
-  'payment.confirm_request': (p) => ({ title: 'Please confirm your payment', body: `${p.worker} says you paid ${p.amount} in cash for "${p.title}". Confirm or tell us if that's wrong.` }),
-  'payment.confirm_reminder': (p) => ({ title: 'Reminder: confirm your payment', body: `Please confirm the ${p.amount} cash payment for "${p.title}".` }),
-  'payment.auto_confirmed': (p) => ({ title: 'Payment confirmed automatically', body: `The ${p.amount} cash payment for "${p.title}" was confirmed because we didn't hear from you in 24 hours.` }),
-  'worker.commission_warning': (p) => ({ title: 'Fixli fees are building up', body: `You owe ${p.owed}. Settle soon to keep receiving jobs (limit ${p.limit}).` }),
-  'worker.commission_blocked': (p) => ({ title: 'You are offline until you settle', body: `You owe ${p.owed}, over the ${p.limit} limit. Settle your balance to receive new jobs. Jobs already booked are not affected.` }),
+  'chat.message': (p) => ({ title: `New message from ${p.sender}`, body: 'Open Fixli to read it.' }),
 };
 
 const ur: Record<NotificationType, T> = {
-  'job.emergency_request': (p) => ({ title: 'آپ کے قریب ایمرجنسی', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ ایک گاہک کو فوری مدد چاہیے۔ ابھی اپنی قیمت بھیجیں۔` }),
+  'job.reassigned': (p) => ({ title: 'آپ کے لیے دوسرا ماہر', body: `${p.worker} اب "${p.title}" نہیں کر سکتے۔ ہم قریب کے دوسرے ماہرین سے پوچھ رہے ہیں۔` }),
+  'job.sos_request': (p) => ({ title: 'آپ کے قریب ایمرجنسی', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ کیا آپ ابھی جا سکتے ہیں؟ ${p.minutes} منٹ میں جواب دیں۔` }),
+  'sos.searching_wider': (p) => ({ title: 'مدد تلاش کی جا رہی ہے', body: `قریب کوئی فوراً نہیں آ سکا۔ ہم نے "${p.title}" مزید ماہرین کو بھیج دیا ہے؛ جلد قیمتیں آئیں گی۔` }),
+  'payment.cash_marked': (p) => ({ title: 'کیا آپ نے نقد ادائیگی کی؟', body: `ماہر کے مطابق آپ نے "${p.title}" کے لیے ${p.price} ادا کیے۔ تصدیق کریں یا غلط ہو تو بتائیں۔` }),
+  'payment.confirmed': (p) => ({ title: 'نقد ادائیگی کی تصدیق', body: `"${p.title}" کے لیے ${p.price}۔ Fixli کی فیس: ${p.commission}۔` }),
+  'payment.auto_confirmed': (p) => ({ title: 'نقد ادائیگی کی تصدیق', body: `"${p.title}" کے لیے ${p.price} کی تصدیق خود بخود ہو گئی۔ Fixli کی فیس: ${p.commission}۔` }),
+  'payment.disputed': (p) => ({ title: 'گاہک نے ادائیگی پر سوال اٹھایا', body: `"${p.title}" کے لیے۔ Fixli سپورٹ دیکھے گی؛ تب تک کوئی فیس نہیں۔` }),
+  'settlement.confirmed': (p) => ({ title: 'ادائیگی موصول', body: `ہمیں ${p.price} موصول ہو گئے۔ شکریہ!` }),
+  'settlement.rejected': (p) => ({ title: 'آپ کی ادائیگی نہیں ملی', body: `${p.price}: ${p.reason ?? 'براہ کرم حوالہ نمبر چیک کر کے دوبارہ بھیجیں۔'}` }),
+  'balance.paused': () => ({ title: 'نئے کام روک دیے گئے', body: 'نئی درخواستیں دوبارہ پانے کے لیے Fixli کی واجب الادا رقم ادا کریں۔ آمدنی دیکھیں۔' }),
+  'dispute.opened': (p) => ({ title: 'ایک مسئلہ رپورٹ ہوا', body: `"${p.title}" کے بارے میں۔ Fixli سپورٹ آپ سے رابطہ کرے گی۔` }),
+  'dispute.updated': (p) => ({ title: 'رپورٹ شدہ مسئلے پر اپ ڈیٹ', body: `"${p.title}": ${p.status}۔` }),
+  'job.en_route': (p) => ({ title: `${p.worker} راستے میں ہیں`, body: `"${p.title}" کے لیے۔ آپ کام کی اسکرین پر انہیں دیکھ سکتے ہیں۔` }),
+  'job.arrived': (p) => ({ title: `${p.worker} پہنچ گئے`, body: `"${p.title}" کے لیے۔` }),
+  'job.awaiting_confirmation': (p) => ({ title: 'کام چیک کریں', body: `${p.worker} نے "${p.title}" مکمل کیا۔ تصدیق کریں یا مسئلہ بتائیں۔` }),
+  'job.confirmed': (p) => ({ title: 'کام کی تصدیق ہو گئی', body: `گاہک نے "${p.title}" کی تصدیق کر دی۔` }),
+  'job.auto_confirmed': (p) => ({ title: 'کام مکمل', body: `"${p.title}" وقت پر تصدیق نہ ہونے پر خود بخود مکمل ہو گیا۔` }),
+  'change_order.created': (p) => ({ title: 'اضافی کام کی منظوری درکار', body: `"${p.title}" کی نئی قیمت: ${p.price}۔ ایپ میں منظور یا انکار کریں۔` }),
+  'change_order.approved': (p) => ({ title: 'اضافی کام منظور', body: `"${p.title}" کی نئی قیمت: ${p.price}۔` }),
+  'change_order.declined': (p) => ({ title: 'اضافی کام نامنظور', body: `گاہک نے "${p.title}" کی پرانی قیمت رکھی۔` }),
   'job.direct_request': (p) => ({ title: 'ایک گاہک نے آپ کو بلایا ہے', body: `"${p.title}"۔ ایپ میں قبول یا انکار کریں۔` }),
   'job.request': (p) => ({ title: 'آپ کے قریب نئی درخواست', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ اپنی قیمت بھیجیں۔` }),
   'offer.received': (p) => ({ title: 'آپ کو قیمت ملی', body: `${p.worker} یہ کام ${p.price} میں کر سکتے ہیں۔` }),
@@ -72,16 +119,30 @@ const ur: Record<NotificationType, T> = {
   'verification.approved': (p) => ({ title: 'دستاویز منظور', body: `آپ کی ${p.doc} منظور ہو گئی۔` }),
   'verification.needs_fix': (p) => ({ title: 'دستاویز درست کریں', body: `آپ کی ${p.doc} کی نئی تصویر درکار ہے۔ ${p.reason ?? ''}`.trim() }),
   'worker.activated': () => ({ title: 'آپ منظور ہو گئے!', body: 'کام لینے کے لیے "آج" والے حصے میں آن لائن ہو جائیں۔' }),
-  'chat.message': (p) => ({ title: `${p.sender} کا نیا پیغام`, body: `${p.text}` }),
-  'payment.confirm_request': (p) => ({ title: 'براہ کرم ادائیگی کی تصدیق کریں', body: `${p.worker} کے مطابق آپ نے "${p.title}" کے لیے ${p.amount} نقد ادا کیے۔ تصدیق کریں یا غلط ہو تو بتائیں۔` }),
-  'payment.confirm_reminder': (p) => ({ title: 'یاد دہانی: ادائیگی کی تصدیق کریں', body: `"${p.title}" کی ${p.amount} نقد ادائیگی کی تصدیق کریں۔` }),
-  'payment.auto_confirmed': (p) => ({ title: 'ادائیگی خود بخود تصدیق ہو گئی', body: `"${p.title}" کی ${p.amount} نقد ادائیگی 24 گھنٹے میں جواب نہ ملنے پر تصدیق کر دی گئی۔` }),
-  'worker.commission_warning': (p) => ({ title: 'Fixli فیس بڑھ رہی ہے', body: `آپ پر ${p.owed} واجب ہیں۔ کام ملتے رہنے کے لیے جلد ادا کریں (حد ${p.limit})۔` }),
-  'worker.commission_blocked': (p) => ({ title: 'ادائیگی تک آپ آف لائن ہیں', body: `آپ پر ${p.owed} واجب ہیں، حد ${p.limit} سے زیادہ۔ نئے کام کے لیے بقایا ادا کریں۔ پہلے سے بک کام متاثر نہیں ہوں گے۔` }),
+  'chat.message': (p) => ({ title: `${p.sender} کا نیا پیغام`, body: 'پڑھنے کے لیے Fixli کھولیں۔' }),
 };
 
 const ar: Record<NotificationType, T> = {
-  'job.emergency_request': (p) => ({ title: 'طوارئ بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. عميل يحتاج مساعدة عاجلة. أرسل سعرك الآن.` }),
+  'job.reassigned': (p) => ({ title: 'نبحث لك عن محترف آخر', body: `لم يعد بإمكان ${p.worker} تنفيذ "${p.title}". نسأل محترفين آخرين بالقرب منك.` }),
+  'job.sos_request': (p) => ({ title: 'حالة طارئة بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. هل يمكنك الذهاب الآن؟ أجب خلال ${p.minutes} دقائق.` }),
+  'sos.searching_wider': (p) => ({ title: 'ما زلنا نبحث عن مساعدة', body: `لم يتمكن أحد قريب من الحضور فوراً. أرسلنا "${p.title}" إلى محترفين آخرين؛ ستصل الأسعار قريباً.` }),
+  'payment.cash_marked': (p) => ({ title: 'هل دفعت نقداً؟', body: `يقول المحترف إنك دفعت ${p.price} مقابل "${p.title}". أكّد أو أخبرنا إن كان ذلك خطأ.` }),
+  'payment.confirmed': (p) => ({ title: 'تم تأكيد الدفع النقدي', body: `${p.price} مقابل "${p.title}". رسوم Fixli: ${p.commission}.` }),
+  'payment.auto_confirmed': (p) => ({ title: 'تم تأكيد الدفع النقدي', body: `تم تأكيد ${p.price} مقابل "${p.title}" تلقائياً. رسوم Fixli: ${p.commission}.` }),
+  'payment.disputed': (p) => ({ title: 'اعترض العميل على دفعة', body: `بخصوص "${p.title}". سيراجعها دعم Fixli؛ لا رسوم حتى ذلك الحين.` }),
+  'settlement.confirmed': (p) => ({ title: 'تم استلام الدفعة', body: `استلمنا ${p.price}. شكراً لك!` }),
+  'settlement.rejected': (p) => ({ title: 'لم نجد دفعتك', body: `${p.price}: ${p.reason ?? 'يرجى التحقق من الرقم المرجعي وإرساله مجدداً.'}` }),
+  'balance.paused': () => ({ title: 'تم إيقاف الطلبات الجديدة', body: 'يرجى سداد المستحق لـ Fixli لتلقي طلبات جديدة. راجع الأرباح.' }),
+  'dispute.opened': (p) => ({ title: 'تم الإبلاغ عن مشكلة', body: `بخصوص "${p.title}". سيتواصل معك دعم Fixli.` }),
+  'dispute.updated': (p) => ({ title: 'تحديث بشأن مشكلة مبلّغ عنها', body: `بخصوص "${p.title}": ${p.status}.` }),
+  'job.en_route': (p) => ({ title: `${p.worker} في الطريق`, body: `من أجل "${p.title}". يمكنك متابعته من شاشة الطلب.` }),
+  'job.arrived': (p) => ({ title: `وصل ${p.worker}`, body: `من أجل "${p.title}".` }),
+  'job.awaiting_confirmation': (p) => ({ title: 'يرجى مراجعة العمل', body: `أنهى ${p.worker} "${p.title}". أكّد الإنجاز أو أبلغ عن مشكلة.` }),
+  'job.confirmed': (p) => ({ title: 'تم تأكيد العمل', body: `أكّد العميل إنجاز "${p.title}".` }),
+  'job.auto_confirmed': (p) => ({ title: 'اكتمل العمل', body: `اكتمل "${p.title}" تلقائياً لعدم تأكيده في الوقت المحدد.` }),
+  'change_order.created': (p) => ({ title: 'عمل إضافي يحتاج موافقتك', body: `السعر الجديد لـ "${p.title}": ${p.price}. وافق أو ارفض من التطبيق.` }),
+  'change_order.approved': (p) => ({ title: 'تمت الموافقة على العمل الإضافي', body: `السعر الجديد لـ "${p.title}": ${p.price}.` }),
+  'change_order.declined': (p) => ({ title: 'تم رفض العمل الإضافي', body: `أبقى العميل السعر الأصلي لـ "${p.title}".` }),
   'job.direct_request': (p) => ({ title: 'طلبك أحد العملاء', body: `"${p.title}". اقبل أو ارفض من التطبيق.` }),
   'job.request': (p) => ({ title: 'طلب جديد بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. أرسل سعرك.` }),
   'offer.received': (p) => ({ title: 'وصلك سعر', body: `يمكن لـ ${p.worker} القيام بالعمل مقابل ${p.price}.` }),
@@ -96,12 +157,7 @@ const ar: Record<NotificationType, T> = {
   'verification.approved': (p) => ({ title: 'تمت الموافقة على المستند', body: `تمت الموافقة على ${p.doc}.` }),
   'verification.needs_fix': (p) => ({ title: 'يرجى تصحيح مستند', body: `يحتاج ${p.doc} إلى صورة جديدة. ${p.reason ?? ''}`.trim() }),
   'worker.activated': () => ({ title: 'تمت الموافقة عليك!', body: 'كن متصلاً من تبويب "اليوم" لتبدأ باستلام الأعمال.' }),
-  'chat.message': (p) => ({ title: `رسالة جديدة من ${p.sender}`, body: `${p.text}` }),
-  'payment.confirm_request': (p) => ({ title: 'يرجى تأكيد الدفع', body: `يقول ${p.worker} إنك دفعت ${p.amount} نقدًا مقابل "${p.title}". أكّد أو أخبرنا إن كان ذلك خطأ.` }),
-  'payment.confirm_reminder': (p) => ({ title: 'تذكير: أكّد الدفع', body: `يرجى تأكيد الدفع النقدي ${p.amount} مقابل "${p.title}".` }),
-  'payment.auto_confirmed': (p) => ({ title: 'تم تأكيد الدفع تلقائيًا', body: `تم تأكيد الدفع النقدي ${p.amount} مقابل "${p.title}" لأننا لم نتلق ردًا خلال 24 ساعة.` }),
-  'worker.commission_warning': (p) => ({ title: 'رسوم Fixli تتراكم', body: `عليك ${p.owed}. سدّد قريبًا لتستمر في تلقي الأعمال (الحد ${p.limit}).` }),
-  'worker.commission_blocked': (p) => ({ title: 'أنت غير متصل حتى تسدد', body: `عليك ${p.owed}، وهو يتجاوز الحد ${p.limit}. سدّد رصيدك لتلقي أعمال جديدة. الأعمال المحجوزة لا تتأثر.` }),
+  'chat.message': (p) => ({ title: `رسالة جديدة من ${p.sender}`, body: 'افتح Fixli لقراءتها.' }),
 };
 
 const DOC: Record<Locale, Record<string, string>> = {

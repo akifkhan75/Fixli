@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { CountryCode, CountryListItem } from '@fixli/shared';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
+import { t } from '../../i18n';
 
 export interface CountryPickerProps {
   visible: boolean;
@@ -21,7 +22,7 @@ export const CountryPicker = ({ visible, title, countries, selected, onSelect, o
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <View style={styles.header}>
           <Text variant="h3" weight="bold" color={theme.colors.textPrimary}>{title}</Text>
-          <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel={t('countryPicker.close')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={28} color={theme.colors.textPrimary} />
           </TouchableOpacity>
         </View>

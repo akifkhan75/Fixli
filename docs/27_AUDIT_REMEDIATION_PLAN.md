@@ -189,3 +189,71 @@ Method: static read of code + docs, plus ran API tsc/jest(+coverage), mobile tsc
 8. CI gates are cosmetic (audit `|| true`, no e2e, Maestro echo, floating trufflehog@main); coverage 45%.
 9. Repo hygiene + brand (Triply) + doc contradictions.
 10. Release checklist 0/71; legal L1–L12, price bands, native-speaker review, EAS accounts, hosting region all open.
+
+---
+
+## PR #3 reconciliation (fix-mobile-app merged with main, 2026-11-20)
+
+PR #3 (F0–F8) and main (R0–R7) were two independent rewrites of the same ground, started from the
+same October commit. Merging them was a design exercise, not a text merge: 96 files conflicted and
+the two sides disagreed on the database itself. **This section says exactly what was kept, what was
+dropped and what is now untested**, so nobody reads "merged" as "everything from both survived".
+
+### Rules used
+1. **The PR's backend is the base** (its schema, migrations, money/ledger, admin console, staff 2FA, SOS
+   dispatch, live tracking, feature flags, price bands, disputes). Its code depends on its own columns
+   all the way through (`Worker.ledgerBalance`, `User.totp*`, `Message.isFlagged`, …), so keeping main's
+   versions of those files would have left two payment systems in one app.
+2. **Main's additions that do not overlap are kept**: phone OTP + password reset, `FeatureGuard`
+   (`ENABLED_FEATURES`), `GET /users/me/export`, field-key rotation tool, ID-number masking + audited reveal,
+   the mobile outbox/OTP/analytics/RTL work, load test, backup drill, the currency-decimals fix.
+3. **One migration chain**: the PR's `20261011…20261012…` migrations plus one new migration
+   (`20261120000000_otp_and_payment_reminders`: `PhoneVerification`, `Payment.claimedAmount/reminderStage`,
+   `Incident.latitude/longitude`). Main's own `20261106…20261114` migrations were removed (they created
+   tables the PR's chain already creates). The chain applies to an empty database and `prisma migrate diff`
+   reports no drift. **A database that already ran main's old migrations cannot be upgraded in place; it
+   must be recreated** (no environment holds real data yet).
+
+### What main had that is now gone (replaced by the PR's equivalent)
+| Main feature | Now |
+|---|---|
+| Cash auto-confirm reminders (`Payment.reminderStage` stages at +2h/+12h/+23h) | Column exists, **nothing writes it**. The PR's own cash flow and sweeper run instead. |
+| `claimedAmount` on "I paid less" | Column exists, **not used**. |
+| Main's disputes (per-person open report, `DISPUTE_EXISTS`, `AMOUNT_TOO_HIGH`) | The PR's disputes (money-linked). The mobile "Report a problem" screen posts the fields both accept. |
+| Main's SOS service (kinds, trusted-contact SMS result, `SosDto`) | The PR's SOS (dispatch to nearest worker, `SosDispatch`). Main's SOS e2e spec removed. |
+| Main's `AccountDeletionService` | The PR's `users.deleteMe`. Main's service and spec removed. |
+| Main's admin Incidents page + `PATCH /admin/incidents/:id` | The PR's Safety page and `safety.manage` permission. |
+| Main's `sms/sms.module.ts` provider interface | Merged into the PR's `SmsProvider` (`LoggingSmsProvider` added; OTP uses it). |
+| Main's mobile SOS screens/helper, push-template and sweeper specs | Removed with the code they tested. |
+
+### Tests that no longer exist (coverage honestly lower)
+Specs for code that was replaced were deleted rather than rewritten: `sweeper.service.spec`,
+`admin-roles.guard.spec`, `jobs.transitions.spec`, `admin-verification.service.spec` (the masking behaviour
+is covered by `profiles.e2e` and `privacy.e2e`), `admin.service.spec`, `rules.sos.spec` and
+`templates.spec` (both were already failing on the PR), main's `safety`/`payments` e2e, the mobile SOS tests.
+**API unit coverage fell from 70 % to about 53 % lines** because the PR's large modules (money, admin
+console, SOS, tracking) were covered only by e2e. **Fixed with real tests, not a lower bar**: the thresholds are
+unchanged (statements 69, branches 73, functions 62, lines 70) and are now met (about 74 / 75 / 67 / 75). New
+unit specs: admin console, admin and verification services, staff 2FA, settlements, ledger, country config,
+earnings, disputes, SOS dispatch, both sweepers, live location, catalogue, notification templates (every type
+in en/ur/ar), the permissions guard, lease, request-shape (DTO) validation and the thin controllers.
+Still thin: `jobs.service` (about 65 % of branches), `chat.service`, `s3.driver`, `main.ts`/`app.module.ts`
+(bootstrap) and the admin/disputes controllers (covered by e2e and the route sweep).
+
+### Changed on purpose while merging
+* ID numbers: lists/details show `referenceMasked`; the full value needs the new `verification.reveal`
+  permission and is audited. Only Super Admin holds it (open question: should it?).
+* Mobile: both analytics pipelines remain (`services/analytics.ts` consent-first allow-list;
+  `services/productAnalytics.ts` funnel events). The funnel events only flow while the person has
+  agreed (consent gate). Two pipelines is a smell; merge them later.
+* Mobile Urdu/Arabic for the new OTP, reports, saved-workers and outbox text was written by the assistant
+  and is **not native-reviewed** (O13).
+* A pre-existing type error in `chat/contact-detector.ts` (the PR's) was fixed.
+* CI: the PR's workflow is the base (audit, migration-drift check, bundle budget, Redis, TruffleHog,
+  semgrep, admin/mobile e2e) with main's two coverage gates added; main's separate `e2e.yml` was dropped
+  because the PR's CI already runs the API e2e.
+
+### Verified locally
+API typecheck clean; unit 422 pass; mobile typecheck clean, 124 tests pass; shared 36 pass; admin and web
+build. API e2e on a clean Postgres 14: see the PR description for the run. **Not run**: Redis outage e2e
+(no Redis here), Maestro/device flows, admin Playwright, mobile Android bundle.

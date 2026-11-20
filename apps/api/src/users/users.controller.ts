@@ -1,26 +1,28 @@
-import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Delete } from '@nestjs/common';
+import { RequirePermission } from '../common/auth/permissions';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Patch, Post, Delete } from '@nestjs/common';
+import { IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { UpdateMeDto } from './dto/update-me.dto';
-import { DeleteAccountDto } from './dto/delete-account.dto';
-import { AccountDeletionService } from './account-deletion.service';
 import { DataExportService } from './data-export.service';
 import { Throttle } from '@nestjs/throttler';
+import { UpdateMeDto } from './dto/update-me.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+
+class DeleteAccountDto {
+  @IsString() @MinLength(1) @MaxLength(200)
+  password: string;
+}
 
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {
-  constructor(
-    private readonly usersService: UsersService,
-    private readonly deletion: AccountDeletionService,
-    private readonly dataExport: DataExportService,
-  ) {}
+  constructor(private readonly usersService: UsersService, private readonly dataExport: DataExportService) {}
 
   @Get()
   @Roles('admin')
+  @RequirePermission('users.read')
   @ApiOperation({ summary: 'List all users (admin only)' })
   findAll() {
     return this.usersService.findAll();
@@ -46,10 +48,11 @@ export class UsersController {
     return this.usersService.updateMe(id, dto);
   }
 
-  @Delete('me')
-  @ApiOperation({ summary: 'Delete own account (needs the password; refused while a job or payment is unsettled)' })
+  @Post('me/delete')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Delete my account (needs my password; refused during an active job or with commission owed)' })
   deleteMe(@CurrentUser('id') id: string, @Body() dto: DeleteAccountDto) {
-    return this.deletion.deleteAccount(id, dto.password);
+    return this.usersService.deleteMe(id, dto.password);
   }
 
   @Get('me/favorites')

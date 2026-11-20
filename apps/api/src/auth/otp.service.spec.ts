@@ -19,7 +19,7 @@ describe('OtpService', () => {
     $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
   };
   const sent: string[] = [];
-  const sms = { configured: true, send: jest.fn(async (_p: string, t: string) => { sent.push(t); return { delivered: true }; }) };
+  const sms = { configured: true, send: jest.fn(async (_p: string, t: string) => { sent.push(t); return { ok: true }; }) };
   const config = { get: (k: string) => (k === 'JWT_SECRET' ? 'test-secret-test-secret-test-secret!' : 'test') };
   const svc = new OtpService(prisma, new JwtService({ secret: 'x' }), config as any, sms as any);
   const PHONE = '+923001234567';

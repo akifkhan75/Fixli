@@ -3,7 +3,6 @@ import { NotFoundException } from '@nestjs/common';
 import { UsersController } from './users.controller';
 import { DataExportService } from './data-export.service';
 import { UsersService } from './users.service';
-import { AccountDeletionService } from './account-deletion.service';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
 
 describe('UsersController', () => {
@@ -13,7 +12,7 @@ describe('UsersController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: svc }, { provide: AccountDeletionService, useValue: {} }, { provide: DataExportService, useValue: { export: jest.fn() } }],
+      providers: [{ provide: UsersService, useValue: svc }, { provide: DataExportService, useValue: { export: jest.fn() } }],
     }).compile();
     controller = module.get(UsersController);
   });

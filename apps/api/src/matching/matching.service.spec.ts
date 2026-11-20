@@ -54,12 +54,12 @@ describe('MatchingService.matchJob', () => {
     expect(realtime.emitToUsers).toHaveBeenCalledWith(['c1'], 'job.updated', { jobId: 'j1', status: 'MATCHES_FOUND' });
   });
 
-  it('an emergency uses the emergency notification type', async () => {
+  it('an emergency is offered like any request (SOS dispatch is handled by SosService)', async () => {
     prisma.jobRequest.findUnique.mockResolvedValue(job({ isEmergency: true }));
     prisma.$queryRaw.mockResolvedValue([cand('w1', 1)]);
     prisma.workingHours.findMany.mockResolvedValue(allDay('w1'));
     await svc.matchJob('j1', 1);
-    expect(notifications.notify.mock.calls[0][0].type).toBe('job.emergency_request');
+    expect(notifications.notify.mock.calls[0][0].type).toBe('job.request');
   });
 
   it('nobody nearby: records it honestly; second round also tells the customer once', async () => {

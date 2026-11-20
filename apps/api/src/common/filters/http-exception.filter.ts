@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
+import { reportServerError } from '../../observability/sentry';
 
 const STATUS_CODES: Record<number, string> = {
   400: 'BAD_REQUEST',
@@ -72,6 +73,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     if (status >= 500) {
+      reportServerError(exception, { requestId, userId: (req as any).user?.id, route: `${req.method} ${req.route?.path ?? 'unknown'}` });
       this.logger.error(
         `${req.method} ${req.originalUrl} -> ${status} [${requestId}] ${
           exception instanceof Error ? exception.stack : String(exception)

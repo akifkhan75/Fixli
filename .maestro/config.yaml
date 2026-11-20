@@ -1,0 +1,9 @@
+# Run all flows:   maestro test .maestro        (or one:  maestro test .maestro/customer_journey.yaml)
+# Needs the API seeded with accounts:  pnpm --filter @fixli/api db:seed:catalog && pnpm --filter @fixli/api seed:e2e
+# and the phone/emulator to reach it (the Android emulator sees the computer as 10.0.2.2).
+flows:
+  - signup_customer.yaml
+  - signup_worker.yaml
+  - customer_journey.yaml
+  - worker_journey.yaml
+  - worker_offline.yaml

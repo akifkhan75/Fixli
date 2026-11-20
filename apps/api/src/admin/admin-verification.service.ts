@@ -1,3 +1,4 @@
+import { routes } from '@fixli/shared';
 import { NotificationService } from '../notifications/notifications.service';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
@@ -30,7 +31,7 @@ export class AdminVerificationService {
     });
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    // The ID number is never in a list: masked only (full value = audited reveal, Compliance role).
+    // The ID number is never in a list: masked only (the full value is an audited reveal).
     const items = page.map(({ reference, ...r }) => ({ ...r, referenceMasked: maskIdNumber(reference) }));
     return { items, nextCursor: hasMore ? items[items.length - 1].id : null };
   }
@@ -56,7 +57,7 @@ export class AdminVerificationService {
     return { ...rest, referenceMasked: maskIdNumber(reference), documents };
   }
 
-  /** Full ID number. Compliance only (see controller); every reveal is written to the audit log. */
+  /** Full ID number (permission verification.reveal); every reveal is written to the audit log. */
   async revealReference(id: string, adminId: string) {
     const c = await this.prisma.verificationCase.findUnique({ where: { id }, select: { reference: true, workerId: true, type: true } });
     if (!c) throw new NotFoundException('Case not found');
@@ -88,7 +89,7 @@ export class AdminVerificationService {
       type: status === 'APPROVED' ? 'verification.approved' : 'verification.needs_fix',
       userIds: [c.workerId], eventKey: `verification:${id}`,
       params: { doc: c.type, reason: dto.reason?.trim() || undefined },
-      data: { url: '/(worker-setup)/setup/documents' },
+      data: { url: routes.workerDocuments() },
     });
     await this.syncWorkerStatus(c.workerId);
     return { id, status };
@@ -108,7 +109,7 @@ export class AdminVerificationService {
     if (state('ID') === 'APPROVED' && state('SELFIE') === 'APPROVED') {
       await this.prisma.worker.update({ where: { id: workerId }, data: { activationStatus: 'ACTIVE', isVerified: true } });
       await this.audit.record({ action: 'worker.activated', entityType: 'Worker', entityId: workerId });
-      await this.notifications.notify({ type: 'worker.activated', userIds: [workerId], eventKey: `worker.activated:${workerId}`, params: {}, data: { url: '/(worker)/today' } });
+      await this.notifications.notify({ type: 'worker.activated', userIds: [workerId], eventKey: `worker.activated:${workerId}`, params: {}, data: { url: routes.workerToday() } });
     } else if (['REJECTED', 'NEEDS_INFO'].some((s) => state('ID') === s || state('SELFIE') === s)) {
       await this.prisma.worker.update({ where: { id: workerId }, data: { activationStatus: 'ONBOARDING' } });
     }

@@ -14,8 +14,9 @@ import { ChipChoice } from '../../src/components/ds/ChipChoice';
 import { LoadingState } from '../../src/components/ds/EmptyState';
 import { openSettings } from '../../src/services/pickPhoto';
 import * as api from '../../src/services/api';
+import { t } from '../../src/i18n';
 
-const LABELS = [{ id: 'Home', label: 'Home' }, { id: 'Work', label: 'Work' }, { id: 'Other', label: 'Other' }];
+const LABELS = () => ([{ id: 'Home', label: t('sharedAddressEdit.home') }, { id: 'Work', label: t('sharedAddressEdit.work') }, { id: 'Other', label: t('sharedAddressEdit.other') }]);
 
 export default function AddressEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -23,7 +24,7 @@ export default function AddressEditScreen() {
   const { country } = useCountry();
   const existing = useApi(async () => (id ? (await api.getAddresses()).find((a) => a.id === id) ?? null : null), [id]);
 
-  if (id && existing.loading) return <Screen title="Address" back><LoadingState /></Screen>;
+  if (id && existing.loading) return <Screen title={t('customerRequestService.address')} back><LoadingState /></Screen>;
   return <Form key={id ?? 'new'} initial={existing.data ?? undefined} id={id} countryCode={country} />;
 }
 
@@ -57,7 +58,7 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
         setDenied(true);
-        setLocError('Location is off. You can turn it on in Settings, or type your address below.');
+        setLocError(t('sharedAddressEdit.locationIsOffYou'));
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -70,7 +71,7 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
         if (!city.trim()) setCity(place.city ?? place.region ?? '');
       }
     } catch {
-      setLocError("We couldn't find your location. Please type your address instead.");
+      setLocError(t('sharedAddressEdit.weCouldntFindYour'));
     } finally {
       setLocating(false);
     }
@@ -83,7 +84,7 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
     setError(undefined);
     try {
       const body = {
-        label: label[0] ?? 'Home', streetAddress: street.trim(), city: city.trim(), country: countryCode,
+        label: label[0] ?? 'Home', /* i18n-ignore: stored id, not text shown */ streetAddress: street.trim(), city: city.trim(), country: countryCode,
         area: area.trim() || undefined, buildingDetail: building.trim() || undefined, landmark: landmark.trim() || undefined,
         latitude: coords?.latitude, longitude: coords?.longitude, isDefault,
       };
@@ -104,36 +105,36 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
 
   return (
     <Screen
-      title={id ? 'Edit address' : 'New address'}
+      title={id ? t('sharedAddressEdit.editAddress') : t('sharedAddressEdit.newAddress')}
       back
-      footer={<Button title="Save address" size="lg" variant="primary" loading={saving} disabled={saving} onPress={save} />}
+      footer={<Button title={t('sharedAddressEdit.saveAddress')} size="lg" variant="primary" loading={saving} disabled={saving} onPress={save} />}
     >
       <Button
-        title={coords ? 'Location saved. Update it' : 'Use my current location'}
+        title={coords ? t('sharedAddressEdit.locationSavedUpdateIt') : t('sharedAddressEdit.useMyCurrentLocation')}
         variant="secondary" size="lg" loading={locating} disabled={locating} onPress={useMyLocation}
         leftIcon={<Ionicons name="navigate" size={20} color={theme.colors.primary} />}
       />
-      {locError ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 8 }}>{locError}</Text> : null}
-      {denied ? <Button title="Open Settings" variant="ghost" onPress={openSettings} /> : null}
+      {locError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{locError}</Text> : null}
+      {denied ? <Button title={t('sharedAddressEdit.openSettings')} variant="ghost" onPress={openSettings} /> : null}
 
-      <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>This is my</Text>
-      <ChipChoice options={LABELS} selectedIds={label} onChange={setLabel} />
+      <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>{t('sharedAddressEdit.thisIsMy')}</Text>
+      <ChipChoice options={LABELS()} selectedIds={label} onChange={setLabel} />
 
       <View style={{ gap: 16, marginTop: 24 }}>
-        <TextInput label="House / street" value={street} onChangeText={setStreet} autoComplete="street-address" error={streetError} />
-        <TextInput label="Flat, floor or building (optional)" value={building} onChangeText={setBuilding} />
-        <TextInput label="Area or neighbourhood (optional)" value={area} onChangeText={setArea} />
-        <TextInput label="City" value={city} onChangeText={setCity} autoCapitalize="words" error={cityError} />
-        <TextInput label="Landmark to help find you (optional)" placeholder="e.g. opposite the mosque" value={landmark} onChangeText={setLandmark} />
+        <TextInput testID="street-input" label={t('sharedAddressEdit.houseStreet')} value={street} onChangeText={setStreet} autoComplete="street-address" error={streetError} />
+        <TextInput label={t('sharedAddressEdit.flatFloorOrBuilding')} value={building} onChangeText={setBuilding} />
+        <TextInput label={t('sharedAddressEdit.areaOrNeighbourhoodOptional')} value={area} onChangeText={setArea} />
+        <TextInput testID="city-input" label={t('sharedAddressEdit.city')} value={city} onChangeText={setCity} autoCapitalize="words" error={cityError} />
+        <TextInput label={t('sharedAddressEdit.landmarkToHelpFind')} placeholder={t('sharedAddressEdit.eGOppositeThe')} value={landmark} onChangeText={setLandmark} />
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24 }}>
-        <Text variant="body" weight="medium" color={theme.colors.textPrimary} style={{ flex: 1 }}>Use this address by default</Text>
-        <Switch value={isDefault} onValueChange={setIsDefault} accessibilityLabel="Use this address by default" trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
+        <Text variant="body" weight="medium" color={theme.colors.textPrimary} style={{ flex: 1 }}>{t('sharedAddressEdit.useThisAddressBy')}</Text>
+        <Switch value={isDefault} onValueChange={setIsDefault} accessibilityLabel={t('sharedAddressEdit.useThisAddressBy')} trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
       </View>
 
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
-      {id ? <View style={{ marginTop: 24 }}><Button title="Delete this address" variant="danger" onPress={remove} disabled={saving} /></View> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
+      {id ? <View style={{ marginTop: 24 }}><Button title={t('sharedAddressEdit.deleteThisAddress')} variant="danger" onPress={remove} disabled={saving} /></View> : null}
     </Screen>
   );
 }

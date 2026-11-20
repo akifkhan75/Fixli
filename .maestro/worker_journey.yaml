@@ -1,0 +1,72 @@
+# Professional (already approved): go online -> receive a request -> send a price -> get booked ->
+# on my way -> arrived -> start -> finish -> cash received. A helper plays the customer.
+appId: com.fixli.app
+env:
+  API: http://10.0.2.2:3002/api
+---
+- runFlow:
+    file: subflows_login.yaml
+    env:
+      PHONE: "3009990002"
+- extendedWaitUntil:
+    visible: "You're offline"
+    timeout: 20000
+- tapOn: "Online"
+- extendedWaitUntil:
+    visible: "You're online"
+    timeout: 20000
+
+# A customer asks for help nearby.
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: customerRequests
+- tapOn: "Jobs"
+- extendedWaitUntil:
+    visible: "View & price"
+    timeout: 30000
+- tapOn: "View & price"
+- tapOn:
+    id: "price-input"
+- inputText: "1500"
+- hideKeyboard
+- tapOn: "Send your price"
+- extendedWaitUntil:
+    visible: "Your price"
+    timeout: 20000
+
+# The customer books them.
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: customerBooks
+- extendedWaitUntil:
+    visible: "I'm on my way"
+    timeout: 30000
+- tapOn: "I'm on my way"
+- extendedWaitUntil:
+    visible: "I've arrived"
+    timeout: 20000
+- tapOn: "I've arrived"
+- extendedWaitUntil:
+    visible: "Start work"
+    timeout: 20000
+- tapOn: "Start work"
+# No camera on the emulator: say why there is no photo.
+- tapOn: "I can't take a photo"
+- tapOn: "Nothing to photograph"
+- tapOn: "Start without a photo"
+- extendedWaitUntil:
+    visible: "Finish work"
+    timeout: 20000
+- tapOn: "Finish work"
+- tapOn: "I can't take a photo"
+- tapOn: "Nothing to photograph"
+- tapOn: "Finish without a photo"
+- extendedWaitUntil:
+    visible: "I received.*in cash"
+    timeout: 20000
+- tapOn: "I received.*in cash"
+- extendedWaitUntil:
+    visible: "Cash marked.*"
+    timeout: 20000

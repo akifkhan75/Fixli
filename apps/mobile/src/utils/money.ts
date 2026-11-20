@@ -21,3 +21,4 @@ export function parseMajorToMinor(input: string, currency: string): number | nul
   const minor = Math.round(parseFloat(cleaned) * 10 ** digits);
   return Number.isSafeInteger(minor) && minor > 0 ? minor : null;
 }
+export { currencyExponent } from '@fixli/shared';

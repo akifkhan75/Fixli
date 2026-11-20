@@ -10,6 +10,7 @@ import { ChipChoice } from '../../../src/components/ds/ChipChoice';
 import { ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
 import { humanize, localizedName } from '../../../src/utils/catalog';
 import * as api from '../../../src/services/api';
+import { t } from '../../../src/i18n';
 
 export default function SkillsScreen() {
   const theme = useTheme();
@@ -22,8 +23,8 @@ export default function SkillsScreen() {
 
   useEffect(() => { if (me.data) setSelected(me.data.services.map((s) => s.category.id)); }, [me.data]);
 
-  if ((catalog.loading || me.loading) && !catalog.data) return <Screen title="What you fix" back><LoadingState /></Screen>;
-  if ((catalog.error || me.error) && !catalog.data) return <Screen title="What you fix" back><ErrorState message={(catalog.error ?? me.error)!} onRetry={() => { catalog.reload(); me.reload(); }} /></Screen>;
+  if ((catalog.loading || me.loading) && !catalog.data) return <Screen title={t('workerSetup.whatYouFix')} back><LoadingState /></Screen>;
+  if ((catalog.error || me.error) && !catalog.data) return <Screen title={t('workerSetup.whatYouFix')} back><ErrorState message={(catalog.error ?? me.error)!} onRetry={() => { catalog.reload(); me.reload(); }} /></Screen>;
 
   const save = async () => {
     setSaving(true);
@@ -32,15 +33,15 @@ export default function SkillsScreen() {
   };
 
   return (
-    <Screen title="What you fix" back footer={<Button title="Save" size="lg" variant="primary" loading={saving} disabled={saving || selected.length === 0} onPress={save} />}>
-      <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 16 }}>Choose every kind of work you do. You will only get requests for these.</Text>
+    <Screen title={t('workerSetup.whatYouFix')} back footer={<Button title={t('sharedEditProfile.save')} size="lg" variant="primary" loading={saving} disabled={saving || selected.length === 0} onPress={save} />}>
+      <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 16 }}>{t('workerSetupSkills.chooseEveryKindOf')}</Text>
       <ChipChoice
         multiSelect
         options={(catalog.data ?? []).map((c) => ({ id: c.id, label: localizedName({ name: c.translations?.en?.name ?? humanize(c.name), translations: c.translations }, locale) }))}
         selectedIds={selected}
         onChange={setSelected}
       />
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
     </Screen>
   );
 }

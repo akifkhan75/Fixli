@@ -30,7 +30,7 @@ const trackingSlice = createSlice({
   name: 'tracking',
   initialState,
   reducers: {
-    startTracking: (state, action: PayloadAction<{ workerId: string; jobId: string; customerLocation: Coordinates }>) => {
+    startTracking: (state, action: PayloadAction<{ workerId: string; jobId: string; customerLocation: Coordinates | null }>) => {
       state.isTracking = true;
       state.trackedWorkerId = action.payload.workerId;
       state.jobId = action.payload.jobId;

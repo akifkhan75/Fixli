@@ -12,7 +12,7 @@ describe('AuthService', () => {
   const config = { get: jest.fn() };
   const audit = { record: jest.fn() };
   const otp = { redeemSignupToken: jest.fn(), issue: jest.fn(), verifySignup: jest.fn(), check: jest.fn(), consume: jest.fn() };
-  const svc = new AuthService(prisma, sessions as any, config as any, audit as any, otp as any);
+  const svc = new AuthService(prisma, sessions as any, config as any, audit as any, { check: jest.fn() } as any, otp as any);
   const device = { deviceId: 'device-12345' };
 
   beforeEach(() => {

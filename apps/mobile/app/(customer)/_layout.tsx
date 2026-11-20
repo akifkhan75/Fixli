@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useI18n } from '../../src/hooks/useI18n';
+import { t } from '../../src/i18n';
 
 export default function CustomerLayout() {
   const theme = useTheme();
@@ -31,7 +32,7 @@ export default function CustomerLayout() {
       <Tabs.Screen
         name="(home)"
         options={{
-          title: t('nav.home') || 'Home',
+          title: t('nav.home'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
@@ -40,7 +41,7 @@ export default function CustomerLayout() {
       <Tabs.Screen
         name="bookings"
         options={{
-          title: t('nav.bookings') || 'My Jobs',
+          title: t('nav.bookings'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar" size={size} color={color} />
           ),
@@ -49,7 +50,7 @@ export default function CustomerLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: t('nav.messages') || 'Messages',
+          title: t('nav.messages'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles" size={size} color={color} />
           ),
@@ -58,7 +59,7 @@ export default function CustomerLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: t('nav.profile') || 'Account',
+          title: t('nav.profile'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
@@ -68,14 +69,14 @@ export default function CustomerLayout() {
         name="request-service"
         options={{
           href: null,
-          title: 'Request Service',
+          title: t('customer.requestService'),
         }}
       />
       <Tabs.Screen
         name="job/[id]"
         options={{
           href: null,
-          title: 'Job',
+          title: t('customer.job'),
         }}
       />
     </Tabs>

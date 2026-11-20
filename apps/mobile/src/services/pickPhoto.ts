@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Linking } from 'react-native';
+import { t } from '../i18n';
 
 export type PhotoSource = 'camera' | 'library';
 export interface PickedPhoto { uri: string; width: number }
@@ -16,8 +17,8 @@ export async function pickPhoto(source: PhotoSource, opts: { square?: boolean; f
   if (!perm.granted) {
     return {
       denied: source === 'camera'
-        ? 'Camera access is off. You can turn it on in Settings, or choose a photo from your gallery instead.'
-        : 'Photo access is off. You can turn it on in Settings, or take a photo with the camera instead.',
+        ? t('photo.cameraOff')
+        : t('photo.libraryOff'),
     };
   }
   const options: ImagePicker.ImagePickerOptions = {

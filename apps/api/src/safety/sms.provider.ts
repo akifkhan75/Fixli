@@ -1,36 +1,35 @@
 import { Logger } from '@nestjs/common';
 
-export const SMS_PROVIDER = Symbol('SMS_PROVIDER');
-
-export interface SmsResult {
-  /** True only when a real provider accepted the message for delivery. */
-  delivered: boolean;
-}
-
 /**
- * One way to text a phone number. Shared by SOS trusted-contact alerts (R3) and OTP codes (R5).
- * A real adapter (WhatsApp / SMS gateway, doc 25 O5) plugs in here; nothing else changes.
+ * Text messages to phones that don't have the app: trusted-contact SOS alerts now, one-time codes
+ * later (O5). The provider is a business decision (doc 25 D-F5); until it's made, NoSmsProvider
+ * says honestly that nothing was sent, and the app tells the user.
  */
 export interface SmsProvider {
-  /** False for the dev logger: callers must not tell users a message was sent. */
+  readonly name: string;
   readonly configured: boolean;
-  send(phone: string, text: string): Promise<SmsResult>;
+  send(toE164: string, text: string): Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
-/** Development / unconfigured fallback: logs the message, never claims delivery. */
+export const SMS_PROVIDER = Symbol('SMS_PROVIDER');
+
+export class NoSmsProvider implements SmsProvider {
+  readonly name = 'none';
+  readonly configured = false;
+  async send() {
+    return { ok: false as const, error: 'NO_PROVIDER' };
+  }
+}
+
+/** Development / unconfigured fallback: logs the text (phone masked), never claims delivery. */
 export class LoggingSmsProvider implements SmsProvider {
+  readonly name = 'log';
   readonly configured = false;
   private readonly logger = new Logger('SmsProvider');
-
   constructor(private readonly production: boolean) {}
-
-  async send(phone: string, text: string): Promise<SmsResult> {
-    if (this.production) {
-      this.logger.error('No SMS provider configured in production: message NOT sent.');
-    } else {
-      // Phone is masked even in dev logs.
-      this.logger.log(`[dev] SMS to ***${phone.slice(-3)}: ${text}`);
-    }
-    return { delivered: false };
+  async send(toE164: string, text: string) {
+    if (this.production) this.logger.error('No SMS provider configured in production: message NOT sent.');
+    else this.logger.log(`[dev] SMS to ***${toE164.slice(-3)}: ${text}`);
+    return { ok: false as const, error: 'NO_PROVIDER' };
   }
 }

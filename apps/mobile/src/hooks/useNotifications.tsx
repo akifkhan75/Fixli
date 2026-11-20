@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Animated, TouchableOpacity, View } from 'react-native';
+import { useReduceMotion } from './useReduceMotion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
@@ -89,11 +90,12 @@ function Banner({ title, body, onPress, onDone }: { title: string; body: string;
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const y = useRef(new Animated.Value(-120)).current;
+  const reduceMotion = useReduceMotion();
   useEffect(() => {
-    Animated.spring(y, { toValue: 0, useNativeDriver: true }).start();
-    const t = setTimeout(() => Animated.timing(y, { toValue: -160, duration: 200, useNativeDriver: true }).start(onDone), 5000);
+    if (reduceMotion) y.setValue(0); else Animated.spring(y, { toValue: 0, useNativeDriver: true }).start();
+    const t = setTimeout(() => Animated.timing(y, { toValue: -160, duration: reduceMotion ? 0 : 200, useNativeDriver: true }).start(onDone), 5000);
     return () => clearTimeout(t);
-  }, [y, onDone]);
+  }, [y, onDone, reduceMotion]);
   return (
     <Animated.View pointerEvents="box-none" style={{ position: 'absolute', top: insets.top + 8, left: 12, right: 12, transform: [{ translateY: y }] }}>
       <TouchableOpacity

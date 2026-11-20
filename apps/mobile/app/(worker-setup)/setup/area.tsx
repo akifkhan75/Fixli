@@ -13,8 +13,9 @@ import { ChipChoice } from '../../../src/components/ds/ChipChoice';
 import { LoadingState } from '../../../src/components/ds/EmptyState';
 import { openSettings } from '../../../src/services/pickPhoto';
 import * as api from '../../../src/services/api';
+import { t } from '../../../src/i18n';
 
-const RADII = [{ id: '3', label: '3 km' }, { id: '5', label: '5 km' }, { id: '10', label: '10 km' }, { id: '20', label: '20 km' }];
+const RADII = () => ([{ id: '3', label: t('workerSetupArea.3Km') }, { id: '5', label: t('workerSetupArea.5Km') }, { id: '10', label: t('workerSetupArea.10Km') }, { id: '20', label: t('workerSetupArea.20Km') }]);
 
 export default function AreaScreen() {
   const theme = useTheme();
@@ -36,7 +37,7 @@ export default function AreaScreen() {
     setRadius([String(w.serviceRadius)]);
   }, [me.data]);
 
-  if (me.loading && !me.data) return <Screen title="Where you work" back><LoadingState /></Screen>;
+  if (me.loading && !me.data) return <Screen title={t('workerSetupArea.whereYouWork')} back><LoadingState /></Screen>;
 
   const locate = async () => {
     setLocError(undefined);
@@ -46,7 +47,7 @@ export default function AreaScreen() {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
         setDenied(true);
-        setLocError('Location is off. Turn it on in Settings so we can show you jobs near you.');
+        setLocError(t('workerSetupArea.locationIsOffTurn'));
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -54,7 +55,7 @@ export default function AreaScreen() {
       const [place] = await Location.reverseGeocodeAsync(pos.coords).catch(() => []);
       if (place && !label.trim()) setLabel([place.district ?? place.subregion, place.city ?? place.region].filter(Boolean).join(', '));
     } catch {
-      setLocError("We couldn't find your location. Please try again.");
+      setLocError(t('workerSetupArea.weCouldntFindYour'));
     } finally {
       setLocating(false);
     }
@@ -71,18 +72,18 @@ export default function AreaScreen() {
   };
 
   return (
-    <Screen title="Where you work" back footer={<Button title="Save" size="lg" variant="primary" loading={saving} disabled={saving || !coords} onPress={save} />}>
-      <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 16 }}>Stand at the place you usually start your day from. We use it to find jobs near you. Customers never see this exact spot.</Text>
-      <Button title={coords ? 'Location saved. Update it' : 'Use my current location'} variant={coords ? 'secondary' : 'primary'} size="lg" loading={locating} disabled={locating} onPress={locate}
+    <Screen title={t('workerSetupArea.whereYouWork')} back footer={<Button title={t('sharedEditProfile.save')} size="lg" variant="primary" loading={saving} disabled={saving || !coords} onPress={save} />}>
+      <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 16 }}>{t('workerSetupArea.standAtThePlace')}</Text>
+      <Button title={coords ? t('sharedAddressEdit.locationSavedUpdateIt') : t('sharedAddressEdit.useMyCurrentLocation')} variant={coords ? 'secondary' : 'primary'} size="lg" loading={locating} disabled={locating} onPress={locate}
         leftIcon={<Ionicons name="navigate" size={20} color={coords ? theme.colors.primary : '#FFF'} />} />
-      {locError ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 8 }}>{locError}</Text> : null}
-      {denied ? <Button title="Open Settings" variant="ghost" onPress={openSettings} /> : null}
+      {locError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{locError}</Text> : null}
+      {denied ? <Button title={t('sharedAddressEdit.openSettings')} variant="ghost" onPress={openSettings} /> : null}
 
       <View style={{ height: 20 }} />
-      <TextInput label="Area name" placeholder="e.g. Gulshan-e-Iqbal, Karachi" value={label} onChangeText={setLabel} />
-      <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>How far will you travel?</Text>
-      <ChipChoice options={RADII} selectedIds={radius} onChange={setRadius} />
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
+      <TextInput label={t('workerSetupArea.areaName')} placeholder={t('workerSetupArea.eGGulshanE')} value={label} onChangeText={setLabel} />
+      <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>{t('workerSetupArea.howFarWillYou')}</Text>
+      <ChipChoice options={RADII()} selectedIds={radius} onChange={setRadius} />
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
     </Screen>
   );
 }

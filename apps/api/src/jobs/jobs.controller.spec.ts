@@ -7,7 +7,7 @@ describe('JobsController', () => {
   const svc = {
     create: jest.fn(), findAll: jest.fn(), findById: jest.fn(), update: jest.fn(),
     requestWorker: jest.fn(), accept: jest.fn(), decline: jest.fn(), start: jest.fn(),
-    complete: jest.fn(), cancel: jest.fn(),
+    cancel: jest.fn(), enRoute: jest.fn(), arrive: jest.fn(), finish: jest.fn(), confirm: jest.fn(), contact: jest.fn(),
   };
   const user = { id: 'u1', type: 'customer' as const, name: 'Test' };
 
@@ -35,7 +35,9 @@ describe('JobsController', () => {
 
   it('exposes one endpoint per transition and no generic status setter', () => {
     expect((controller as any).replace).toBeUndefined();
-    for (const fn of ['accept', 'decline', 'start', 'complete', 'cancel', 'requestWorker']) {
+    // The worker can't complete their own job: there is no /complete (doc 26 8.2).
+    expect((controller as any).complete).toBeUndefined();
+    for (const fn of ['accept', 'decline', 'enRoute', 'arrive', 'start', 'finish', 'confirm', 'cancel', 'requestWorker', 'contact']) {
       expect(typeof (controller as any)[fn]).toBe('function');
     }
   });

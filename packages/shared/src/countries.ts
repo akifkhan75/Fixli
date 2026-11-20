@@ -89,15 +89,3 @@ export interface CountryListItem extends CountryConfig {
   enabled: boolean;
 }
 
-/**
- * Digits after the decimal point for a currency's minor unit (PKR 2, JPY 0, KWD 3). The country
- * config is the source of truth: asking the runtime (`Intl`) gives different answers on different
- * Node/Hermes/ICU builds (some treat PKR as zero-decimal), which would show 1,500 rupees as 150,000.
- */
-export function currencyExponent(currency: string): number {
-  const code = currency.toUpperCase();
-  for (const c of Object.values(COUNTRIES)) if (c.currency.code === code) return c.currency.exponent;
-  if (['JPY', 'KRW', 'VND', 'CLP', 'UGX'].includes(code)) return 0;
-  if (['KWD', 'BHD', 'OMR', 'JOD', 'TND'].includes(code)) return 3;
-  return 2;
-}

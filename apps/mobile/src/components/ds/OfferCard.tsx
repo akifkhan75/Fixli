@@ -8,6 +8,7 @@ import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { formatMoney } from '../../utils/money';
 import type { OfferCard as Offer } from '../../services/api';
+import { t, tn } from '../../i18n';
 
 function useMinutesLeft(expiresAt: string) {
   const [now, setNow] = useState(Date.now());
@@ -27,15 +28,15 @@ export function OfferCard({ offer, locale, onChoose, busy, disabled }: { offer: 
 
   return (
     <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16, marginBottom: 14 }}>
-      <TouchableOpacity onPress={() => router.push(`/worker/${w.id}` as any)} accessibilityRole="button" accessibilityLabel={`View ${w.name}'s profile`} style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <TouchableOpacity onPress={() => router.push(`/worker/${w.id}` as any)} accessibilityRole="button" accessibilityLabel={t('customerJob.viewSProfile', { name: w.name })} style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Avatar name={w.name} imageUrl={w.profileImageUrl} size="lg" />
         <View style={{ flex: 1, marginStart: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{w.name}</Text>
-            {w.isVerified ? <Ionicons name="shield-checkmark" size={16} color={theme.colors.success} style={{ marginStart: 6 }} accessibilityLabel="ID checked" /> : null}
+            {w.isVerified ? <Ionicons name="shield-checkmark" size={16} color={theme.colors.success} style={{ marginStart: 6 }} accessibilityLabel={t('customerJob.idChecked')} /> : null}
           </View>
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
-            {w.ratingCount ? `★ ${w.rating.toFixed(1)} (${w.ratingCount})` : 'New on Fixli'} · {w.jobsCompleted} jobs{w.distanceKm != null ? ` · ${w.distanceKm} km away` : ''}
+            {w.ratingCount ? `★ ${w.rating.toFixed(1)} (${w.ratingCount})` : t('offerCard.newOnFixli')} · {tn('common.jobs', w.jobsCompleted)}{w.distanceKm != null ? ` · ${t('offerCard.kmAway', { km: w.distanceKm })}` : ''}
           </Text>
         </View>
       </TouchableOpacity>
@@ -43,13 +44,13 @@ export function OfferCard({ offer, locale, onChoose, busy, disabled }: { offer: 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 14 }}>
         <View style={{ flex: 1 }}>
           <Text variant="h2" weight="extrabold" color={theme.colors.textPrimary}>{formatMoney(offer.amount, offer.currency, locale)}</Text>
-          {eta ? <Text variant="bodySmall" color={theme.colors.textSecondary}>Can come in about {eta}</Text> : null}
+          {eta ? <Text variant="bodySmall" color={theme.colors.textSecondary}>{t('offerCard.canCome', { eta })}</Text> : null}
         </View>
-        <Text variant="caption" color={minutes <= 2 ? theme.colors.error : theme.colors.textTertiary}>{minutes ? `${minutes} min left` : 'Expired'}</Text>
+        <Text variant="caption" color={minutes <= 2 ? theme.colors.errorText : theme.colors.textTertiary}>{minutes ? t('offerCard.minLeft', { minutes }) : t('offerCard.expired')}</Text>
       </View>
       {offer.note ? <Text variant="body" color={theme.colors.textPrimary} style={{ marginTop: 8 }}>"{offer.note}"</Text> : null}
       <View style={{ marginTop: 14 }}>
-        <Button title={`Choose ${w.name.split(' ')[0]}`} variant="primary" size="lg" loading={busy} disabled={disabled || minutes === 0} onPress={onChoose} />
+        <Button title={t('offerCard.choose', { name: w.name.split(' ')[0] })} variant="primary" size="lg" loading={busy} disabled={disabled || minutes === 0} onPress={onChoose} />
       </View>
     </View>
   );

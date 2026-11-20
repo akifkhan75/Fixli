@@ -51,24 +51,3 @@ export function distanceKm(aLat: number, aLng: number, bLat: number, bLng: numbe
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(aLat)) * Math.cos(r(bLat)) * Math.sin(dLng / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
-
-export interface Ranked { distanceKm: number | null; score: number }
-
-/**
- * Who is told about a request (doc 25 O3 / doc 27 R3):
- *  - normal job: the best `limit` by score;
- *  - SOS round 1: ONLY the nearest worker, so one person owns the call (distance, not rating);
- *  - SOS round 2 (nobody answered in the SOS window): cascade to the best `cascade` by score.
- */
-export function selectRecipients<T extends Ranked>(
-  ranked: T[],
-  opts: { isEmergency: boolean; round: 1 | 2; limit: number; sosFirst: number; sosCascade: number },
-): T[] {
-  const byScore = [...ranked].sort((a, b) => b.score - a.score);
-  if (!opts.isEmergency) return byScore.slice(0, opts.limit);
-  if (opts.round === 1) {
-    const byDistance = [...ranked].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity) || b.score - a.score);
-    return byDistance.slice(0, opts.sosFirst);
-  }
-  return byScore.slice(0, opts.sosCascade);
-}

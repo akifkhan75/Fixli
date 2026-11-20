@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
 import { DirIcon } from './DirIcon';
+import { useI18n } from '../../hooks/useI18n';
 
 interface ScreenProps {
   title?: string;
@@ -22,6 +23,7 @@ interface ScreenProps {
 /** Consistent screen frame: safe area, title row, optional back, scrolling body, sticky footer. */
 export function Screen({ title, back, footer, scroll = true, refreshing, onRefresh, children }: ScreenProps) {
   const theme = useTheme();
+  const { t } = useI18n();
   const body = scroll ? (
     <ScrollView
       contentContainerStyle={{ padding: 20, paddingBottom: 32, flexGrow: 1 }}
@@ -40,7 +42,7 @@ export function Screen({ title, back, footer, scroll = true, refreshing, onRefre
       {(title || back) && (
         <View style={styles.header}>
           {back ? (
-            <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back" style={styles.back} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('common.back')} style={styles.back} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <DirIcon name="arrow-back" size={26} color={theme.colors.textPrimary} />
             </TouchableOpacity>
           ) : null}

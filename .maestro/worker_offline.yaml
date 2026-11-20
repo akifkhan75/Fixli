@@ -1,0 +1,53 @@
+# No signal: a job step is saved on the phone, shown as waiting, and goes out when the signal returns.
+appId: com.fixli.app
+env:
+  API: http://10.0.2.2:3002/api
+---
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: customerRequests
+- runFlow:
+    file: subflows_login.yaml
+    env:
+      PHONE: "3009990002"
+- extendedWaitUntil:
+    visible: "You're offline"
+    timeout: 20000
+- tapOn: "Online"
+- extendedWaitUntil:
+    visible: "You're online"
+    timeout: 20000
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: workerOffers
+- runScript:
+    file: helpers/api.js
+    env:
+      ACTION: customerBooks
+- tapOn: "Today"
+- extendedWaitUntil:
+    visible: ".*Maestro.*|Next job"
+    timeout: 30000
+- tapOn: "Next job"
+- extendedWaitUntil:
+    visible: "I'm on my way"
+    timeout: 20000
+
+# Signal lost.
+- toggleAirplaneMode
+- extendedWaitUntil:
+    visible: "Offline.*"
+    timeout: 20000
+- tapOn: "I'm on my way"
+- assertVisible: "Saved. It will be sent when you're online."
+# The button must not be offered again while the step waits (no double send).
+- assertNotVisible: "I've arrived"
+
+# Signal back: it is sent by itself and the job moves on.
+- toggleAirplaneMode
+- extendedWaitUntil:
+    visible: "I've arrived"
+    timeout: 60000
+- assertNotVisible: "Saved. It will be sent when you're online."

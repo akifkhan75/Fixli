@@ -170,7 +170,7 @@ maybe('Realtime + notifications across instances (e2e)', () => {
   });
 
   it('job progress reaches the customer; the notification centre lists, counts and marks read', async () => {
-    await request(A.getHttpServer()).post(`/api/job-requests/${jobId}/start`).set(as('pro')).expect((r) => expect([200, 201]).toContain(r.status));
+    await request(A.getHttpServer()).post(`/api/job-requests/${jobId}/start`).set(as('pro')).send({ photoSkipReason: 'NOT_APPLICABLE' }).expect((r) => expect([200, 201]).toContain(r.status));
     const list = await request(B.getHttpServer()).get('/api/notifications').set(as('cust')).expect(200);
     expect(list.body.items[0]).toMatchObject({ type: 'job.started', readAt: null, data: { url: `/(customer)/job/${jobId}` } });
     expect((await request(B.getHttpServer()).get('/api/notifications/unread-count').set(as('cust')).expect(200)).body.count).toBeGreaterThanOrEqual(2);

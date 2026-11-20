@@ -1,4 +1,6 @@
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { ADMIN_ROLES, AdminRole } from '../../common/auth/permissions';
 
 export class VerificationQueryDto {
   @IsOptional() @IsIn(['SUBMITTED', 'APPROVED', 'REJECTED', 'NEEDS_INFO']) status?: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'NEEDS_INFO';
@@ -13,13 +15,29 @@ export class VerificationDecisionDto {
 }
 
 export class ActionReasonDto {
-  @IsString()
-  @MaxLength(500)
+  @IsString() @MinLength(3) @MaxLength(500)
   reason: string;
 }
 
-export class IncidentUpdateDto {
-  @IsIn(['INVESTIGATING', 'RESOLVED']) status: 'INVESTIGATING' | 'RESOLVED';
-  /** What was done (who was called, outcome). Required to resolve. */
-  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+export class PageQueryDto {
+  @IsOptional() @IsInt() @Min(0) @Max(100_000) skip?: number;
+}
+
+export class UserSearchDto {
+  @IsOptional() @IsString() @MaxLength(100) @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  q?: string;
+}
+
+export const JOB_STATUSES = ['CREATED', 'MATCHES_FOUND', 'AWAITING_WORKER', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED', 'CANCELLED'] as const;
+export class JobListQueryDto extends PageQueryDto {
+  @IsOptional() @IsIn(JOB_STATUSES) status?: (typeof JOB_STATUSES)[number];
+}
+
+export class IncidentQueryDto extends PageQueryDto {
+  @IsOptional() @IsIn(['OPEN', 'INVESTIGATING', 'RESOLVED']) status?: string;
+}
+
+export class SetRolesDto {
+  @IsArray() @ArrayMaxSize(ADMIN_ROLES.length) @IsIn(ADMIN_ROLES, { each: true })
+  roles: AdminRole[];
 }

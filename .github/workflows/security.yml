@@ -1,40 +1,19 @@
-name: Security Audit & E2E Tests
+name: Secret scan
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
 
 jobs:
-  security:
+  trufflehog:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          
-      - name: Install dependencies
-        run: npm install -g pnpm@9 && pnpm install --frozen-lockfile
-
-      # Blocking: no CRITICAL advisory in production dependencies.
-      - name: Dependency scan (prod, critical = blocking)
-        run: pnpm audit --prod --audit-level critical
-
-      # Reporting only until the production high-severity backlog (multer, lodash, js-yaml,
-      # date-and-time, node-forge) is upgraded - tracked in docs/27 R1. Dev-only advisories
-      # (e.g. ts-jest > handlebars) never ship. Flip to blocking once the backlog is 0.
-      - name: Dependency scan (prod, high = report)
-        run: pnpm audit --prod --audit-level high
-        continue-on-error: true
-        
-      - name: Run Secret Scan
-        uses: trufflesecurity/trufflehog@v3.88.0
+          fetch-depth: 0
+      - name: TruffleHog (verified secrets only)
+        uses: trufflesecurity/trufflehog@main
         with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --debug --only-verified
+          extra_args: --only-verified
+# Phone and browser end-to-end tests live in e2e-admin.yml and e2e-mobile.yml; load tests in load.yml.

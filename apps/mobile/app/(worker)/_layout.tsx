@@ -2,6 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
+import { t } from '../../src/i18n';
 
 export default function WorkerLayout() {
   const theme = useTheme();
@@ -29,7 +30,7 @@ export default function WorkerLayout() {
       <Tabs.Screen
         name="today"
         options={{
-          title: 'Today',
+          title: t('customerRequestService.today'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="sunny" size={size} color={color} />
           ),
@@ -38,7 +39,7 @@ export default function WorkerLayout() {
       <Tabs.Screen
         name="jobs"
         options={{
-          title: 'Jobs',
+          title: t('worker.jobs'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="briefcase" size={size} color={color} />
           ),
@@ -47,7 +48,7 @@ export default function WorkerLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: 'Messages',
+          title: t('worker.messages'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles" size={size} color={color} />
           ),
@@ -56,7 +57,7 @@ export default function WorkerLayout() {
       <Tabs.Screen
         name="earnings"
         options={{
-          title: 'Earnings',
+          title: t('worker.earnings'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="wallet" size={size} color={color} />
           ),
@@ -65,7 +66,7 @@ export default function WorkerLayout() {
       <Tabs.Screen
         name="account"
         options={{
-          title: 'Account',
+          title: t('customerProfile.account'),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
@@ -75,7 +76,7 @@ export default function WorkerLayout() {
         name="job/[id]"
         options={{
           href: null,
-          title: 'Job',
+          title: t('customer.job'),
         }}
       />
     </Tabs>

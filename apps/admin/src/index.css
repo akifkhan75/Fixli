@@ -163,9 +163,3 @@ button {
   color: var(--info);
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
-
-.badge-danger {
-  background-color: rgba(239, 68, 68, 0.15);
-  color: var(--danger, #ef4444);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-}

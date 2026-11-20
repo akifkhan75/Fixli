@@ -49,7 +49,7 @@ describe('validateEnv', () => {
 
   describe('FIELD_ENCRYPTION_KEY', () => {
     const good = Buffer.alloc(32, 1).toString('base64');
-    const prod = { ...base, NODE_ENV: 'production', FRONTEND_URL: 'https://x.test', PUBLIC_API_URL: 'https://api.x.test/api', S3_BUCKET: 'b', STORAGE_PUBLIC_BASE_URL: 'https://cdn.x.test' };
+    const prod = { ...base, NODE_ENV: 'production', FRONTEND_URL: 'https://x.test', PUBLIC_API_URL: 'https://api.x.test/api', S3_BUCKET: 'b', STORAGE_PUBLIC_BASE_URL: 'https://cdn.x.test', TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64') };
     it('is required in production', () => expect(() => validateEnv(prod)).toThrow(/FIELD_ENCRYPTION_KEY is required/));
     it('must decode to 32 bytes', () => {
       expect(() => validateEnv({ ...base, FIELD_ENCRYPTION_KEY: Buffer.alloc(16).toString('base64') })).toThrow(/32 bytes/);

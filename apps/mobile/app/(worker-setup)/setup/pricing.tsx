@@ -11,14 +11,15 @@ import { ChipChoice } from '../../../src/components/ds/ChipChoice';
 import { LoadingState } from '../../../src/components/ds/EmptyState';
 import { parseMajorToMinor } from '../../../src/utils/money';
 import * as api from '../../../src/services/api';
+import { t } from '../../../src/i18n';
 
 type Model = NonNullable<api.WorkerMe['pricingModel']>;
-const MODELS: { id: Model; label: string }[] = [
-  { id: 'CALLOUT_PLUS_QUOTE', label: 'Visit fee, then a quote' },
-  { id: 'FIXED', label: 'Fixed prices' },
-  { id: 'HOURLY', label: 'Per hour' },
-  { id: 'QUOTE', label: 'Quote after inspection' },
-];
+const MODELS = (): { id: Model; label: string }[] => ([
+  { id: 'CALLOUT_PLUS_QUOTE', label: t('workerSetupPricing.visitFeeThenA') },
+  { id: 'FIXED', label: t('workerSetupPricing.fixedPrices') },
+  { id: 'HOURLY', label: t('workerSetupPricing.perHour') },
+  { id: 'QUOTE', label: t('workerSetupPricing.quoteAfterInspection') },
+]);
 
 export default function PricingScreen() {
   const theme = useTheme();
@@ -40,7 +41,7 @@ export default function PricingScreen() {
     if (w.hourlyRate) setRate(String(w.hourlyRate / 10 ** digits));
   }, [me.data]);
 
-  if (me.loading && !me.data) return <Screen title="Your prices" back><LoadingState /></Screen>;
+  if (me.loading && !me.data) return <Screen title={t('workerSetup.yourPrices')} back><LoadingState /></Screen>;
 
   const m = model[0] as Model | undefined;
   const needsFee = m === 'CALLOUT_PLUS_QUOTE' || m === 'FIXED';
@@ -66,17 +67,17 @@ export default function PricingScreen() {
   };
 
   return (
-    <Screen title="Your prices" back footer={<Button title="Save" size="lg" variant="primary" loading={saving} disabled={saving || !m} onPress={save} />}>
-      <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>How do you charge?</Text>
-      <ChipChoice options={MODELS} selectedIds={model} onChange={setModel} />
+    <Screen title={t('workerSetup.yourPrices')} back footer={<Button title={t('sharedEditProfile.save')} size="lg" variant="primary" loading={saving} disabled={saving || !m} onPress={save} />}>
+      <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{t('workerSetupPricing.howDoYouCharge')}</Text>
+      <ChipChoice options={MODELS()} selectedIds={model} onChange={setModel} />
       {needsFee ? (
-        <View style={{ marginTop: 24 }}><TextInput label={m === 'FIXED' ? `Starting price (${currency})` : `Visit fee (${currency})`} keyboardType="number-pad" value={fee} onChangeText={setFee} error={feeError} /></View>
+        <View style={{ marginTop: 24 }}><TextInput label={m === 'FIXED' ? t('workerSetupPricing.startingPrice', { currency }) : t('workerSetupPricing.visitFee', { currency })} keyboardType="number-pad" value={fee} onChangeText={setFee} error={feeError} /></View>
       ) : null}
       {needsRate ? (
-        <View style={{ marginTop: 24 }}><TextInput label={`Price per hour (${currency})`} keyboardType="number-pad" value={rate} onChangeText={setRate} error={rateError} /></View>
+        <View style={{ marginTop: 24 }}><TextInput label={t('workerSetupPricing.pricePerHour', { currency })} keyboardType="number-pad" value={rate} onChangeText={setRate} error={rateError} /></View>
       ) : null}
-      {m ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 10 }}>You can send a different price for each job. This is only your usual rate.</Text> : null}
-      {error ? <Text variant="bodySmall" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
+      {m ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 10 }}>{t('workerSetupPricing.youCanSendA')}</Text> : null}
+      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
     </Screen>
   );
 }

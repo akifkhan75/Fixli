@@ -3,6 +3,7 @@ import { TouchableOpacity, View, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
+import { t } from '../../i18n';
 
 export interface CategoryTileProps {
   id: string;
@@ -31,7 +32,7 @@ export const CategoryTile = ({ name, icon = 'construct', onPress }: CategoryTile
       ]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Service category: ${name}`}
+      accessibilityLabel={t('categoryTile.serviceCategory', { name })}
     >
       <View style={[styles.iconContainer, { backgroundColor: theme.colors.primary + '15' }]}>
         <Ionicons name={icon} size={32} color={theme.colors.primary} />
@@ -45,8 +46,7 @@ export const CategoryTile = ({ name, icon = 'construct', onPress }: CategoryTile
 
 const styles = StyleSheet.create({
   container: {
-    // minHeight: Urdu text is ~1.7x taller and must grow the tile, not be clipped.
-    minHeight: 120,
+    height: 120,
     padding: 16,
     justifyContent: 'center',
     shadowColor: 'rgba(10,18,40,0.06)',

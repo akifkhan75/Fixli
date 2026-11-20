@@ -1,0 +1,16 @@
+# Signs in with a seeded account. Pass PHONE (the number without +92, e.g. 3009990001).
+appId: com.fixli.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 20000
+- tapOn:
+    id: "phone-input"
+- inputText: ${PHONE}
+- tapOn:
+    id: "password-input"
+- inputText: "Maestro-pass-42"
+- hideKeyboard
+- tapOn: "Sign In"

@@ -8,6 +8,7 @@ import { Text } from './Text';
 import type { JobEventView, JobMediaView } from '../../services/api';
 import { eventSentence, type Viewer } from '../../utils/jobStatus';
 import { useI18n } from '../../hooks/useI18n';
+import { t } from '../../i18n';
 
 /** Photos (horizontal) and the voice note with its transcript. Links are short-lived and signed. */
 export function JobMedia({ media }: { media: JobMediaView[] }) {
@@ -21,11 +22,11 @@ export function JobMedia({ media }: { media: JobMediaView[] }) {
     <View style={{ marginTop: 20 }}>
       {photos.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {photos.map((p) => <Image key={p.id} source={{ uri: p.url }} accessibilityLabel="Photo of the problem" style={{ width: 160, height: 120, borderRadius: 12, marginEnd: 8, backgroundColor: theme.colors.surface }} />)}
+          {photos.map((p) => <Image key={p.id} source={{ uri: p.url }} accessibilityLabel={t('customerRequestService.photoOfTheProblem')} style={{ width: 160, height: 120, borderRadius: 12, marginEnd: 8, backgroundColor: theme.colors.surface }} />)}
         </ScrollView>
       ) : null}
       {voice ? (
-        <TouchableOpacity onPress={() => { player.seekTo(0); player.play(); }} accessibilityRole="button" accessibilityLabel="Play the voice note"
+        <TouchableOpacity onPress={() => { player.seekTo(0); player.play(); }} accessibilityRole="button" accessibilityLabel={t('jobParts.playTheVoiceNote')}
           style={{ marginTop: 12, backgroundColor: theme.colors.surface, borderRadius: 14, padding: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="play-circle" size={28} color={theme.colors.primary} />

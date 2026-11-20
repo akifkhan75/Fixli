@@ -1,9 +1,10 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { ApiError, createUploadSlot, completeUpload } from './api';
+import { t } from '../i18n';
 
-export type UploadPurpose = 'AVATAR' | 'VERIFICATION' | 'PORTFOLIO' | 'JOB_PHOTO';
+export type UploadPurpose = 'AVATAR' | 'VERIFICATION' | 'PORTFOLIO' | 'JOB_PHOTO' | 'CHAT_PHOTO';
 
-const MAX_EDGE: Record<UploadPurpose, number> = { AVATAR: 800, PORTFOLIO: 1600, VERIFICATION: 2000, JOB_PHOTO: 1600 };
+const MAX_EDGE: Record<UploadPurpose, number> = { AVATAR: 800, PORTFOLIO: 1600, VERIFICATION: 2000, JOB_PHOTO: 1600, CHAT_PHOTO: 1600 };
 
 /** Shrinks a camera photo to a sensible size/quality before upload (phones shoot 5-10 MB). */
 export async function prepareImage(uri: string, purpose: UploadPurpose, width?: number) {
@@ -26,7 +27,7 @@ export async function uploadImage(uri: string, purpose: UploadPurpose, width?: n
 
   const slot = await createUploadSlot(purpose, 'image/jpeg', blob.size);
   const put = await fetch(slot.upload.url, { method: slot.upload.method, headers: slot.upload.headers, body: blob });
-  if (!put.ok) throw new ApiError("The photo couldn't be uploaded. Please try again.", put.status);
+  if (!put.ok) throw new ApiError(t('photo.uploadFailed'), put.status);
 
   const done = await completeUpload(slot.id);
   return { id: done.id, url: done.url };
@@ -37,7 +38,7 @@ export async function uploadAudio(uri: string): Promise<{ id: string }> {
   const blob = await (await fetch(uri)).blob();
   const slot = await createUploadSlot('JOB_AUDIO', 'audio/mp4', blob.size);
   const put = await fetch(slot.upload.url, { method: slot.upload.method, headers: slot.upload.headers, body: blob });
-  if (!put.ok) throw new ApiError("The recording couldn't be uploaded. Please try again.", put.status);
+  if (!put.ok) throw new ApiError(t('photo.recordingUploadFailed'), put.status);
   const done = await completeUpload(slot.id);
   return { id: done.id };
 }

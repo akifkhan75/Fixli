@@ -1,4 +1,5 @@
 import { statusSentence, toPhase, isActive, isFinished } from '../utils/jobStatus';
+import { parseMajorToMinor } from '../utils/money';
 
 describe('job status vocabulary', () => {
   it('never shows a raw enum name', () => {
@@ -62,5 +63,34 @@ describe('marketplace wording', () => {
     expect(eventSentence('PROFESSIONALS_NOTIFIED', 'customer', { notified: 1 })).toBe('We told 1 professional near you');
     expect(eventSentence('PROFESSIONALS_NOTIFIED', 'customer', { notified: 4 })).toBe('We told 4 professionals near you');
     expect(eventSentence('OFFER_ACCEPTED', 'worker')).toBe('The customer chose your price');
+  });
+});
+
+describe('on-site steps (doc 27 F2)', () => {
+  it('every new status has a real sentence for both sides, never "Updating…"', () => {
+    for (const s of ['EN_ROUTE', 'ARRIVED', 'AWAITING_CONFIRMATION']) {
+      expect(statusSentence(s, 'customer', 'Bilal')).not.toMatch(/Updating/);
+      expect(statusSentence(s, 'worker')).not.toMatch(/Updating/);
+    }
+    expect(statusSentence('AWAITING_CONFIRMATION', 'customer', 'Bilal')).toMatch(/confirm/);
+  });
+  it('maps onto the timeline steps', () => {
+    expect(toPhase('EN_ROUTE')).toBe('ON_THE_WAY');
+    expect(toPhase('ARRIVED')).toBe('ARRIVED');
+    expect(toPhase('AWAITING_CONFIRMATION')).toBe('DONE');
+    expect(isActive('EN_ROUTE')).toBe(true);
+    expect(isActive('COMPLETED')).toBe(false);
+  });
+  it('timeline lines for the new events, including late cancellation', () => {
+    expect(eventSentence('WORK_COMPLETED', 'worker')).toMatch(/customer confirmed/);
+    expect(eventSentence('AUTO_CONFIRMED', 'customer')).toMatch(/automatically/);
+    expect(eventSentence('CANCELLED', 'worker', { by: 'customer', late: true })).toMatch(/after the professional set off/);
+  });
+});
+
+describe('extra-work price input', () => {
+  it('a worker types rupees, the server gets paisa (never 100x off)', () => {
+    expect(parseMajorToMinor('2500', 'PKR')).toBe(250000);
+    expect(parseMajorToMinor('2,500', 'PKR')).toBe(250000);
   });
 });

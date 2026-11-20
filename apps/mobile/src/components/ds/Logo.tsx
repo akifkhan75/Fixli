@@ -2,6 +2,7 @@ import React from 'react';
 import { ImageStyle, StyleProp } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '../../hooks/useTheme';
+import { t } from '../../i18n';
 
 // logo-light = dark wordmark for light backgrounds, logo-dark = white wordmark for dark backgrounds
 const SOURCES = {
@@ -28,7 +29,7 @@ export const Logo = ({ variant = 'wordmark', height = 48, style }: LogoProps) =>
       style={[{ height, width: height * ASPECT[variant] }, style]}
       resizeMode="contain"
       accessibilityRole="image"
-      accessibilityLabel="Fixli"
+      accessibilityLabel={t('logo.fixli')}
     />
   );
 };

@@ -1,3 +1,8 @@
+import { BlocksService } from '../blocks/blocks.service';
+import { routes } from '@fixli/shared';
+import { BUSY_STATUSES, IN_FLIGHT_STATUSES } from '../jobs/job-state-machine';
+
+const IN_FLIGHT_BLOCK_MS = 3 * 3600_000;
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
@@ -5,7 +10,6 @@ import { NotificationService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SubmitOfferDto } from './offer.dto';
 
-const BUSY_STATUSES = ['ACCEPTED', 'IN_PROGRESS'];
 
 @Injectable()
 export class OffersService {
@@ -14,6 +18,7 @@ export class OffersService {
     private readonly config: ConfigService,
     private readonly notifications: NotificationService,
     private readonly realtime: RealtimeService,
+    private readonly blocks: BlocksService,
   ) {}
 
   private ttlMs() {
@@ -23,7 +28,7 @@ export class OffersService {
   /** A worker can only act on a request the matching engine sent them, while it is open. */
   private async requireMatchedOpenJob(workerId: string, jobId: string) {
     const [worker, match] = await Promise.all([
-      this.prisma.worker.findUnique({ where: { id: workerId }, select: { activationStatus: true, currency: true } }),
+      this.prisma.worker.findUnique({ where: { id: workerId }, select: { activationStatus: true, currency: true, balanceBlocked: true } }),
       this.prisma.jobMatch.findUnique({
         where: { jobRequestId_workerId: { jobRequestId: jobId, workerId } },
         include: { jobRequest: { select: { id: true, status: true, customerId: true, assignedWorkerId: true } } },
@@ -31,6 +36,8 @@ export class OffersService {
     ]);
     if (!match) throw new NotFoundException('Job not found');
     if (worker?.activationStatus !== 'ACTIVE') throw new ForbiddenException({ code: 'WORKER_NOT_ACTIVE', message: 'Your account must be approved to send prices.' });
+    if (await this.blocks.between(workerId, match.jobRequest.customerId)) throw new NotFoundException('Job not found');
+    if (worker.balanceBlocked) throw new ForbiddenException({ code: 'COMMISSION_LIMIT', message: 'Settle what you owe Fixli to send new prices.' });
     if (match.declinedAt) throw new ConflictException({ code: 'ALREADY_DECLINED', message: 'You said this request is not for you.' });
     if (match.jobRequest.status !== 'MATCHES_FOUND' || match.jobRequest.assignedWorkerId) {
       throw new ConflictException({ code: 'REQUEST_CLOSED', message: 'This request is no longer open.' });
@@ -63,7 +70,7 @@ export class OffersService {
       await this.notifications.notify({
         type: 'offer.received', userIds: [job.customerId], eventKey: `offer.received:${offer.id}:${expiresAt.getTime()}`,
         params: { worker: worker?.name ?? 'A professional', price: { minor: offer.amount, currency: offer.currency } },
-        data: { url: `/(customer)/job/${jobId}`, jobId },
+        data: { url: routes.customerJob(jobId), jobId },
       });
     }
     return offer;
@@ -120,7 +127,11 @@ export class OffersService {
     const job = await this.prisma.jobRequest.findFirst({ where: { id: jobId, customerId }, select: { id: true, status: true } });
     if (!job) throw new NotFoundException('Job not found');
     const offers = await this.prisma.offer.findMany({
-      where: { jobRequestId: jobId, status: 'PENDING', expiresAt: { gt: new Date() } },
+      where: {
+        jobRequestId: jobId, status: 'PENDING', expiresAt: { gt: new Date() },
+        // Never show a price from someone the customer blocked, or who blocked them.
+        worker: { user: { blocksCreated: { none: { blockedId: customerId } }, blockedBy: { none: { blockerId: customerId } } } },
+      },
       select: {
         id: true, amount: true, currency: true, etaMinutes: true, note: true, expiresAt: true, createdAt: true,
         worker: {
@@ -167,6 +178,7 @@ export class OffersService {
     if (offer.status !== 'PENDING') throw new ConflictException({ code: 'OFFER_NOT_AVAILABLE', message: 'This price is no longer available.' });
     if (offer.expiresAt <= new Date()) throw new ConflictException({ code: 'OFFER_EXPIRED', message: 'This price has expired. Please choose another one.' });
     const job = offer.jobRequest;
+    if (await this.blocks.between(customerId, offer.workerId)) throw new ConflictException({ code: 'BLOCKED', message: 'You blocked this professional.' });
     if (job.status !== 'MATCHES_FOUND') throw new ConflictException({ code: 'REQUEST_CLOSED', message: 'This request is no longer open.' });
 
     const from = job.scheduledFrom ?? new Date();
@@ -179,8 +191,11 @@ export class OffersService {
         where: {
           assignedWorkerId: offer.workerId, id: { not: job.id },
           OR: [
-            { status: 'IN_PROGRESS' },
-            { status: { in: BUSY_STATUSES as any }, scheduledFrom: { lt: to }, scheduledTo: { gt: from } },
+            // On a job right now (on the way, on site, working): can't also take something that
+            // starts soon, whatever that job's booked window said.
+            ...(from.getTime() < Date.now() + IN_FLIGHT_BLOCK_MS ? [{ status: { in: IN_FLIGHT_STATUSES } }] : []),
+            // Booked but not finished: busy for that time window.
+            { status: { in: BUSY_STATUSES }, scheduledFrom: { lt: to }, scheduledTo: { gt: from } },
           ],
         },
         select: { id: true },
@@ -218,12 +233,12 @@ export class OffersService {
     const title = job.title ?? 'Repair';
     await this.notifications.notify({
       type: 'offer.accepted', userIds: [offer.workerId], eventKey: `offer.accepted:${offer.id}`,
-      params: { title }, data: { url: `/(worker)/job/${job.id}`, jobId: job.id },
+      params: { title }, data: { url: routes.workerJob(job.id), jobId: job.id },
     });
     for (const l of losers) {
       await this.notifications.notify({
         type: 'offer.not_chosen', userIds: [l.workerId], eventKey: `offer.not_chosen:${l.id}`,
-        params: { title }, data: { url: '/(worker)/jobs', jobId: job.id }, push: false,
+        params: { title }, data: { url: routes.workerJobs(), jobId: job.id }, push: false,
       });
     }
     // Everyone who was sent this request: it has left the open list.

@@ -25,15 +25,21 @@ import { AdminModule } from './admin/admin.module';
 import { MatchingModule } from './matching/matching.module';
 import { OffersModule } from './offers/offers.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { TrackingModule } from './tracking/tracking.module';
 import { StorageModule } from './storage/storage.module';
 import { CommonModule } from './common/common.module';
 import { RedisThrottlerStorage } from './common/throttle/redis-throttler.storage';
+import { THROTTLE_STORAGE, ThrottleStorageModule } from './common/throttle/throttle-storage.module';
 import { validateEnv } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { PaymentsModule } from './payments/payments.module';
+import { BlocksModule } from './blocks/blocks.module';
 import { SafetyModule } from './safety/safety.module';
+import { MoneyModule } from './money/money.module';
 import { SmsModule } from './sms/sms.module';
 import { FeatureGuard } from './common/features/feature.guard';
 
@@ -45,15 +51,18 @@ import { FeatureGuard } from './common/features/feature.guard';
       validate: validateEnv,
     }),
     ThrottlerModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (c: ConfigService) => ({
+      imports: [ThrottleStorageModule],
+      inject: [THROTTLE_STORAGE],
+      useFactory: (storage?: RedisThrottlerStorage) => ({
         throttlers: [{ ttl: 60000, limit: 100 }],
-        // Several API instances must share counters; one instance can keep them in memory.
-        storage: c.get<string>('REDIS_URL') ? new RedisThrottlerStorage(c.get<string>('REDIS_URL')!) : undefined,
+        // Several API instances must share counters (Redis); one instance can keep them in memory.
+        storage,
       }),
     }),
     DatabaseModule,
     CommonModule,
+    RealtimeModule,
+    TrackingModule,
     StorageModule,
     AdminModule,
     MatchingModule,
@@ -74,8 +83,10 @@ import { FeatureGuard } from './common/features/feature.guard';
     ServiceCatalogModule,
     PropertiesModule,
     RecurringJobsModule,
+    BlocksModule,
     PaymentsModule,
     SafetyModule,
+    MoneyModule,
     SmsModule,
   ],
   controllers: [AppController, AppConfigController],
@@ -84,6 +95,8 @@ import { FeatureGuard } from './common/features/feature.guard';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Staff routes: one permission each, deny by default (common/auth/permissions.ts).
+    { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: FeatureGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],

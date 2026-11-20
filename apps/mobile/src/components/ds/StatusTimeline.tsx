@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
+import { t } from '../../i18n';
 
 export type JobPhase = 
   | 'REQUESTED' 
@@ -18,26 +19,26 @@ export interface StatusTimelineProps {
   currentPhase: JobPhase;
 }
 
-const PHASES: { id: JobPhase; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: 'REQUESTED', label: 'Requested', icon: 'paper-plane' },
-  { id: 'OFFERS_READY', label: 'Offers ready', icon: 'people' },
-  { id: 'BOOKED', label: 'Booked', icon: 'calendar' },
-  { id: 'ON_THE_WAY', label: 'On the way', icon: 'car' },
-  { id: 'ARRIVED', label: 'Arrived', icon: 'location' },
-  { id: 'WORKING', label: 'Working', icon: 'hammer' },
-  { id: 'DONE', label: 'Done', icon: 'checkmark-circle' },
-];
+const PHASES = (): { id: JobPhase; label: string; icon: keyof typeof Ionicons.glyphMap }[] => ([
+  { id: 'REQUESTED', label: t('statusTimeline.requested'), icon: 'paper-plane' },
+  { id: 'OFFERS_READY', label: t('statusTimeline.offersReady'), icon: 'people' },
+  { id: 'BOOKED', label: t('statusTimeline.booked'), icon: 'calendar' },
+  { id: 'ON_THE_WAY', label: t('customerJob.onTheWay'), icon: 'car' },
+  { id: 'ARRIVED', label: t('statusTimeline.arrived'), icon: 'location' },
+  { id: 'WORKING', label: t('statusTimeline.working'), icon: 'hammer' },
+  { id: 'DONE', label: t('sharedChangePassword.done'), icon: 'checkmark-circle' },
+]);
 
 export const StatusTimeline = ({ currentPhase }: StatusTimelineProps) => {
   const theme = useTheme();
   
-  const currentIndex = PHASES.findIndex((p) => p.id === currentPhase);
+  const currentIndex = PHASES().findIndex((p) => p.id === currentPhase);
   // Default to first phase if invalid or PAID (PAID implies DONE is complete)
-  const activeIndex = currentIndex === -1 ? (currentPhase === 'PAID' ? PHASES.length : 0) : currentIndex;
+  const activeIndex = currentIndex === -1 ? (currentPhase === 'PAID' ? PHASES().length : 0) : currentIndex;
 
   return (
     <View style={styles.container}>
-      {PHASES.map((phase, index) => {
+      {PHASES().map((phase, index) => {
         const isPast = index < activeIndex;
         const isActive = index === activeIndex;
         const isFuture = index > activeIndex;
@@ -55,7 +56,7 @@ export const StatusTimeline = ({ currentPhase }: StatusTimelineProps) => {
               <View style={[styles.iconCircle, { backgroundColor: color }]}>
                 <Ionicons name={phase.icon} size={16} color="#FFF" />
               </View>
-              {index < PHASES.length - 1 && (
+              {index < PHASES().length - 1 && (
                 <View style={[styles.line, { backgroundColor: isPast ? theme.colors.success : theme.colors.border }]} />
               )}
             </View>
@@ -71,7 +72,7 @@ export const StatusTimeline = ({ currentPhase }: StatusTimelineProps) => {
               </Text>
               {isActive && (
                 <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>
-                  In progress...
+                  {t('statusTimeline.inProgress')}
                 </Text>
               )}
             </View>

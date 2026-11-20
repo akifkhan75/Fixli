@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { examplePhone, type CountryConfig } from '@fixli/shared';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
+import { t } from '../../i18n';
 
 export interface PhoneFieldProps {
   label: string;
@@ -36,7 +37,7 @@ export const PhoneField = ({
           disabled={!canChangeCountry}
           accessibilityRole="button"
           accessibilityLabel={`${country.name}, +${country.dialCode}`}
-          accessibilityHint={canChangeCountry ? 'Double tap to change country' : undefined}
+          accessibilityHint={canChangeCountry ? t('phoneField.doubleTapToChange') : undefined}
           style={[styles.chip, { borderEndColor: theme.colors.border }]}
           hitSlop={{ top: 8, bottom: 8 }}
         >
@@ -59,11 +60,12 @@ export const PhoneField = ({
           autoCorrect={false}
           maxLength={22}
           accessibilityLabel={label}
+          testID="phone-input"
           style={[styles.input, { color: theme.colors.textPrimary, fontSize: 18, textAlign: 'left' }]}
         />
       </View>
       {error ? (
-        <Text variant="caption" color={theme.colors.error} accessibilityRole="alert" style={{ marginTop: theme.spacing.xs }}>
+        <Text variant="caption" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: theme.spacing.xs }}>
           {error}
         </Text>
       ) : null}

@@ -72,24 +72,6 @@ export class WorkersController {
     return this.workers.submitForReview(id);
   }
 
-  @Get('me/earnings')
-  @Roles('worker')
-  @ApiOperation({ summary: 'Get worker earnings summary' })
-  getEarnings(@CurrentUser('id') id: string) {
-    return this.workers.getEarnings(id);
-  }
-
-  @Get('me/ledger')
-  @Roles('worker')
-  @ApiOperation({ summary: 'Get paginated ledger entries' })
-  getLedger(
-    @CurrentUser('id') id: string,
-    @Query('skip') skip?: string,
-    @Query('take') take?: string,
-  ) {
-    return this.workers.getLedger(id, skip ? parseInt(skip, 10) : 0, take ? parseInt(take, 10) : 50);
-  }
-
   @Get(':id')
   @ApiOperation({ summary: 'Public worker profile' })
   findOne(@Param('id') id: string, @CurrentUser() viewer: { id: string; type: string }) {

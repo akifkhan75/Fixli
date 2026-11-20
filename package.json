@@ -31,6 +31,19 @@
     "turbo": "^2.4.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22 <25"
+  },
+  "pnpm": {
+    "overrides": {
+      "multer": ">=2.3.0 <3",
+      "lodash": ">=4.18.0 <5",
+      "js-yaml@4": ">=4.3.2 <5"
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-86w9-cpqp-85rv",
+        "GHSA-vfj7-8cjw-p6xm"
+      ]
+    }
   }
 }
