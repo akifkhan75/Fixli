@@ -1,6 +1,7 @@
 import { StaleNote } from '../../../src/components/ds/StaleNote';
 import React, { useState, useEffect } from 'react';
 import { View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { useApi, friendlyError } from '../../../src/hooks/useApi';
@@ -223,10 +224,16 @@ export default function WorkerJobScreen() {
       {actionError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{actionError}</Text> : null}
       {job.status === 'MATCHES_FOUND' ? (
         <View style={{ marginTop: 28 }}>
-          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{t('workerJob.yourPrice')}</Text>
+          <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: offer && !editingPrice ? 12 : 4 }}>{t('workerJob.yourPrice')}</Text>
+          {!offer || editingPrice ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginBottom: 12 }}>{t('workerJob.priceHint')}</Text> : null}
           {offer && !editingPrice ? (
             <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Ionicons name="checkmark-circle" size={18} color={theme.colors.success} />
+                <Text variant="bodySmall" weight="semibold" color={theme.colors.success}>{t('workerJob.priceSent')}</Text>
+              </View>
               <Text variant="h2" weight="extrabold" color={theme.colors.textPrimary}>{formatMoney(offer.amount, offer.currency, locale)}</Text>
+              <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>{t('workerJob.priceSentHint')}</Text>
               <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>{t('workerJob.waitingValidUntil', { time: new Date(offer.expiresAt).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }) })}</Text>
               <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
                 <View style={{ flex: 1 }}><Button title={t('workerJob.withdraw')} variant="secondary" disabled={busy} onPress={withdraw} /></View>
@@ -237,7 +244,7 @@ export default function WorkerJobScreen() {
             <PriceForm
               currency={me.data.currency} usualMinor={me.data.pricingModel === 'HOURLY' ? me.data.hourlyRate : me.data.minimumCallOutFee}
               initialMinor={offer?.amount} initialEta={offer?.etaMinutes} locale={locale} busy={busy}
-              submitLabel={offer ? 'Update price' : 'Send price'} onSubmit={sendPrice}
+              submitLabel={offer ? t('workerJob.updatePrice') : t('workerJob.sendPrice')} onSubmit={sendPrice}
             />
           ) : null}
           {!offer ? <View style={{ marginTop: 12 }}><Button title={t('workerJob.notForMe')} variant="ghost" disabled={busy} onPress={notForMe} /></View> : null}

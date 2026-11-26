@@ -44,8 +44,9 @@ export function toPhase(status: string): JobPhase {
     case 'AWAITING_WORKER': return 'OFFERS_READY';
     case 'EN_ROUTE': return 'ON_THE_WAY';
     case 'ARRIVED': return 'ARRIVED';
-    case 'IN_PROGRESS': return 'WORKING';
-    case 'AWAITING_CONFIRMATION':
+    case 'IN_PROGRESS':
+    // Worker finished, customer still has to confirm: the work is not "done" for the customer yet.
+    case 'AWAITING_CONFIRMATION': return 'WORKING';
     case 'COMPLETED': return 'DONE';
     default: return 'REQUESTED';
   }

@@ -1,27 +1,27 @@
-import { analytics } from '../../src/services/analytics';
-import { StaleNote } from '../../src/components/ds/StaleNote';
+import { analytics } from '../../../src/services/analytics';
+import { StaleNote } from '../../../src/components/ds/StaleNote';
 import React, { useCallback, useState } from 'react';
 import { View, Switch, TouchableOpacity } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../src/hooks/useTheme';
-import { useApi, friendlyError } from '../../src/hooks/useApi';
-import { useAppSelector } from '../../src/hooks/useRedux';
-import { selectCurrentUser } from '../../src/store/authSlice';
-import { Screen } from '../../src/components/ds/Screen';
-import { Text } from '../../src/components/ds/Text';
-import { Button } from '../../src/components/ds/Button';
-import { Logo } from '../../src/components/ds/Logo';
-import { useI18n } from '../../src/hooks/useI18n';
-import { formatMoney } from '../../src/utils/money';
-import { NotificationBell } from '../../src/components/ds/NotificationBell';
-import { useLiveReload } from '../../src/hooks/useRealtime';
-import { useNotifications } from '../../src/hooks/useNotifications';
-import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
-import { statusSentence } from '../../src/utils/jobStatus';
-import * as api from '../../src/services/api';
-import { t, tn } from '../../src/i18n';
-import { DirIcon } from '../../src/components/ds/DirIcon';
+import { useTheme } from '../../../src/hooks/useTheme';
+import { useApi, friendlyError } from '../../../src/hooks/useApi';
+import { useAppSelector } from '../../../src/hooks/useRedux';
+import { selectCurrentUser } from '../../../src/store/authSlice';
+import { Screen } from '../../../src/components/ds/Screen';
+import { Text } from '../../../src/components/ds/Text';
+import { Button } from '../../../src/components/ds/Button';
+import { Logo } from '../../../src/components/ds/Logo';
+import { useI18n } from '../../../src/hooks/useI18n';
+import { formatMoney } from '../../../src/utils/money';
+import { NotificationBell } from '../../../src/components/ds/NotificationBell';
+import { useLiveReload } from '../../../src/hooks/useRealtime';
+import { useNotifications } from '../../../src/hooks/useNotifications';
+import { EmptyState, ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
+import { statusSentence } from '../../../src/utils/jobStatus';
+import * as api from '../../../src/services/api';
+import { t, tn } from '../../../src/i18n';
+import { DirIcon } from '../../../src/components/ds/DirIcon';
 
 export default function TodayScreen() {
   const theme = useTheme();
@@ -111,7 +111,7 @@ export default function TodayScreen() {
       {toggleError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{toggleError}</Text> : null}
 
       {status === 'ACTIVE' && earnings.data ? (
-        <TouchableOpacity onPress={() => router.push('/(worker)/earnings' as any)} activeOpacity={0.8} accessibilityRole="button"
+        <TouchableOpacity onPress={() => router.push('/(worker)/(tabs)/earnings' as any)} activeOpacity={0.8} accessibilityRole="button"
           style={{ backgroundColor: earnings.data.limits.blocked ? theme.colors.error + '18' : theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16, marginTop: 16 }}>
           <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('workerToday.today')}</Text>
           <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginTop: 2 }}>{formatMoney(earnings.data.today.gross, earnings.data.currency, locale)}</Text>
@@ -136,7 +136,7 @@ export default function TodayScreen() {
       )}
 
       {jobs.data?.offered.length ? (
-        <TouchableOpacity onPress={() => router.push('/(worker)/jobs' as any)} accessibilityRole="button" activeOpacity={0.8}
+        <TouchableOpacity onPress={() => router.push('/(worker)/(tabs)/jobs' as any)} accessibilityRole="button" activeOpacity={0.8}
           style={{ marginTop: 20, backgroundColor: theme.colors.accent + '15', borderColor: theme.colors.accent, borderWidth: 1, borderRadius: theme.borderRadius.xl, padding: 16, flexDirection: 'row', alignItems: 'center' }}>
           <Ionicons name="notifications" size={24} color={theme.colors.accent} />
           <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary} style={{ flex: 1, marginStart: 14 }}>{tn('workerToday.requestsNear', jobs.data.offered.length)}</Text>

@@ -72,7 +72,7 @@ export const StatusTimeline = ({ currentPhase }: StatusTimelineProps) => {
               </Text>
               {isActive && (
                 <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>
-                  {t('statusTimeline.inProgress')}
+                  {phase.id === 'DONE' ? t('statusTimeline.complete') : t('statusTimeline.inProgress')}
                 </Text>
               )}
             </View>

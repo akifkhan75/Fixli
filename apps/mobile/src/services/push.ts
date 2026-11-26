@@ -3,17 +3,22 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { registerPushToken } from './api';
 
-// While the app is open we show our own in-app banner instead of the system one.
+// While the app is open we show our own in-app banner (plus our own beep) instead of the system banner.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: true }),
+  handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: true }),
 });
 
 let channelsReady = false;
 async function ensureChannels() {
   if (Platform.OS !== 'android' || channelsReady) return;
-  await Notifications.setNotificationChannelAsync('default', { name: 'Updates', importance: Notifications.AndroidImportance.HIGH });
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'Updates', importance: Notifications.AndroidImportance.HIGH, sound: 'default', vibrationPattern: [0, 250],
+  });
   await Notifications.setNotificationChannelAsync('requests', {
-    name: 'New job requests', importance: Notifications.AndroidImportance.MAX, vibrationPattern: [0, 250, 250, 250],
+    name: 'New job requests', importance: Notifications.AndroidImportance.MAX, sound: 'default', vibrationPattern: [0, 250, 250, 250],
+  });
+  await Notifications.setNotificationChannelAsync('messages', {
+    name: 'Messages', importance: Notifications.AndroidImportance.HIGH, sound: 'default', vibrationPattern: [0, 180],
   });
   channelsReady = true;
 }

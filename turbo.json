@@ -3,6 +3,41 @@
   "globalDependencies": [
     "**/.env.*local"
   ],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "JWT_EXPIRES_IN",
+    "REFRESH_TOKEN_DAYS",
+    "FIELD_ENCRYPTION_KEY",
+    "REDIS_URL",
+    "GEMINI_API_KEY",
+    "GEMINI_MODEL",
+    "NODE_ENV",
+    "PORT",
+    "FRONTEND_URL",
+    "PUBLIC_API_URL",
+    "ENABLED_COUNTRIES",
+    "ENABLED_FEATURES",
+    "OTP_REQUIRED",
+    "STORAGE_DRIVER",
+    "STORAGE_LOCAL_DIR",
+    "STORAGE_PUBLIC_BASE_URL",
+    "S3_BUCKET",
+    "S3_REGION",
+    "S3_ENDPOINT",
+    "S3_ACCESS_KEY_ID",
+    "S3_SECRET_ACCESS_KEY",
+    "MATCH_NOTIFY_LIMIT",
+    "MAX_OFFERS_SHOWN",
+    "OFFER_TTL_MINUTES",
+    "REMATCH_AFTER_MINUTES",
+    "REMATCH_RADIUS_FACTOR",
+    "RUN_BACKGROUND_JOBS",
+    "EXPO_PUSH_URL",
+    "EXPO_ACCESS_TOKEN",
+    "SENTRY_DSN",
+    "LOG_LEVEL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": [

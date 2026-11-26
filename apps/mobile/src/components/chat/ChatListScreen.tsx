@@ -6,6 +6,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useI18n } from '../../hooks/useI18n';
 import { useApi } from '../../hooks/useApi';
 import { useLiveReload } from '../../hooks/useRealtime';
+import { useNotifications } from '../../hooks/useNotifications';
 import { Text } from '../ds/Text';
 import { Screen } from '../ds/Screen';
 import { Avatar } from '../ds/Avatar';
@@ -17,9 +18,11 @@ import { t } from '../../i18n';
 export function ChatListScreen() {
   const theme = useTheme();
   const { locale } = useI18n();
+  const { refreshChatUnread } = useNotifications();
   const { data, loading, error, reload } = useApi(async () => (await api.getConversations()).items);
-  useFocusEffect(useCallback(() => { reload(); }, [reload]));
-  useLiveReload(reload, ['conversation.updated', 'message.created']);
+  const refresh = useCallback(async () => { await reload(); await refreshChatUnread(); }, [reload, refreshChatUnread]);
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useLiveReload(refresh, ['conversation.updated', 'message.created']);
 
   const when = (iso: string) => {
     const d = new Date(iso);

@@ -42,7 +42,7 @@ export default function MyJobsScreen() {
           onAction={tab === 'ACTIVE' ? () => router.push('/(customer)/(home)' as any) : undefined}
         />
       ) : shown.map((job) => (
-        <TouchableOpacity key={job.id} onPress={() => router.push(`/(customer)/job/${job.id}` as any)} activeOpacity={0.8} accessibilityRole="button"
+        <TouchableOpacity key={job.id} onPress={() => router.push(`/(customer)/(home)/job/${job.id}` as any)} activeOpacity={0.8} accessibilityRole="button"
           style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center' }}>
           <Ionicons name={statusIcon(job.status)} size={26} color={job.status === 'CANCELLED' ? theme.colors.error : theme.colors.primary} />
           <View style={{ flex: 1, marginHorizontal: 14 }}>

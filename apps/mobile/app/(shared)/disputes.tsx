@@ -32,7 +32,7 @@ export default function DisputesScreen() {
         return (
           <TouchableOpacity
             key={d.id}
-            onPress={() => router.push(`/(customer)/job/${d.jobRequestId}` as any)}
+            onPress={() => router.push(`/(customer)/(home)/job/${d.jobRequestId}` as any)}
             accessibilityRole="button"
             accessibilityLabel={`${d.reason}. ${st.text()}`}
             style={{ padding: 16, marginBottom: 12, borderRadius: theme.borderRadius.lg, backgroundColor: theme.colors.surface }}
