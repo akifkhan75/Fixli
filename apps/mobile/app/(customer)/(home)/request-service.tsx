@@ -3,29 +3,29 @@ import { View, Image, TouchableOpacity, ScrollView, Linking, Alert } from 'react
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../src/hooks/useTheme';
-import { useI18n } from '../../src/hooks/useI18n';
-import { useCountry } from '../../src/hooks/useCountry';
-import { useApi, friendlyError } from '../../src/hooks/useApi';
-import { usePhotoUpload, type Uploaded } from '../../src/hooks/usePhotoUpload';
-import { Screen } from '../../src/components/ds/Screen';
-import { Text } from '../../src/components/ds/Text';
-import { Button } from '../../src/components/ds/Button';
-import { TextInput } from '../../src/components/ds/TextInput';
-import { ChipChoice } from '../../src/components/ds/ChipChoice';
-import { PhotoButtons } from '../../src/components/ds/PhotoButtons';
-import { ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
-import { VoiceField, type VoiceValue } from '../../src/forms/components/VoiceField';
-import { humanize, localizedName } from '../../src/utils/catalog';
-import { ApiError } from '../../src/services/api';
-import { useNotifications } from '../../src/hooks/useNotifications';
-import { useAppSelector } from '../../src/hooks/useRedux';
-import { selectCurrentUser } from '../../src/store/authSlice';
-import { submitJobRequest } from '../../src/services/outboxHandlers';
-import { analytics } from '../../src/services/analytics';
-import * as api from '../../src/services/api';
-import { t, tn } from '../../src/i18n';
-import { DirIcon } from '../../src/components/ds/DirIcon';
+import { useTheme } from '../../../src/hooks/useTheme';
+import { useI18n } from '../../../src/hooks/useI18n';
+import { useCountry } from '../../../src/hooks/useCountry';
+import { useApi, friendlyError } from '../../../src/hooks/useApi';
+import { usePhotoUpload, type Uploaded } from '../../../src/hooks/usePhotoUpload';
+import { Screen } from '../../../src/components/ds/Screen';
+import { Text } from '../../../src/components/ds/Text';
+import { Button } from '../../../src/components/ds/Button';
+import { TextInput } from '../../../src/components/ds/TextInput';
+import { ChipChoice } from '../../../src/components/ds/ChipChoice';
+import { PhotoButtons } from '../../../src/components/ds/PhotoButtons';
+import { ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
+import { VoiceField, type VoiceValue } from '../../../src/forms/components/VoiceField';
+import { humanize, localizedName } from '../../../src/utils/catalog';
+import { ApiError } from '../../../src/services/api';
+import { useNotifications } from '../../../src/hooks/useNotifications';
+import { useAppSelector } from '../../../src/hooks/useRedux';
+import { selectCurrentUser } from '../../../src/store/authSlice';
+import { submitJobRequest } from '../../../src/services/outboxHandlers';
+import { analytics } from '../../../src/services/analytics';
+import * as api from '../../../src/services/api';
+import { t, tn } from '../../../src/i18n';
+import { DirIcon } from '../../../src/components/ds/DirIcon';
 
 type When = 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED';
 type Slot = 'MORNING' | 'AFTERNOON' | 'EVENING';
@@ -186,7 +186,7 @@ export default function RequestServiceScreen() {
       // "Book again": ask the same professional first. If they're not available, the request
       // simply stays open for others (matching already ran).
       if (params.workerId) await api.requestWorkerForJob(job.id, params.workerId).catch(() => undefined);
-      router.replace(`/(customer)/job/${job.id}` as any);
+      router.replace(`/(customer)/(home)/job/${job.id}` as any);
     } catch (e) {
       setError(e instanceof ApiError
         ? (e.code === 'OFFLINE' ? t('offline.emergency') : e.userMessage)

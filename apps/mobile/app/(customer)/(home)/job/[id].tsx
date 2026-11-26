@@ -1,37 +1,37 @@
-import { analytics } from '../../../src/services/analytics';
-import { StaleNote } from '../../../src/components/ds/StaleNote';
+import { analytics } from '../../../../src/services/analytics';
+import { StaleNote } from '../../../../src/components/ds/StaleNote';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useTheme } from '../../../src/hooks/useTheme';
-import { useI18n } from '../../../src/hooks/useI18n';
-import { useApi, friendlyError } from '../../../src/hooks/useApi';
-import { Screen } from '../../../src/components/ds/Screen';
-import { Text } from '../../../src/components/ds/Text';
-import { Button } from '../../../src/components/ds/Button';
-import { Avatar } from '../../../src/components/ds/Avatar';
-import { ChipChoice } from '../../../src/components/ds/ChipChoice';
-import { TextInput } from '../../../src/components/ds/TextInput';
-import { StatusTimeline } from '../../../src/components/ds/StatusTimeline';
-import { JobHistory, JobMedia } from '../../../src/components/ds/JobParts';
-import { ChangeOrdersList } from '../../../src/components/ds/ChangeOrdersList';
-import { ReviewForm } from '../../../src/components/ds/ReviewForm';
-import { CashConfirmCard } from '../../../src/components/ds/CashConfirmCard';
-import { ReportProblem } from '../../../src/components/ds/ReportProblem';
-import { FavoriteHeart } from '../../../src/components/ds/FavoriteHeart';
-import { ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
-import { OfferCard } from '../../../src/components/ds/OfferCard';
+import { useTheme } from '../../../../src/hooks/useTheme';
+import { useI18n } from '../../../../src/hooks/useI18n';
+import { useApi, friendlyError } from '../../../../src/hooks/useApi';
+import { Screen } from '../../../../src/components/ds/Screen';
+import { Text } from '../../../../src/components/ds/Text';
+import { Button } from '../../../../src/components/ds/Button';
+import { Avatar } from '../../../../src/components/ds/Avatar';
+import { ChipChoice } from '../../../../src/components/ds/ChipChoice';
+import { TextInput } from '../../../../src/components/ds/TextInput';
+import { StatusTimeline } from '../../../../src/components/ds/StatusTimeline';
+import { JobHistory, JobMedia } from '../../../../src/components/ds/JobParts';
+import { ChangeOrdersList } from '../../../../src/components/ds/ChangeOrdersList';
+import { ReviewForm } from '../../../../src/components/ds/ReviewForm';
+import { CashConfirmCard } from '../../../../src/components/ds/CashConfirmCard';
+import { ReportProblem } from '../../../../src/components/ds/ReportProblem';
+import { FavoriteHeart } from '../../../../src/components/ds/FavoriteHeart';
+import { ErrorState, LoadingState } from '../../../../src/components/ds/EmptyState';
+import { OfferCard } from '../../../../src/components/ds/OfferCard';
 import MapView, { Marker } from 'react-native-maps';
-import { useAppDispatch, useAppSelector } from '../../../src/hooks/useRedux';
-import { useWorkerLiveLocation } from '../../../src/hooks/useWorkerLiveLocation';
-import { CallButton } from '../../../src/components/ds/CallButton';
-import { MessageButton } from '../../../src/components/ds/MessageButton';
-import { formatMoney } from '../../../src/utils/money';
-import { CANCEL_REASON_LABEL, formatWindow, statusSentence, toPhase } from '../../../src/utils/jobStatus';
-import { humanize, localizedName } from '../../../src/utils/catalog';
-import * as api from '../../../src/services/api';
-import { useLiveReload } from '../../../src/hooks/useRealtime';
-import { t, tn } from '../../../src/i18n';
+import { useAppDispatch, useAppSelector } from '../../../../src/hooks/useRedux';
+import { useWorkerLiveLocation } from '../../../../src/hooks/useWorkerLiveLocation';
+import { CallButton } from '../../../../src/components/ds/CallButton';
+import { MessageButton } from '../../../../src/components/ds/MessageButton';
+import { formatMoney } from '../../../../src/utils/money';
+import { CANCEL_REASON_LABEL, formatWindow, statusSentence, toPhase } from '../../../../src/utils/jobStatus';
+import { humanize, localizedName } from '../../../../src/utils/catalog';
+import * as api from '../../../../src/services/api';
+import { useLiveReload } from '../../../../src/hooks/useRealtime';
+import { t, tn } from '../../../../src/i18n';
 
 // Job status, prices, extra-work requests and the professional's position update live.
 export default function CustomerJobScreen() {
@@ -92,7 +92,7 @@ export default function CustomerJobScreen() {
 
   const payment = job.payments?.[0] as api.PaymentView | undefined;
   const bookAgain = () => { void analytics.track('rebook_started'); router.push({
-    pathname: '/(customer)/request-service',
+    pathname: '/(customer)/(home)/request-service',
     params: { categoryId: job.category?.id, issue: job.issueCodes?.[0], ...(worker ? { workerId: worker.id } : {}) },
   } as any); };
 

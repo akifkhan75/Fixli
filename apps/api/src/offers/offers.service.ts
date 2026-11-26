@@ -64,15 +64,13 @@ export class OffersService {
       return o;
     });
     this.realtime.emitToUsers([job.customerId], 'offers.updated', { jobId });
-    if (!existing || existing.status !== 'PENDING') {
-      // A first price (or a fresh one after it expired) is news; a revision just updates the list.
-      const worker = await this.prisma.user.findUnique({ where: { id: workerId }, select: { name: true } });
-      await this.notifications.notify({
-        type: 'offer.received', userIds: [job.customerId], eventKey: `offer.received:${offer.id}:${expiresAt.getTime()}`,
-        params: { worker: worker?.name ?? 'A professional', price: { minor: offer.amount, currency: offer.currency } },
-        data: { url: routes.customerJob(jobId), jobId },
-      });
-    }
+    // Every send (first price or revision) tells the customer; expiresAt is part of the key so a revision is a new event.
+    const worker = await this.prisma.user.findUnique({ where: { id: workerId }, select: { name: true } });
+    await this.notifications.notify({
+      type: 'offer.received', userIds: [job.customerId], eventKey: `offer.received:${offer.id}:${expiresAt.getTime()}`,
+      params: { worker: worker?.name ?? 'A professional', price: { minor: offer.amount, currency: offer.currency } },
+      data: { url: routes.customerJob(jobId), jobId },
+    });
     return offer;
   }
 

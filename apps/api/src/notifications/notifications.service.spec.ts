@@ -12,7 +12,7 @@ describe('NotificationService', () => {
   const svc = new NotificationService(prisma, realtime as any, push as any);
   const input = {
     type: 'offer.received' as const, userIds: ['c1', 'c1'], eventKey: 'offer.received:o1:1',
-    params: { worker: 'Bilal', price: { minor: 150000, currency: 'PKR' } }, data: { url: '/(customer)/job/j1', jobId: 'j1' },
+    params: { worker: 'Bilal', price: { minor: 150000, currency: 'PKR' } }, data: { url: '/(customer)/(home)/job/j1', jobId: 'j1' },
   };
 
   beforeEach(() => {
@@ -31,7 +31,7 @@ describe('NotificationService', () => {
     expect(prisma.notification.create.mock.calls[0][0].data.body).toMatch(/Bilal can do it for .*1,500/);
     expect(realtime.emitToUsers).toHaveBeenCalledWith(['c1'], 'notification.created', expect.objectContaining({ id: 'n1', data: input.data }));
     expect(push.send.mock.calls[0][0].map((m: any) => m.to)).toEqual(['ExponentPushToken[a]', 'ExponentPushToken[b]']);
-    expect(push.send.mock.calls[0][0][0].data).toMatchObject({ url: '/(customer)/job/j1', notificationId: 'n1' });
+    expect(push.send.mock.calls[0][0][0].data).toMatchObject({ url: '/(customer)/(home)/job/j1', notificationId: 'n1' });
   });
 
   it('forgets a token the phone no longer accepts', async () => {

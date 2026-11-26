@@ -25,7 +25,7 @@ export default function CategoryScreen() {
   if (!category) return <Screen title={t('customerHomeCategories.services')} back><Text variant="body" color={theme.colors.textSecondary}>{t('customerHomeCategories.weCouldntFindThat')}</Text></Screen>;
 
   const title = localizedName({ name: category.translations?.en?.name ?? humanize(category.name), translations: category.translations }, locale);
-  const start = (issueCode?: string) => router.push({ pathname: '/(customer)/request-service', params: { categoryId: category.id, ...(issueCode ? { issue: issueCode } : {}) } } as any);
+  const start = (issueCode?: string) => router.push({ pathname: '/(customer)/(home)/request-service', params: { categoryId: category.id, ...(issueCode ? { issue: issueCode } : {}) } } as any);
 
   return (
     <Screen title={title} back>

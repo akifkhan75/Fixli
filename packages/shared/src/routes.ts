@@ -5,24 +5,24 @@
 // ============================================================
 
 export const routes = {
-  customerJob: (jobId: string) => `/(customer)/job/${jobId}`,
+  customerJob: (jobId: string) => `/(customer)/(home)/job/${jobId}`,
   workerJob: (jobId: string) => `/(worker)/job/${jobId}`,
   /** The job screen for whichever side this user is on. */
   jobFor: (jobId: string, side: 'customer' | 'worker') => (side === 'customer' ? routes.customerJob(jobId) : routes.workerJob(jobId)),
   thread: (conversationId: string) => `/thread/${conversationId}`,
-  workerJobs: () => '/(worker)/jobs',
-  workerToday: () => '/(worker)/today',
-  workerEarnings: () => '/(worker)/earnings',
+  workerJobs: () => '/(worker)/(tabs)/jobs',
+  workerToday: () => '/(worker)/(tabs)/today',
+  workerEarnings: () => '/(worker)/(tabs)/earnings',
   workerDocuments: () => '/(worker-setup)/setup/documents',
 } as const;
 
 /** Route patterns, for the app's "every link has a screen" test: `:id` stands for any segment. */
 export const ROUTE_PATTERNS = [
-  '/(customer)/job/:id',
+  '/(customer)/(home)/job/:id',
   '/(worker)/job/:id',
   '/thread/:id',
-  '/(worker)/jobs',
-  '/(worker)/today',
-  '/(worker)/earnings',
+  '/(worker)/(tabs)/jobs',
+  '/(worker)/(tabs)/today',
+  '/(worker)/(tabs)/earnings',
   '/(worker-setup)/setup/documents',
 ] as const;

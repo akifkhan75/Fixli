@@ -96,7 +96,7 @@ export default function CustomerHomeScreen() {
             variant="secondary" 
             size="lg" 
             style={{ flex: 1 }}
-            onPress={() => router.push('/(customer)/request-service' as any)}
+            onPress={() => router.push('/(customer)/(home)/request-service' as any)}
             accessibilityRole="button"
             accessibilityLabel={t('home.category.other')}
           />
@@ -105,7 +105,7 @@ export default function CustomerHomeScreen() {
             variant="secondary" 
             size="lg" 
             style={{ flex: 1 }}
-            onPress={() => router.push('/(customer)/request-service' as any)}
+            onPress={() => router.push('/(customer)/(home)/request-service' as any)}
             accessibilityRole="button"
             accessibilityLabel={t('customerHome.tellUsUsingVoice')}
           />

@@ -47,6 +47,7 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
   const [error, setError] = useState<string | undefined>();
   const [denied, setDenied] = useState(false);
   const startedAt = useRef(0);
+  const starting = useRef(false);
 
   // Hard stop at 60 s so recordings stay short and cheap to transcribe.
   useEffect(() => {
@@ -55,19 +56,29 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
   }, [rec.durationMillis, rec.isRecording]);
 
   const start = async () => {
+    if (starting.current || busy) return;
+    starting.current = true;
     setError(undefined);
     setDenied(false);
-    const perm = await AudioModule.requestRecordingPermissionsAsync();
-    if (!perm.granted) {
-      setDenied(true);
-      setError(t('voiceField.microphoneAccessIsOff'));
-      return;
+    try {
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        setDenied(true);
+        setError(t('voiceField.microphoneAccessIsOff'));
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      if (recorder.getStatus().isRecording) await recorder.stop().catch(() => undefined);
+      // Android rejects a second prepare while the session is still prepared after stop.
+      if (!recorder.getStatus().canRecord) await recorder.prepareToRecordAsync();
+      recorder.record();
+      startedAt.current = Date.now();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      starting.current = false;
     }
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    await recorder.prepareToRecordAsync();
-    recorder.record();
-    startedAt.current = Date.now();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
   };
 
   const stop = async () => {

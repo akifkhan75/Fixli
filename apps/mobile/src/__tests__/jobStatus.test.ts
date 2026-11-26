@@ -77,7 +77,7 @@ describe('on-site steps (doc 27 F2)', () => {
   it('maps onto the timeline steps', () => {
     expect(toPhase('EN_ROUTE')).toBe('ON_THE_WAY');
     expect(toPhase('ARRIVED')).toBe('ARRIVED');
-    expect(toPhase('AWAITING_CONFIRMATION')).toBe('DONE');
+    expect(toPhase('AWAITING_CONFIRMATION')).toBe('WORKING');
     expect(isActive('EN_ROUTE')).toBe(true);
     expect(isActive('COMPLETED')).toBe(false);
   });

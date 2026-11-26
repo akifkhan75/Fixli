@@ -41,8 +41,8 @@ async function main() {
   await prisma.worker.create({
     data: {
       id: 'w1', activationStatus: 'ACTIVE', isOnline: true, rating: 4.8, isVerified: true, currency: 'PKR',
-      pricingModel: 'CALLOUT_PLUS_QUOTE', minimumCallOutFee: 150000, serviceLat: 24.8607, serviceLng: 67.0011,
-      serviceAreaLabel: 'Karachi', serviceRadius: 10, bio: 'Dev demo plumber and electrician.',
+      pricingModel: 'CALLOUT_PLUS_QUOTE', minimumCallOutFee: 150000, serviceLat: 24.9215, serviceLng: 67.0925,
+      serviceAreaLabel: 'Gulshan-e-Iqbal, Karachi', serviceRadius: 25, bio: 'Dev demo plumber and electrician.',
       services: {
         create: [
           { categoryId: catPlumbing.id },

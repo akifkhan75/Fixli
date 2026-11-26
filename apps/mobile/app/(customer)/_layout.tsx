@@ -3,11 +3,12 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useI18n } from '../../src/hooks/useI18n';
-import { t } from '../../src/i18n';
+import { useNotifications } from '../../src/hooks/useNotifications';
 
 export default function CustomerLayout() {
   const theme = useTheme();
   const { t } = useI18n();
+  const { chatUnread } = useNotifications();
 
   return (
     <Tabs
@@ -51,6 +52,7 @@ export default function CustomerLayout() {
         name="chat"
         options={{
           title: t('nav.messages'),
+          tabBarBadge: chatUnread > 0 ? (chatUnread > 99 ? '99+' : chatUnread) : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles" size={size} color={color} />
           ),
@@ -63,20 +65,6 @@ export default function CustomerLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="request-service"
-        options={{
-          href: null,
-          title: t('customer.requestService'),
-        }}
-      />
-      <Tabs.Screen
-        name="job/[id]"
-        options={{
-          href: null,
-          title: t('customer.job'),
         }}
       />
     </Tabs>

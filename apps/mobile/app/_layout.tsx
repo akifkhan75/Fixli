@@ -137,7 +137,7 @@ function SessionGate({ children }: { children: React.ReactNode }) {
     if (!restored) return;
     const inAuth = segments[0] === '(auth)';
     if (!user && !inAuth) router.replace('/(auth)/login' as any);
-    else if (user && inAuth) router.replace((user.type === 'worker' ? '/(worker)/today' : '/(customer)/(home)') as any);
+    else if (user && inAuth) router.replace((user.type === 'worker' ? '/(worker)/(tabs)/today' : '/(customer)/(home)') as any);
   }, [restored, user, segments, router]);
 
   return restored ? <>{children}</> : null;

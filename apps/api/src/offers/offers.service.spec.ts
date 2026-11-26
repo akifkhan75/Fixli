@@ -68,13 +68,14 @@ describe('OffersService', () => {
       expect(realtime.emitToUsers).toHaveBeenCalledWith(['c1'], 'offers.updated', { jobId: 'j1' });
       expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'offer.received', userIds: ['c1'], params: expect.objectContaining({ worker: 'Bilal' }) }));
     });
-    it('revising a still-pending price updates it quietly (no new notification)', async () => {
+    it('revising a still-pending price updates it and tells the customer again', async () => {
       prisma.worker.findUnique.mockResolvedValue(activeWorker); prisma.jobMatch.findUnique.mockResolvedValue(openMatch());
       prisma.offer.findUnique.mockResolvedValue({ id: 'o1', status: 'PENDING' });
       tx.offer.update.mockResolvedValue({ id: 'o1', amount: 4000, currency: 'PKR' });
+      prisma.user.findUnique.mockResolvedValue({ name: 'Bilal' });
       await svc.submit('w1', 'j1', { amount: 4000 } as any);
       expect(tx.jobEvent.create.mock.calls[0][0].data.type).toBe('OFFER_REVISED');
-      expect(notifications.notify).not.toHaveBeenCalled();
+      expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'offer.received', userIds: ['c1'], params: expect.objectContaining({ worker: 'Bilal' }) }));
       expect(realtime.emitToUsers).toHaveBeenCalled();
     });
     it('a fresh price after the old one expired is news again', async () => {

@@ -14,5 +14,5 @@ export default function Index() {
     return <Redirect href="/(customer)/(home)" />;
   }
 
-  return <Redirect href="/(worker)/today" />;
+  return <Redirect href="/(worker)/(tabs)/today" />;
 }

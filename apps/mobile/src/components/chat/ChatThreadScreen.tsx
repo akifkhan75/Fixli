@@ -20,6 +20,7 @@ import { Button } from '../ds/Button';
 import { ChipChoice } from '../ds/ChipChoice';
 import { ErrorState, LoadingState } from '../ds/EmptyState';
 import { t } from '../../i18n';
+import { useNotifications } from '../../hooks/useNotifications';
 
 type Row =
   | { kind: 'day'; key: string; label: string }
@@ -45,6 +46,7 @@ export function ChatThreadScreen() {
   const theme = useTheme();
   const { locale } = useI18n();
   const me = useAppSelector(selectCurrentUser);
+  const { refreshChatUnread } = useNotifications();
   const [messages, setMessages] = useState<api.ChatMessage[]>([]);
   const [meta, setMeta] = useState<api.ConversationMeta | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -75,13 +77,13 @@ export function ChatThreadScreen() {
       setMeta(res.conversation);
       setCursor(res.nextCursor);
       setError(null);
-      void api.markMessagesAsRead(id!).catch(() => undefined);
+      void api.markMessagesAsRead(id!).then(() => refreshChatUnread()).catch(() => undefined);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
       setLoading(false);
     }
-  }, [id, merge]);
+  }, [id, merge, refreshChatUnread]);
 
   useEffect(() => { void load(); }, [load]);
   // After a gap (offline, app in background), re-read rather than trust that nothing was missed.
@@ -103,7 +105,7 @@ export function ChatThreadScreen() {
     if (e.data?.conversationId !== id) return;
     if (e.type === 'message.created') {
       merge([e.data]);
-      if (e.data.sender?.id !== me?.id) { setTypingUntil(0); void api.markMessagesAsRead(id!).catch(() => undefined); }
+      if (e.data.sender?.id !== me?.id) { setTypingUntil(0); void api.markMessagesAsRead(id!).then(() => refreshChatUnread()).catch(() => undefined); }
     } else if (e.type === 'message.read') {
       const ids = new Set<string>(e.data.messageIds);
       setMessages((prev) => prev.map((m) => (ids.has(m.id) && !m.reads.some((r) => r.userId === e.data.userId) ? { ...m, reads: [...m.reads, { userId: e.data.userId, readAt: e.data.readAt }] } : m)));

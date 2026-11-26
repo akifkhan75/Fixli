@@ -949,7 +949,7 @@ model Notification {
   type      String
   title     String
   body      String
-  /// e.g. { "url": "/(customer)/job/abc", "jobId": "abc" }
+  /// e.g. { "url": "/(customer)/(home)/job/abc", "jobId": "abc" }
   data      Json?
   eventKey  String
   readAt    DateTime?
