@@ -102,7 +102,7 @@ export class PaymentsService {
         throw new ConflictException({ code: 'PAYMENT_NOT_PENDING', message: 'This payment is no longer waiting for confirmation.' });
       }
       const workerId = p.jobRequest.assignedWorkerId!;
-      const country = await this.countries.forWorker(workerId);
+      const country = await this.countries.forWorker(workerId, tx);
       // Floor/ceiling are in the country's currency; a job in another currency gets the rate only.
       const rule = p.currency === country.currency ? country.commission : { ...country.commission, minMinor: 0, maxMinor: Number.MAX_SAFE_INTEGER };
       const commission = computeCommission(p.amount, rule);

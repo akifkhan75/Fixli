@@ -35,6 +35,15 @@ describe('CountryConfigService', () => {
     expect(c.version).toBe(7);
   });
 
+  it('reads through the transaction it is given, never a second pool connection', async () => {
+    const tx: any = { countryConfig: { findUnique: jest.fn().mockResolvedValue(null) }, user: { findUnique: jest.fn().mockResolvedValue({ countryCode: 'PK' }) } };
+    await svc.forWorker('w1', tx);
+    expect(tx.user.findUnique).toHaveBeenCalled();
+    expect(tx.countryConfig.findUnique).toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.countryConfig.findUnique).not.toHaveBeenCalled();
+  });
+
   it('is cached for a minute and refreshed after invalidate()', async () => {
     prisma.countryConfig.findUnique.mockResolvedValue(null);
     await svc.get('PK'); await svc.get('PK');

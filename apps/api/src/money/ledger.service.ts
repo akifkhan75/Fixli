@@ -54,7 +54,7 @@ export class LedgerService {
 
     const balance = w.ledgerBalance + p.amount;
     const owedSince = balance <= 0 ? null : w.ledgerBalance <= 0 ? new Date() : w.owedSince;
-    const limits = (await this.countries.forWorker(p.workerId)).cashLimits;
+    const limits = (await this.countries.forWorker(p.workerId, tx)).cashLimits;
     const blocked = isBlocked(balance, owedSince, limits);
     await tx.worker.update({
       where: { id: p.workerId },

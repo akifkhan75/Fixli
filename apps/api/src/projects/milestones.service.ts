@@ -245,7 +245,7 @@ export class MilestonesService {
     if (!(await this.move(tx, m, 'RELEASED', actor, { releasedAt: new Date() }))) throw this.changed();
     const workerId = m.project.awardedWorkerId!;
     const currency = m.project.currency;
-    const country = await this.countries.forWorker(workerId);
+    const country = await this.countries.forWorker(workerId, tx);
     // Floor/ceiling are in the country's currency; another currency gets the rate only.
     const rule = currency === country.currency ? country.commission : { ...country.commission, minMinor: 0, maxMinor: Number.MAX_SAFE_INTEGER };
     const commission = computeCommission(m.amount, rule);

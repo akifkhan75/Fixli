@@ -76,6 +76,10 @@ jobs:
       - name: API unit tests
         run: pnpm --filter @fixli/api exec jest --coverage --runInBand # coverage thresholds in apps/api/package.json (70% lines)
 
+      # The outage test starts and kills its own Redis, so it needs the server program itself.
+      - name: Install redis-server
+        run: command -v redis-server || (sudo apt-get update -qq && sudo apt-get install -y -qq redis-server)
+
       # Boots the real AppModule: catches dependency-injection errors that mocked unit tests can't.
       - name: API e2e tests
         run: pnpm --filter @fixli/api test:e2e
