@@ -242,7 +242,10 @@ export const notInterested = (jobId: string) => request<{ success: boolean }>(`/
 export interface CreateJobInput {
   categoryId: string; issueCodes: string[]; description?: string;
   photoUploadIds?: string[]; audioUploadId?: string; audioTranscript?: string;
-  addressId: string; when: 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED'; date?: string; timeSlot?: 'MORNING' | 'AFTERNOON' | 'EVENING';
+  /** A saved address, OR a one-off current-location pin (latitude + longitude) for roadside help. Send one. */
+  addressId?: string;
+  latitude?: number; longitude?: number; area?: string; city?: string; landmark?: string;
+  when: 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED'; date?: string; timeSlot?: 'MORNING' | 'AFTERNOON' | 'EVENING';
   isEmergency?: boolean; analysisId?: string; idempotencyKey: string;
 }
 export const createJob = (input: CreateJobInput) => request<JobView>('/job-requests', { method: 'POST', body: JSON.stringify(input) });

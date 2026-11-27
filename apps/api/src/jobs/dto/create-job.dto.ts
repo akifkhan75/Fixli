@@ -1,5 +1,5 @@
 import {
-  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, Length, Matches, MaxLength,
+  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsLatitude, IsLongitude, IsNotEmpty, IsOptional, IsString, Length, Matches, MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -26,9 +26,33 @@ export class CreateJobDto {
   @IsOptional() @IsString() @MaxLength(2000)
   audioTranscript?: string;
 
-  /** One of the customer's saved addresses. */
-  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(64)
-  addressId: string;
+  /**
+   * One of the customer's saved addresses. Omit it to send a one-off location pin instead
+   * (latitude + longitude) — used for roadside / "I'm here right now" requests where the
+   * problem isn't at a saved address. Send exactly one of the two.
+   */
+  @ApiPropertyOptional() @IsOptional() @IsString() @IsNotEmpty() @MaxLength(64)
+  addressId?: string;
+
+  /** One-off pin latitude (send with longitude, instead of addressId). */
+  @ApiPropertyOptional() @IsOptional() @IsLatitude()
+  latitude?: number;
+
+  /** One-off pin longitude (send with latitude, instead of addressId). */
+  @ApiPropertyOptional() @IsOptional() @IsLongitude()
+  longitude?: number;
+
+  /** Coarse neighbourhood for a pin, shown to workers before booking (never exact). */
+  @IsOptional() @IsString() @MaxLength(120)
+  area?: string;
+
+  /** City for a pin, shown to workers before booking. */
+  @IsOptional() @IsString() @MaxLength(100)
+  city?: string;
+
+  /** "Outside the blue gate", "near the petrol pump" — helps a worker reach a pinned spot. */
+  @IsOptional() @IsString() @MaxLength(200)
+  landmark?: string;
 
   @ApiProperty({ enum: ['NOW', 'TODAY', 'TOMORROW', 'SCHEDULED'] })
   @IsIn(['NOW', 'TODAY', 'TOMORROW', 'SCHEDULED'])
