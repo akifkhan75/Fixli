@@ -10,7 +10,7 @@ import { friendlyError } from '../../hooks/useApi';
 import { Text } from '../../components/ds/Text';
 import { TextInput } from '../../components/ds/TextInput';
 import { uploadAudio } from '../../services/upload';
-import { transcribeVoice } from '../../services/api';
+import { ApiError, transcribeVoice } from '../../services/api';
 import { openSettings } from '../../services/pickPhoto';
 import { useI18n } from '../../hooks/useI18n';
 import { PulseRings } from '../../components/motion/PulseRings';
@@ -45,6 +45,8 @@ export function VoiceField({ value, onChange, locale, label }: VoiceFieldProps) 
   const player = useAudioPlayer(value.audioUri ?? null);
   const [busy, setBusy] = useState<'upload' | null>(null);
   const [error, setError] = useState<string | undefined>();
+  /** Transcription failed but the recording is kept — show as hint, not a hard failure. */
+  const [hint, setHint] = useState<string | undefined>();
   const [denied, setDenied] = useState(false);
   const startedAt = useRef(0);
   const starting = useRef(false);
@@ -59,6 +61,7 @@ export function VoiceField({ value, onChange, locale, label }: VoiceFieldProps) 
     if (starting.current || busy) return;
     starting.current = true;
     setError(undefined);
+    setHint(undefined);
     setDenied(false);
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
@@ -98,10 +101,14 @@ export function VoiceField({ value, onChange, locale, label }: VoiceFieldProps) 
       try {
         const { text } = await transcribeVoice(id, locale);
         onChange({ audioUploadId: id, audioUri: uri, transcript: text || value.transcript });
-        if (!text) setError(t('voiceField.weCouldntHearAny'));
+        if (!text) setHint(t('voiceField.weCouldntHearAny'));
       } catch (e) {
-        // The recording still goes to the professional; only the text is missing.
-        setError(t('voiceField.yourRecordingIsStill', { error: friendlyError(e) }));
+        // The recording still goes to the professional; only auto-typing is missing.
+        const soft = e instanceof ApiError && e.code === 'AI_UNAVAILABLE';
+        const msg = soft
+          ? t('voiceField.voiceTypingUnavailable')
+          : t('voiceField.yourRecordingIsStill', { error: friendlyError(e) });
+        if (soft) setHint(msg); else setError(msg);
       }
     } catch (e) {
       setError(friendlyError(e));
@@ -163,6 +170,7 @@ export function VoiceField({ value, onChange, locale, label }: VoiceFieldProps) 
         </View>
       ) : null}
 
+      {hint ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>{hint}</Text> : null}
       {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{error}</Text> : null}
       {denied ? <TouchableOpacity onPress={openSettings} accessibilityRole="button" style={{ marginTop: 6 }}><Text variant="bodySmall" weight="semibold" color={theme.colors.primaryText}>{t('voice.openSettings')}</Text></TouchableOpacity> : null}
     </View>

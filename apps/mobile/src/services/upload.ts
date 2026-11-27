@@ -1,4 +1,5 @@
 import * as ImageManipulator from 'expo-image-manipulator';
+import { File, UploadType } from 'expo-file-system';
 import { API_URL } from '../config';
 import { ApiError, createUploadSlot, completeUpload } from './api';
 import { t } from '../i18n';
@@ -40,16 +41,39 @@ export async function prepareImage(uri: string, purpose: UploadPurpose, width?: 
 }
 
 /**
+ * RN's `fetch(fileUri).blob()` is unreliable on Expo SDK 58 (we saw 14-byte "photos" that
+ * failed magic-byte checks). Stream the real file with expo-file-system instead.
+ */
+async function putLocalFile(url: string, fileUri: string, headers: Record<string, string>, failMessage: string): Promise<number> {
+  const file = new File(fileUri);
+  if (!file.exists || !file.size || file.size < 1) {
+    throw new ApiError(failMessage, 0);
+  }
+  const result = await file.upload(resolveUploadUrl(url), {
+    httpMethod: 'PUT',
+    uploadType: UploadType.BINARY_CONTENT,
+    headers,
+    mimeType: headers['Content-Type'] ?? headers['content-type'],
+  });
+  if (result.status < 200 || result.status >= 300) {
+    throw new ApiError(failMessage, result.status);
+  }
+  return file.size;
+}
+
+/**
  * Photo -> object storage, in three steps: ask for a slot, PUT the bytes straight to storage,
  * then ask the server to verify them. The server decides if the file is acceptable.
  */
 export async function uploadImage(uri: string, purpose: UploadPurpose, width?: number): Promise<{ id: string; url: string | null }> {
   const prepared = await prepareImage(uri, purpose, width);
-  const blob = await (await fetch(prepared)).blob();
+  const file = new File(prepared);
+  if (!file.exists || !file.size || file.size < 1) {
+    throw new ApiError(t('photo.uploadFailed'), 0);
+  }
 
-  const slot = await createUploadSlot(purpose, 'image/jpeg', blob.size);
-  const put = await fetch(resolveUploadUrl(slot.upload.url), { method: slot.upload.method, headers: slot.upload.headers, body: blob });
-  if (!put.ok) throw new ApiError(t('photo.uploadFailed'), put.status);
+  const slot = await createUploadSlot(purpose, 'image/jpeg', file.size);
+  await putLocalFile(slot.upload.url, prepared, slot.upload.headers, t('photo.uploadFailed'));
 
   const done = await completeUpload(slot.id);
   return { id: done.id, url: done.url };
@@ -57,10 +81,12 @@ export async function uploadImage(uri: string, purpose: UploadPurpose, width?: n
 
 /** A finished voice recording (m4a) -> storage, verified by the server like photos. */
 export async function uploadAudio(uri: string): Promise<{ id: string }> {
-  const blob = await (await fetch(uri)).blob();
-  const slot = await createUploadSlot('JOB_AUDIO', 'audio/mp4', blob.size);
-  const put = await fetch(resolveUploadUrl(slot.upload.url), { method: slot.upload.method, headers: slot.upload.headers, body: blob });
-  if (!put.ok) throw new ApiError(t('photo.recordingUploadFailed'), put.status);
+  const file = new File(uri);
+  if (!file.exists || !file.size || file.size < 1) {
+    throw new ApiError(t('photo.recordingUploadFailed'), 0);
+  }
+  const slot = await createUploadSlot('JOB_AUDIO', 'audio/mp4', file.size);
+  await putLocalFile(slot.upload.url, uri, slot.upload.headers, t('photo.recordingUploadFailed'));
   const done = await completeUpload(slot.id);
   return { id: done.id };
 }

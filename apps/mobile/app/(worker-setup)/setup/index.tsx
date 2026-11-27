@@ -113,6 +113,7 @@ export default function SetupScreen() {
       <View style={{ marginTop: theme.spacing.xl }}>
         <GroupedList title={t('workerSetup.makeYourProfileStronger')} items={[
           { id: 'about', label: t('workerAccount.aboutYouAndYour'), icon: 'person-outline', onPress: () => router.push('/setup/about' as any) },
+          { id: 'tools', label: t('workerAccount.toolsYouBring'), icon: 'build-outline', value: me.equipment?.length ? String(me.equipment.length) : undefined, onPress: () => router.push('/setup/tools' as any) },
           { id: 'portfolio', label: t('workerAccount.photosOfYourPast'), icon: 'images-outline', value: me.portfolio.length ? String(me.portfolio.length) : undefined, onPress: () => router.push('/setup/portfolio' as any) },
         ]} />
       </View>

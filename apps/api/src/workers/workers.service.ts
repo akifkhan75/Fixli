@@ -23,6 +23,7 @@ const PUBLIC_WORKER_SELECT = {
   hasInsurance: true,
   isVerified: true,
   isOnline: true,
+  equipment: true,
   serviceRadius: true,
   serviceAreaLabel: true,
   currency: true,
@@ -161,7 +162,11 @@ export class WorkersService {
     }
 
     const businessName = dto.businessName === undefined ? undefined : dto.businessName.trim() || null;
-    await this.prisma.worker.update({ where: { id: userId }, data: { ...dto, businessName } });
+    const equipment =
+      dto.equipment === undefined
+        ? undefined
+        : [...new Map(dto.equipment.map((e) => e.trim()).filter(Boolean).map((e) => [e.toLowerCase(), e.slice(0, 60)])).values()].slice(0, 30);
+    await this.prisma.worker.update({ where: { id: userId }, data: { ...dto, businessName, ...(equipment !== undefined ? { equipment } : {}) } });
     return this.findOwn(userId);
   }
 

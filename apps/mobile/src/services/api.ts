@@ -455,6 +455,7 @@ export type OnboardingStep = 'skills' | 'area' | 'hours' | 'pricing' | 'document
 export interface WorkerMe {
   id: string; rating: number; isVerified: boolean; bio: string | null; experienceYears: number; languages: string[];
   gender: 'FEMALE' | 'MALE' | null; hidePhotoUntilBooked: boolean; isOnline: boolean;
+  equipment: string[];
   serviceLat: number | null; serviceLng: number | null; serviceAreaLabel: string | null; serviceRadius: number;
   pricingModel: 'FIXED' | 'HOURLY' | 'CALLOUT_PLUS_QUOTE' | 'QUOTE' | null;
   minimumCallOutFee: number | null; hourlyRate: number | null; currency: string;
@@ -467,7 +468,7 @@ export interface WorkerMe {
   verifications: { id: string; type: VerificationType; status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'NEEDS_INFO'; reason: string | null }[];
   onboarding: { steps: Record<OnboardingStep, boolean>; missing: OnboardingStep[]; complete: boolean; percent: number };
 }
-export type WorkerPatch = Partial<Pick<WorkerMe, 'bio' | 'experienceYears' | 'languages' | 'gender' | 'hidePhotoUntilBooked' | 'pricingModel' | 'minimumCallOutFee' | 'hourlyRate' | 'serviceLat' | 'serviceLng' | 'serviceAreaLabel' | 'serviceRadius' | 'isOnline' | 'teamSize'>> & { businessName?: string };
+export type WorkerPatch = Partial<Pick<WorkerMe, 'bio' | 'experienceYears' | 'languages' | 'gender' | 'hidePhotoUntilBooked' | 'pricingModel' | 'minimumCallOutFee' | 'hourlyRate' | 'serviceLat' | 'serviceLng' | 'serviceAreaLabel' | 'serviceRadius' | 'isOnline' | 'teamSize' | 'equipment'>> & { businessName?: string };
 
 export const getWorkerMe = () => request<WorkerMe>('/workers/me');
 export const patchWorkerMe = (p: WorkerPatch) => request<WorkerMe>('/workers/me', { method: 'PATCH', body: JSON.stringify(p) });
@@ -482,6 +483,7 @@ export const submitWorkerForReview = () =>
 export interface PublicWorker {
   id: string; rating: number; ratingCount: number; jobsCompleted: number; bio: string | null; experienceYears: number;
   languages: string[]; isVerified: boolean; isOnline: boolean; serviceAreaLabel: string | null; currency: string;
+  equipment: string[];
   pricingModel: WorkerMe['pricingModel']; minimumCallOutFee: number | null; hourlyRate: number | null;
   user: { id: string; name: string; profileImageUrl: string | null };
   services: WorkerMe['services'];

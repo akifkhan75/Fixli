@@ -8,14 +8,17 @@ const MAX_ADDRESSES = 10;
 export class AddressesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private assertCoords(d: { latitude?: number; longitude?: number }) {
+  private assertCoords(d: { latitude?: number; longitude?: number }, required: boolean) {
+    if (required && (d.latitude == null || d.longitude == null)) {
+      throw new BadRequestException({ code: 'LOCATION_REQUIRED', message: 'Turn on location or pin this address on the map so we can find nearby professionals.' });
+    }
     if ((d.latitude == null) !== (d.longitude == null)) {
       throw new BadRequestException({ code: 'INVALID_COORDINATES', message: 'Send both latitude and longitude, or neither.' });
     }
   }
 
   async create(userId: string, data: CreateAddressDto) {
-    this.assertCoords(data);
+    this.assertCoords(data, true);
     return this.prisma.$transaction(async (tx) => {
       const count = await tx.address.count({ where: { userId } });
       if (count >= MAX_ADDRESSES) {
@@ -37,7 +40,7 @@ export class AddressesService {
   }
 
   async update(id: string, userId: string, data: UpdateAddressDto) {
-    this.assertCoords(data);
+    this.assertCoords(data, false);
     return this.prisma.$transaction(async (tx) => {
       const address = await tx.address.findFirst({ where: { id, userId } });
       if (!address) throw new NotFoundException('Address not found');

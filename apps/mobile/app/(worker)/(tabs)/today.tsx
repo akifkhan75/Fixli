@@ -91,17 +91,35 @@ export default function TodayScreen() {
           accessibilityState={{ checked: w.isOnline, busy: toggling }}
           accessibilityLabel={t('workerToday.online')}
           accessibilityHint={w.isOnline ? t('workerToday.goOffline') : t('workerToday.goOnline')}
-          style={{ backgroundColor: w.isOnline ? theme.colors.successSoft : theme.colors.surface, borderColor: w.isOnline ? theme.colors.success : theme.colors.border, borderWidth: 2, borderRadius: theme.borderRadius['2xl'], padding: 20, alignItems: 'center' }}>
-          {w.isOnline ? <PulseRings icon="radio" size={120} /> : (
-            <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: theme.colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="power" size={36} color={theme.colors.textSecondary} />
-              </View>
+          style={{
+            backgroundColor: w.isOnline ? theme.colors.successSoft : theme.colors.surface,
+            borderColor: w.isOnline ? theme.colors.success : theme.colors.border,
+            borderWidth: 1.5,
+            borderRadius: theme.borderRadius.xl,
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+          {w.isOnline ? (
+            <PulseRings icon="radio" size={44} />
+          ) : (
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="power" size={22} color={theme.colors.textSecondary} />
             </View>
           )}
-          <Text variant="h2" weight="bold" align="center" color={w.isOnline ? theme.colors.successText : theme.colors.textPrimary}>{w.isOnline ? t('workerToday.youreOnline') : t('workerToday.youreOffline')}</Text>
-          <Text variant="bodySmall" align="center" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>{w.isOnline ? t('workerToday.customersNearYouCan') : t('workerToday.goOnlineToReceive')}</Text>
-          <Text variant="bodySmall" weight="bold" align="center" color={theme.colors.primaryText} style={{ marginTop: 12 }}>{w.isOnline ? t('workerToday.goOffline') : t('workerToday.goOnline')}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="bodyLarge" weight="bold" color={w.isOnline ? theme.colors.successText : theme.colors.textPrimary}>
+              {w.isOnline ? t('workerToday.youreOnline') : t('workerToday.youreOffline')}
+            </Text>
+            <Text variant="caption" color={theme.colors.textSecondary} style={{ marginTop: 2 }} numberOfLines={2}>
+              {w.isOnline ? t('workerToday.customersNearYouCan') : t('workerToday.goOnlineToReceive')}
+            </Text>
+          </View>
+          <Text variant="caption" weight="bold" color={theme.colors.primaryText}>
+            {w.isOnline ? t('workerToday.goOffline') : t('workerToday.goOnline')}
+          </Text>
         </PressableScale>
       ) : (
         <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 18 }}>
@@ -146,7 +164,13 @@ export default function TodayScreen() {
           {next.location ? <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}><Ionicons name="location" size={16} color={theme.colors.textTertiary} /><Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginStart: 6, flex: 1 }}>{next.location}</Text></View> : null}
         </Card>
       ) : (
-        <EmptyState icon="calendar-outline" title={t('workerToday.noJobsBookedYet')} message={t('workerToday.whenACustomerBooks')} />
+        <EmptyState
+          icon="calendar-outline"
+          title={t('workerToday.noJobsBookedYet')}
+          message={t('workerToday.whenACustomerBooks')}
+          actionLabel={t('workerToday.exploreJobs')}
+          onAction={() => router.push('/(worker)/(tabs)/jobs' as any)}
+        />
       )}
 
       {jobs.data?.offered.length ? (

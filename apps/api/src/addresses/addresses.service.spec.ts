@@ -6,11 +6,16 @@ describe('AddressesService', () => {
   const prisma: any = { address: { findMany: jest.fn() }, $transaction: jest.fn((fn: any) => fn(tx)) };
   const svc = new AddressesService(prisma);
   beforeEach(() => { jest.resetAllMocks(); prisma.$transaction.mockImplementation((fn: any) => fn(tx)); });
-  const dto = (o: any = {}) => ({ label: 'Home', line1: 'x', city: 'Karachi', country: 'pk', ...o }) as any;
+  const dto = (o: any = {}) => ({ label: 'Home', line1: 'x', city: 'Karachi', country: 'pk', latitude: 24.92, longitude: 67.09, ...o }) as any;
 
   it('rejects half a coordinate pair', async () => {
-    await expect(svc.create('u1', dto({ latitude: 24.9 }))).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.create('u1', dto({ latitude: 24.9, longitude: undefined }))).rejects.toBeInstanceOf(BadRequestException);
     await expect(svc.update('a1', 'u1', { longitude: 67 } as any)).rejects.toBeInstanceOf(BadRequestException);
+  });
+  it('requires coordinates when creating an address', async () => {
+    await expect(svc.create('u1', dto({ latitude: undefined, longitude: undefined }))).rejects.toMatchObject({
+      response: { code: 'LOCATION_REQUIRED' },
+    });
   });
   it('the first address becomes the default and the country is upper-cased', async () => {
     tx.address.count.mockResolvedValue(0);

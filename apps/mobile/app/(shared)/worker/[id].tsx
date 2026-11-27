@@ -79,6 +79,13 @@ export default function WorkerProfileScreen() {
         </View>
       ) : null}
 
+      {w.equipment?.length ? (
+        <View style={{ marginTop: 20 }}>
+          <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('sharedWorker.tools')}</Text>
+          <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{w.equipment.join(' · ')}</Text>
+        </View>
+      ) : null}
+
       {w.bio ? (
         <View style={{ marginTop: 20 }}>
           <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('sharedWorker.about')}</Text>

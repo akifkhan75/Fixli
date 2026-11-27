@@ -15,8 +15,9 @@ export class CreateAddressDto {
   /** ISO 3166-1 alpha-2 */
   @IsString() @Length(2, 2) country: string;
   @IsOptional() @IsString() @MaxLength(20) postalCode?: string;
-  @IsOptional() @IsLatitude() latitude?: number;
-  @IsOptional() @IsLongitude() longitude?: number;
+  /** Required so matching can find nearby workers (city-only fallback is unreliable). */
+  @IsLatitude() latitude: number;
+  @IsLongitude() longitude: number;
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 
