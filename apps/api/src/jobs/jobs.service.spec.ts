@@ -108,6 +108,31 @@ describe('JobsService', () => {
       expect(tx.jobRequest.create).not.toHaveBeenCalled();
     });
 
+    it('accepts a one-off location pin (roadside) and snapshots it without any saved address', async () => {
+      primeCreate();
+      await svc.create(customer, dto({ addressId: undefined, latitude: 24.86, longitude: 67.0, area: 'Clifton', city: 'Karachi', landmark: 'By the petrol pump' }));
+      expect(prisma.address.findFirst).not.toHaveBeenCalled();
+      const data = tx.jobRequest.create.mock.calls[0][0].data;
+      expect(data).toMatchObject({ addressId: null, latitude: 24.86, longitude: 67.0, area: 'Clifton', city: 'Karachi', location: 'By the petrol pump, Clifton, Karachi' });
+    });
+
+    it('leaves a bare pin location null — never raw coordinates, never a hardcoded English label', async () => {
+      primeCreate();
+      await svc.create(customer, dto({ addressId: undefined, latitude: 24.86, longitude: 67.0 }));
+      const data = tx.jobRequest.create.mock.calls[0][0].data;
+      expect(data.location).toBeNull();
+      expect(data.latitude).toBe(24.86);
+    });
+
+    it('rejects a request with both an address and a pin, or with half a coordinate pair', async () => {
+      primeCreate();
+      await expect(svc.create(customer, dto({ latitude: 24.8, longitude: 67 }))).rejects.toMatchObject({ response: { code: 'LOCATION_CONFLICT' } });
+      primeCreate();
+      await expect(svc.create(customer, dto({ addressId: undefined, latitude: 24.8 }))).rejects.toMatchObject({ response: { code: 'INVALID_COORDINATES' } });
+      primeCreate();
+      await expect(svc.create(customer, dto({ addressId: undefined }))).rejects.toMatchObject({ response: { code: 'LOCATION_REQUIRED' } });
+    });
+
     it('needs some description of the problem', async () => {
       primeCreate();
       await expect(svc.create(customer, dto({ issueCodes: [], description: 'x' }))).rejects.toMatchObject({ response: { code: 'DESCRIBE_PROBLEM' } });

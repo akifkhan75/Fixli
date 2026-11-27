@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Image, TouchableOpacity, ScrollView, Linking, Alert, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { useI18n } from '../../../src/hooks/useI18n';
@@ -47,6 +48,8 @@ interface Draft {
   date?: string;
   slot?: Slot;
   addressId?: string;
+  /** A one-off current-location pin (roadside / "I'm here now"), used instead of a saved address. */
+  pin?: { latitude: number; longitude: number; area?: string; city?: string };
   /** Generated once per request: resending after a dropped connection never creates a second job. */
   idempotencyKey: string;
 }
@@ -77,6 +80,9 @@ export default function RequestServiceScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState<string | undefined>();
+  const [locDenied, setLocDenied] = useState(false);
   const photoUp = usePhotoUpload('JOB_PHOTO');
   const analyzedFor = useRef('');
   const me = useAppSelector(selectCurrentUser);
@@ -94,7 +100,9 @@ export default function RequestServiceScreen() {
         try {
           const saved = JSON.parse(raw) as Draft;
           const sameStart = !params.categoryId || saved.categoryId === params.categoryId;
-          if (sameStart) setD({ ...saved, step: Math.min(saved.step, 3) });
+          // Never restore an old current-location pin: a breakdown spot from hours ago must not
+          // silently reselect and send a worker to the wrong place. The person re-shares it.
+          if (sameStart) setD({ ...saved, pin: undefined, step: Math.min(saved.step, 3) });
         } catch { /* ignore broken draft */ }
       }
       setRestored(true);
@@ -105,12 +113,53 @@ export default function RequestServiceScreen() {
     if (restored && !emergency) AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(d)).catch(() => undefined);
   }, [d, restored, emergency]);
 
-  // Pick the default saved address automatically.
+  // Pick the default saved address automatically — unless the person is using a current-location pin.
   useEffect(() => {
+    if (d.pin) return;
     if (!d.addressId && addresses.data?.length) set({ addressId: (addresses.data.find((a) => a.isDefault) ?? addresses.data[0]).id });
     if (d.addressId && addresses.data && !addresses.data.some((a) => a.id === d.addressId)) set({ addressId: addresses.data[0]?.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addresses.data]);
+  }, [addresses.data, d.pin]);
+
+  // Share the phone's current location instead of a saved address (roadside breakdowns, or
+  // anywhere the problem isn't at home). Mirrors the address-edit location capture: a hard
+  // timeout and a last-known fallback so the button can never hang.
+  const useMyLocation = async () => {
+    setLocError(undefined);
+    setLocDenied(false);
+    setLocating(true);
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) {
+        setLocDenied(true);
+        setLocError(t('customerRequestService.locationDenied'));
+        return;
+      }
+      const fresh = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
+      ]).catch(() => null);
+      const pos = fresh ?? (await Location.getLastKnownPositionAsync().catch(() => null));
+      if (!pos) {
+        setLocError(t('customerRequestService.locationFailed'));
+        return;
+      }
+      const [place] = await Location.reverseGeocodeAsync(pos.coords).catch(() => []);
+      set({
+        pin: {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          area: place?.district ?? place?.subregion ?? undefined,
+          city: place?.city ?? place?.region ?? undefined,
+        },
+        addressId: undefined,
+      });
+    } catch {
+      setLocError(t('customerRequestService.locationFailed'));
+    } finally {
+      setLocating(false);
+    }
+  };
 
   const category = catalog.data?.find((c) => c.id === d.categoryId);
   const catName = (c: api.CatalogCategory) => localizedName({ name: c.translations?.en?.name ?? humanize(c.name), translations: c.translations }, locale);
@@ -121,7 +170,7 @@ export default function RequestServiceScreen() {
     !!category && (d.issueCodes.length > 0 || d.description.trim().length >= 3 || !!d.voice.audioUploadId),
     true,
     d.when !== 'SCHEDULED' || (!!d.date && !!d.slot),
-    !!address,
+    !!address || !!d.pin,
     true,
   ];
 
@@ -156,7 +205,7 @@ export default function RequestServiceScreen() {
 
   const { askForPush } = useNotifications();
   const submit = async () => {
-    if (!category || !address) return;
+    if (!category || (!address && !d.pin)) return;
     setSubmitting(true);
     setError(undefined);
     try {
@@ -167,7 +216,9 @@ export default function RequestServiceScreen() {
         photoUploadIds: d.photos.map((p) => p.id),
         audioUploadId: d.voice.audioUploadId,
         audioTranscript: d.voice.audioUploadId ? d.voice.transcript.trim() || undefined : undefined,
-        addressId: address.id,
+        ...(d.pin
+          ? { latitude: d.pin.latitude, longitude: d.pin.longitude, area: d.pin.area, city: d.pin.city }
+          : { addressId: address!.id }),
         when: d.when,
         date: d.when === 'SCHEDULED' ? d.date : undefined,
         timeSlot: d.when === 'SCHEDULED' || d.when === 'TOMORROW' ? d.slot : undefined,
@@ -325,10 +376,28 @@ export default function RequestServiceScreen() {
         <Entrance key="step3">
           <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 8 }}>{t('customerRequestService.where')}</Text>
           <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 20 }}>{t('customerRequestService.professionalsOnlySeeYour')}</Text>
+
+          <TouchableOpacity
+            onPress={useMyLocation} disabled={locating} accessibilityRole="radio" accessibilityState={{ selected: !!d.pin, disabled: locating }}
+            accessibilityLabel={t('customerRequestService.useCurrentLocation')}
+            style={{ borderWidth: 1.5, borderColor: d.pin ? theme.colors.primary : theme.colors.border, backgroundColor: d.pin ? theme.colors.primary + '10' : theme.colors.surface, borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name={d.pin ? 'navigate-circle' : 'navigate-circle-outline'} size={24} color={d.pin ? theme.colors.primary : theme.colors.textTertiary} />
+            <View style={{ flex: 1, marginStart: 12 }}>
+              <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>{t('customerRequestService.useCurrentLocation')}</Text>
+              <Text variant="bodySmall" color={theme.colors.textSecondary}>
+                {locating ? t('customerRequestService.findingLocation') : d.pin ? ([d.pin.area, d.pin.city].filter(Boolean).join(', ') || t('customerRequestService.pinnedOnMap')) : t('customerRequestService.roadsideHint')}
+              </Text>
+            </View>
+            {d.pin ? <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} /> : null}
+          </TouchableOpacity>
+          {locError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginBottom: 8 }}>{locError}</Text> : null}
+          {locDenied ? <Button title={t('sharedAddressEdit.openSettings')} variant="ghost" onPress={() => Linking.openSettings()} /> : null}
+
+          {addresses.data?.length ? <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 8, marginBottom: 10 }}>{t('customerRequestService.orASavedAddress')}</Text> : null}
           {addresses.loading && !addresses.data ? <LoadingState /> : (addresses.data ?? []).map((a) => {
-            const selected = a.id === d.addressId;
+            const selected = !d.pin && a.id === d.addressId;
             return (
-              <TouchableOpacity key={a.id} onPress={() => set({ addressId: a.id })} accessibilityRole="radio" accessibilityState={{ selected }}
+              <TouchableOpacity key={a.id} onPress={() => set({ addressId: a.id, pin: undefined })} accessibilityRole="radio" accessibilityState={{ selected }}
                 style={{ borderWidth: 1.5, borderColor: selected ? theme.colors.primary : theme.colors.border, backgroundColor: selected ? theme.colors.primary + '10' : theme.colors.surface, borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={24} color={selected ? theme.colors.primary : theme.colors.textTertiary} />
                 <View style={{ flex: 1, marginStart: 12 }}>
@@ -366,7 +435,7 @@ export default function RequestServiceScreen() {
             { step: 0, icon: 'construct' as const, title: catName(category), body: [issueText, d.description.trim(), d.voice.transcript.trim()].filter(Boolean).join(' · ') || (d.voice.audioUploadId ? t('customerRequestService.voiceAttached') : '') },
             { step: 1, icon: 'camera' as const, title: d.photos.length ? tn('customerRequestService.photos', d.photos.length) : t('customerRequestService.noPhotos'), body: d.voice.audioUploadId ? t('customerRequestService.voiceAttached') : '' },
             { step: 2, icon: 'calendar' as const, title: d.when === 'NOW' ? t('customerRequestService.now') : d.when === 'TODAY' ? t('customerRequestService.today') : d.when === 'TOMORROW' ? t('customerRequestService.tomorrow') : days.find((x) => x.id === d.date)?.label ?? '', body: d.slot ? { MORNING: t('customerRequestService.morning812'), AFTERNOON: t('customerRequestService.afternoon125'), EVENING: t('customerRequestService.evening59') }[d.slot] : '' },
-            { step: 3, icon: 'location' as const, title: address?.label ?? t('customerRequestService.address'), body: address ? [address.streetAddress, address.area, address.city].filter(Boolean).join(', ') : '' },
+            { step: 3, icon: 'location' as const, title: d.pin ? t('customerRequestService.useCurrentLocation') : (address?.label ?? t('customerRequestService.address')), body: d.pin ? ([d.pin.area, d.pin.city].filter(Boolean).join(', ') || t('customerRequestService.pinnedOnMap')) : (address ? [address.streetAddress, address.area, address.city].filter(Boolean).join(', ') : '') },
           ].map((row) => (
             <TouchableOpacity key={row.step} onPress={() => set({ step: row.step })} accessibilityRole="button" accessibilityLabel={t('customerRequestService.change', { title: row.title, body: row.body })}
               style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: 16, padding: 16, marginBottom: 10 }}>

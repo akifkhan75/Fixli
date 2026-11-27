@@ -229,6 +229,30 @@ describe('Request a service (e2e)', () => {
       }
     });
 
+    it('accepts a current-location pin instead of a saved address (roadside), matches nearby, and never leaks coordinates', async () => {
+      const res = await http().post('/api/job-requests').set(as('cust')).send({
+        categoryId: plumbing.id, issueCodes: ['leaking_tap'], when: 'NOW', idempotencyKey: key(),
+        latitude: 24.928, longitude: 67.095, area: 'Clifton', city: 'Karachi', landmark: 'By the petrol pump',
+      }).expect(201);
+      expect(res.body).toMatchObject({ addressId: null, area: 'Clifton', city: 'Karachi', latitude: 24.928 });
+      // The nearby worker is matched and can open it, but sees only the coarse area — never the pin.
+      const feed = await http().get(`/api/job-requests/${res.body.id}`).set(as('work')).expect(200);
+      expect(feed.body).toMatchObject({ area: 'Clifton', city: 'Karachi' });
+      expect(feed.body.latitude).toBeUndefined();
+      expect(feed.body.location).toBeUndefined();
+      expect(JSON.stringify(feed.body)).not.toMatch(/petrol pump|24\.928|67\.095/);
+    });
+
+    it('rejects a request with neither an address nor a pin, both together, or half a pin', async () => {
+      const base = { categoryId: plumbing.id, issueCodes: ['leaking_tap'], when: 'TODAY' };
+      const r1 = await http().post('/api/job-requests').set(as('cust')).send({ ...base, idempotencyKey: key() }).expect(400);
+      expect(r1.body.error.code).toBe('LOCATION_REQUIRED');
+      const r2 = await http().post('/api/job-requests').set(as('cust')).send({ ...base, addressId, latitude: 24.9, longitude: 67, idempotencyKey: key() }).expect(400);
+      expect(r2.body.error.code).toBe('LOCATION_CONFLICT');
+      const r3 = await http().post('/api/job-requests').set(as('cust')).send({ ...base, latitude: 24.9, idempotencyKey: key() }).expect(400);
+      expect(r3.body.error.code).toBe('INVALID_COORDINATES');
+    });
+
     it('an open job shows workers the area and photos, but not the exact address or full name', async () => {
       const w = await http().get(`/api/job-requests/${jobId}`).set(as('work')).expect(200);
       expect(w.body).toMatchObject({ area: 'Gulshan Block 13', city: 'Karachi', title: 'Leaking tap', customer: { name: 'cust' } });

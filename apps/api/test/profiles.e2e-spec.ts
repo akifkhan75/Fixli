@@ -191,6 +191,17 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
       await http().post('/api/addresses').set(as('cust2')).send(addr({ latitude: 124.9, longitude: 67 })).expect(400);
     });
 
+    it('updates its fields and moves the pin', async () => {
+      const a = await http().post('/api/addresses').set(as('cust')).send(addr({ label: 'Home' })).expect(201);
+      const res = await http().patch(`/api/addresses/${a.body.id}`).set(as('cust'))
+        .send({ label: 'Work', streetAddress: 'Office 9', area: 'Clifton', city: 'Karachi', country: 'pk', latitude: 24.81, longitude: 67.03, landmark: 'Blue gate' })
+        .expect(200);
+      expect(res.body).toMatchObject({ label: 'Work', streetAddress: 'Office 9', area: 'Clifton', latitude: 24.81, longitude: 67.03, landmark: 'Blue gate', country: 'PK' });
+      const list = await http().get('/api/addresses').set(as('cust')).expect(200);
+      expect(list.body.find((x: any) => x.id === a.body.id)).toMatchObject({ streetAddress: 'Office 9', latitude: 24.81 });
+      await http().delete(`/api/addresses/${a.body.id}`).set(as('cust')).expect(200);
+    });
+
     it("is private to the owner", async () => {
       await http().patch(`/api/addresses/${created[0]}`).set(as('cust')).send({ label: 'Mine' }).expect(404);
       await http().delete(`/api/addresses/${created[0]}`).set(as('cust')).expect(404);
