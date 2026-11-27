@@ -78,8 +78,17 @@ Nothing below can be done from the code.
 - [ ] Maestro flows on an emulator (sign-in and sign-up flows were updated for the new screens and need a run).
 - [ ] Usability test with at least 5 customers and 5 workers in Urdu, including people who read with difficulty.
 - [ ] External penetration test (include the payment webhook and code sign-in).
-- [ ] **CI dependency audit fails** on two high advisories that predate this round: `zod` 3 inside Expo's build tool, and `decode-uri-component` (the fixed version is ESM-only and would break `query-string`). Upgrade when Expo and the navigation library allow, or record an accepted risk in `package.json` → `pnpm.auditConfig`.
+- [ ] Revisit the accepted dependency risks below and remove each ignore once an upgrade is possible.
 - [ ] Store listings, screenshots (the new design), data-safety forms (`docs/store/data-safety.md` needs SMS, card provider and any ID reading added).
+
+### Accepted dependency risks
+
+Ignored in `package.json` → `pnpm.auditConfig.ignoreGhsas` (accepted by the owner, 2026-11-27).
+
+| Advisory | Package | Why accepted |
+|----------|---------|--------------|
+| GHSA-mrhx-c7xc-m3w5 | `zod` 3 | Reached only through Expo's command-line build tool; not in the app or API runtime. The fix exists only in zod 4, which Expo does not use yet. |
+| GHSA-qr28-fpjm-wq7f | `decode-uri-component` 0.2 | Used by `query-string` to parse link addresses in the app: a crafted link could freeze that one phone's app. The fixed version is ESM-only and would break `query-string` 7. |
 
 ### Deploying this round
 1. Apply migrations `20261127000000_projects` and `20261127010000_hot_path_indexes` (additive; no database rebuild).

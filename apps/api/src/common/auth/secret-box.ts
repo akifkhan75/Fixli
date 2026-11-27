@@ -22,7 +22,8 @@ export class SecretBox {
   open(sealed: string): string {
     const [v, iv, tag, data] = sealed.split('.');
     if (v !== 'v1') throw new Error('Unknown secret format');
-    const d = createDecipheriv('aes-256-gcm', this.key, Buffer.from(iv, 'base64url'));
+    // Only the full 16-byte tag counts: Node would otherwise accept a shortened, forgeable one.
+    const d = createDecipheriv('aes-256-gcm', this.key, Buffer.from(iv, 'base64url'), { authTagLength: 16 });
     d.setAuthTag(Buffer.from(tag, 'base64url'));
     return Buffer.concat([d.update(Buffer.from(data, 'base64url')), d.final()]).toString('utf8');
   }
