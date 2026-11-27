@@ -32,6 +32,13 @@ describe('schedule', () => {
     expect(w.to > late).toBe(true);
   });
 
+  it('TODAY in the last hour of the day never ends before it starts', () => {
+    const late = new Date('2026-10-08T18:38:00Z'); // 23:38 Karachi
+    const w = computeWindow('TODAY', { timeZone: KHI, now: late });
+    expect(w.from).toEqual(late);
+    expect(w.to.getTime() - late.getTime()).toBe(3600_000);
+  });
+
   it('TOMORROW with a slot uses local hours', () => {
     const w = computeWindow('TOMORROW', { timeZone: KHI, slot: 'EVENING', now });
     expect(w.from.toISOString()).toBe('2026-10-09T12:00:00.000Z'); // 17:00 local
