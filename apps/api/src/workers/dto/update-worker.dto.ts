@@ -15,6 +15,8 @@ export class UpdateWorkerDto {
   @IsOptional() @IsBoolean() hidePhotoUntilBooked?: boolean;
   @IsOptional() @IsBoolean() hasInsurance?: boolean;
   @IsOptional() @IsArray() @ArrayMaxSize(30) @IsString({ each: true }) @MaxLength(60, { each: true }) equipment?: string[];
+  /** This worker can tow a vehicle (has a truck/trailer). Towing jobs match only these workers. */
+  @IsOptional() @IsBoolean() canTow?: boolean;
 
   @IsOptional() @IsIn(['FIXED', 'HOURLY', 'CALLOUT_PLUS_QUOTE', 'QUOTE']) pricingModel?: 'FIXED' | 'HOURLY' | 'CALLOUT_PLUS_QUOTE' | 'QUOTE';
   /** Integer minor units (paisa). */
@@ -27,6 +29,12 @@ export class UpdateWorkerDto {
   @IsOptional() @IsInt() @Min(1) @Max(50) serviceRadius?: number;
 
   @IsOptional() @IsBoolean() isOnline?: boolean;
+}
+
+/** A worker's live position heartbeat while online, for immediate/roadside matching. */
+export class UpdateLocationDto {
+  @IsLatitude() latitude: number;
+  @IsLongitude() longitude: number;
 }
 
 export class SetSkillsDto {

@@ -154,8 +154,13 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24 }}>
-        <Text variant="body" weight="medium" color={theme.colors.textPrimary} style={{ flex: 1 }}>{t('sharedAddressEdit.useThisAddressBy')}</Text>
-        <Switch value={isDefault} onValueChange={setIsDefault} accessibilityLabel={t('sharedAddressEdit.useThisAddressBy')} trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
+        <View style={{ flex: 1, marginEnd: 12 }}>
+          <Text variant="body" weight="medium" color={theme.colors.textPrimary}>{t('sharedAddressEdit.useThisAddressBy')}</Text>
+          {/* You can't un-set the only default here; you pick a different address as default instead.
+              Without this hint, turning the switch off and saving looks like "my change didn't save". */}
+          {initial?.isDefault ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{t('sharedAddressEdit.alreadyDefaultHint')}</Text> : null}
+        </View>
+        <Switch value={isDefault} onValueChange={setIsDefault} disabled={initial?.isDefault === true} accessibilityLabel={t('sharedAddressEdit.useThisAddressBy')} trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
       </View>
 
       {id ? <View style={{ marginTop: 24 }}><Button title={t('sharedAddressEdit.deleteThisAddress')} variant="danger" onPress={remove} disabled={saving} /></View> : null}
