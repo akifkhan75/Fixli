@@ -62,9 +62,21 @@ export class UsersService {
       where: { status: { in: BUSY_STATUSES }, OR: [{ customerId: id }, { assignedWorkerId: id }] },
     });
     if (active) throw new ConflictException({ code: 'ACTIVE_JOB', message: 'Finish or cancel your current job first.' });
+    const mine = { OR: [{ customerId: id }, { awardedWorkerId: id }] };
+    const [activeProjects, unrefunded] = await Promise.all([
+      this.prisma.project.count({ where: { ...mine, status: { in: ['AWARDED', 'IN_PROGRESS'] } } }),
+      this.prisma.projectPayment.count({ where: { status: { in: ['HELD', 'REFUND_PENDING'] }, milestone: { project: mine } } }),
+    ]);
+    if (activeProjects) throw new ConflictException({ code: 'ACTIVE_JOB', message: 'Finish or cancel your current project first.' });
+    if (unrefunded) throw new ConflictException({ code: 'MONEY_PENDING', message: 'A payment is still being processed. Please try again later.' });
     if ((user.worker?.ledgerBalance ?? 0) > 0) {
       throw new ConflictException({ code: 'BALANCE_OWED', message: 'Please settle what you owe Fixli first (see Earnings).' });
     }
+    if ((user.worker?.ledgerBalance ?? 0) < 0) {
+      throw new ConflictException({ code: 'MONEY_PENDING', message: 'Fixli still owes you money. Contact support to receive it first.' });
+    }
+    const myProjects = await this.prisma.project.findMany({ where: { customerId: id }, select: { photoKeys: true, audioKey: true } });
+    const projectFiles = myProjects.flatMap((p) => [...p.photoKeys, ...(p.audioKey ? [p.audioKey] : [])]);
 
     await this.prisma.$transaction(async (tx) => {
       const open = await tx.jobRequest.findMany({ where: { customerId: id, status: { in: ['CREATED', 'MATCHES_FOUND', 'AWAITING_WORKER'] } }, select: { id: true, status: true } });
@@ -73,12 +85,18 @@ export class UsersService {
         await tx.jobEvent.create({ data: { jobRequestId: j.id, actorId: id, type: 'CANCELLED', fromStatus: j.status, toStatus: 'CANCELLED', payload: { by: 'customer', reason: 'ACCOUNT_DELETED' } } });
       }
       await tx.offer.updateMany({ where: { workerId: id, status: 'PENDING' }, data: { status: 'WITHDRAWN' } });
+      await tx.projectBid.updateMany({ where: { workerId: id, status: 'PENDING' }, data: { status: 'WITHDRAWN' } });
+      await tx.projectInvite.deleteMany({ where: { workerId: id } });
+      await tx.project.updateMany({ where: { customerId: id, status: { in: ['DRAFT', 'OPEN'] } }, data: { status: 'CANCELLED', cancelledById: id, cancelReason: 'ACCOUNT_DELETED' } });
+      await tx.projectBid.updateMany({ where: { project: { customerId: id }, status: 'PENDING' }, data: { status: 'REJECTED' } });
+      // Where they live, what they said and their pictures go; amounts and dates stay for the books.
+      await tx.project.updateMany({ where: { customerId: id }, data: { description: '', location: null, latitude: null, longitude: null, addressId: null, audioKey: null, audioTranscript: null, photoKeys: [] } });
       await tx.address.deleteMany({ where: { userId: id } });
       await tx.trustedContact.deleteMany({ where: { userId: id } });
       await tx.favoriteWorker.deleteMany({ where: { OR: [{ customerId: id }, { workerId: id }] } });
       if (user.type === 'worker') {
         await tx.portfolioItem.deleteMany({ where: { workerId: id } });
-        await tx.worker.update({ where: { id }, data: { isOnline: false, bio: null } });
+        await tx.worker.update({ where: { id }, data: { isOnline: false, bio: null, businessName: null, teamSize: null } });
         // The ID number and the file keys go; the decision history (approved, rejected) stays.
         await tx.verificationCase.updateMany({ where: { workerId: id }, data: { documentKeys: [], reference: null } });
       }
@@ -93,6 +111,7 @@ export class UsersService {
     });
     // Identity documents, selfie, profile photo and portfolio photos are erased, not just hidden.
     await this.storage.deleteOwned(id, ['VERIFICATION', 'AVATAR', 'PORTFOLIO']);
+    if (projectFiles.length) await this.storage.removeKeys(projectFiles);
     // Signs out every device, drops live connections and forgets push tokens (Phase 6 path).
     await this.sessions.revokeAllExcept(id);
     await this.audit.record({ actorId: id, action: 'user.deleted', entityType: 'User', entityId: id });

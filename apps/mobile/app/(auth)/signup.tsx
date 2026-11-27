@@ -19,6 +19,9 @@ import * as api from '../../src/services/api';
 import { OtpCodeStep } from '../../src/components/ds/OtpCodeStep';
 import { signupUser, selectAuthError, selectIsAuthLoading, clearAuthError } from '../../src/store/authSlice';
 import { DirIcon } from '../../src/components/ds/DirIcon';
+import { ChoiceCard } from '../../src/components/ds/ChoiceCard';
+import { SpeakButton } from '../../src/components/ds/SpeakButton';
+import { Entrance } from '../../src/components/motion/Entrance';
 
 type Role = 'customer' | 'worker';
 
@@ -132,26 +135,12 @@ export default function SignupScreen() {
           <View>
             <Text variant="h1" weight="extrabold" color={theme.colors.textPrimary} style={{ marginBottom: 28 }}>{t('auth.signupTitle')}</Text>
             {([
-              { id: 'customer', icon: 'home-outline', title: t('auth.roleCustomer'), sub: t('auth.roleCustomerSub') },
-              { id: 'worker', icon: 'construct-outline', title: t('auth.roleWorker'), sub: t('auth.roleWorkerSub') },
-            ] as const).map((r) => (
-              <TouchableOpacity
-                key={r.id}
-                onPress={() => { dispatch(clearAuthError()); setRole(r.id); }}
-                accessibilityRole="button"
-                accessibilityLabel={`${r.title}. ${r.sub}`}
-                style={[styles.roleCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderRadius: theme.borderRadius.xl }]}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.roleIcon, { backgroundColor: theme.colors.primary + '15' }]}>
-                  <Ionicons name={r.icon} size={30} color={theme.colors.primary} />
-                </View>
-                <View style={{ flex: 1, marginHorizontal: 16 }}>
-                  <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{r.title}</Text>
-                  <Text variant="bodySmall" color={theme.colors.textSecondary}>{r.sub}</Text>
-                </View>
-                <DirIcon name="chevron-forward" size={22} color={theme.colors.textTertiary} />
-              </TouchableOpacity>
+              { id: 'customer', icon: 'home', title: t('auth.roleCustomer'), sub: t('auth.roleCustomerSub') },
+              { id: 'worker', icon: 'hammer', title: t('auth.roleWorker'), sub: t('auth.roleWorkerSub') },
+            ] as const).map((r, index) => (
+              <Entrance key={r.id} index={index}>
+                <ChoiceCard icon={r.icon} title={r.title} hint={r.sub} speak onPress={() => { dispatch(clearAuthError()); setRole(r.id); }} />
+              </Entrance>
             ))}
             <View style={styles.footer}>
               <Text variant="body" color={theme.colors.textSecondary}>{t('auth.haveAccount')} </Text>
@@ -177,7 +166,10 @@ export default function SignupScreen() {
           </View>
         ) : (
           <View>
-            <Text variant="h1" weight="extrabold" color={theme.colors.textPrimary} style={{ marginBottom: 8 }}>{t('auth.yourDetails')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <Text variant="h1" weight="extrabold" color={theme.colors.textPrimary} style={{ flex: 1 }}>{t('auth.yourDetails')}</Text>
+              <SpeakButton text={t('auth.detailsSpoken')} />
+            </View>
             {role === 'worker' ? (
               <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginBottom: 20 }}>{t('auth.workerNote')}</Text>
             ) : <View style={{ height: 12 }} />}
@@ -242,7 +234,5 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, paddingTop: 64, paddingBottom: 40 },
   back: { width: 44, height: 44, justifyContent: 'center', marginBottom: 12 },
-  roleCard: { flexDirection: 'row', alignItems: 'center', padding: 18, borderWidth: 1.5, marginBottom: 16 },
-  roleIcon: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24, flexWrap: 'wrap' },
 });

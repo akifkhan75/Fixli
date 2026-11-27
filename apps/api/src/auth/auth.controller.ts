@@ -2,7 +2,7 @@ import { Controller, Post, Get, Delete, Body, Param, HttpCode, HttpStatus, Req }
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { AdminLoginDto, ChangePasswordDto, LoginDto, RefreshDto, ResetPasswordDto, SignupDto, StartPhoneDto, TotpActivateDto, TotpSetupDto, VerifyPhoneDto } from './dto/auth.dto';
+import { AdminLoginDto, ChangePasswordDto, CodeLoginDto, LoginDto, RefreshDto, ResetPasswordDto, SignupDto, StartPhoneDto, TotpActivateDto, TotpSetupDto, VerifyPhoneDto } from './dto/auth.dto';
 import { StaffTwoFactorService } from './staff-two-factor.service';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -63,6 +63,24 @@ export class AuthController {
   @ApiOperation({ summary: 'Sign in with phone + password' })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('login/code/start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a sign-in code (same answer whether or not the account exists)' })
+  startLoginCode(@Body() dto: StartPhoneDto, @Req() req: { ip?: string }) {
+    return this.authService.startLoginCode(dto, req.ip);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('login/code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sign in with the texted code, no password' })
+  loginWithCode(@Body() dto: CodeLoginDto) {
+    return this.authService.loginWithCode(dto);
   }
 
   @Public()

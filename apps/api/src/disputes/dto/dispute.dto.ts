@@ -45,6 +45,10 @@ export class ResolveDisputeDto {
   @IsOptional() @IsIn(['CONFIRM', 'VOID'])
   paymentOutcome?: 'CONFIRM' | 'VOID';
 
+  /** For a project stage dispute: pay the professional, refund the customer, or resume work. */
+  @IsOptional() @IsIn(['RELEASE', 'REFUND', 'RESUME'])
+  stageOutcome?: 'RELEASE' | 'REFUND' | 'RESUME';
+
   @IsOptional() @ValidateNested() @Type(() => LedgerAdjustmentDto)
   ledgerAdjustment?: LedgerAdjustmentDto;
 }

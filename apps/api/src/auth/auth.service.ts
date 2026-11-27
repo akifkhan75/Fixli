@@ -21,7 +21,7 @@ import { AuditService } from '../common/audit/audit.service';
 import { SessionService, TokenPair } from './session.service';
 import { OtpService } from './otp.service';
 import { StaffTwoFactorService } from './staff-two-factor.service';
-import { AdminLoginDto, ChangePasswordDto, LoginDto, ResetPasswordDto, SignupDto, StartPhoneDto, TotpActivateDto, VerifyPhoneDto } from './dto/auth.dto';
+import { AdminLoginDto, ChangePasswordDto, CodeLoginDto, LoginDto, ResetPasswordDto, SignupDto, StartPhoneDto, TotpActivateDto, VerifyPhoneDto } from './dto/auth.dto';
 
 const BCRYPT_COST = process.env.NODE_ENV === 'test' ? 4 : 12;
 const MAX_FAILED = 5;
@@ -185,6 +185,25 @@ export class AuthService {
     await this.sessions.revokeAllExcept(user.id);
     await this.audit.record({ actorId: user.id, action: 'auth.password_reset', entityType: 'User', entityId: user.id });
     return { success: true };
+  }
+
+  /** Passwordless sign-in, step 1. Same answer whether or not the account exists. */
+  async startLoginCode(dto: StartPhoneDto, ip?: string) {
+    const phone = this.target(dto);
+    const user = await this.prisma.user.findUnique({ where: { phone }, select: { status: true, type: true } });
+    const eligible = !!user && user.status === 'ACTIVE' && user.type !== 'admin';
+    return this.otp.issue(phone, 'LOGIN', ip, eligible);
+  }
+
+  /** Step 2: the texted code proves ownership of the number. Staff never sign in this way. */
+  async loginWithCode(dto: CodeLoginDto) {
+    const phone = this.target(dto);
+    const vid = await this.otp.check(phone, 'LOGIN', dto.code);
+    const user = await this.prisma.user.findUnique({ where: { phone }, select: { id: true, status: true, type: true } });
+    if (!user || user.status !== 'ACTIVE' || user.type === 'admin' || !(await this.otp.consume(vid))) {
+      throw new BadRequestException({ code: 'INVALID_CODE', message: 'That code is wrong or has expired. Ask for a new one.' });
+    }
+    return this.issueSession(user.id, dto, 'phone');
   }
 
   async login(dto: LoginDto) {

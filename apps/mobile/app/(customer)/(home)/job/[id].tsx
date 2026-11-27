@@ -1,7 +1,7 @@
 import { analytics } from '../../../../src/services/analytics';
 import { StaleNote } from '../../../../src/components/ds/StaleNote';
 import React, { useEffect, useRef, useState } from 'react';
-import { View, TouchableOpacity } from 'react-native';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../../src/hooks/useTheme';
 import { useI18n } from '../../../../src/hooks/useI18n';
@@ -32,6 +32,10 @@ import { humanize, localizedName } from '../../../../src/utils/catalog';
 import * as api from '../../../../src/services/api';
 import { useLiveReload } from '../../../../src/hooks/useRealtime';
 import { t, tn } from '../../../../src/i18n';
+import { Card } from '../../../../src/components/ds/Card';
+import { Entrance } from '../../../../src/components/motion/Entrance';
+import { PulseRings } from '../../../../src/components/motion/PulseRings';
+import { SuccessCheck } from '../../../../src/components/motion/SuccessCheck';
 
 // Job status, prices, extra-work requests and the professional's position update live.
 export default function CustomerJobScreen() {
@@ -114,7 +118,13 @@ export default function CustomerJobScreen() {
   return (
     <Screen title={t('customerJob.yourRequest')} back onRefresh={reload} refreshing={loading} footer={footer}>
       <StaleNote at={staleAt} />
-      <Text variant="h2" weight="bold" color={theme.colors.textPrimary}>{statusSentence(job.status, 'customer', worker?.user.name)}</Text>
+      {job.status === 'COMPLETED' ? <View style={{ alignItems: 'center', marginBottom: 16 }}><SuccessCheck label={statusSentence(job.status, 'customer', worker?.user.name)} /></View> : null}
+      {['CREATED', 'MATCHES_FOUND', 'AWAITING_WORKER'].includes(job.status) && !offers.data?.length ? (
+        <View style={{ alignItems: 'center', marginBottom: 12 }}><PulseRings icon="search" label={statusSentence(job.status, 'customer', worker?.user.name)} /></View>
+      ) : null}
+      <Entrance key={job.status}>
+        <Text variant="h2" weight="bold" align={['AWAITING_CONFIRMATION', 'EN_ROUTE', 'IN_PROGRESS'].includes(job.status) ? undefined : 'center'} color={theme.colors.textPrimary}>{statusSentence(job.status, 'customer', worker?.user.name)}</Text>
+      </Entrance>
       {job.status === 'MATCHES_FOUND' ? (
         <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
           {job.notifiedCount
@@ -141,7 +151,7 @@ export default function CustomerJobScreen() {
         <View style={{ marginTop: 20 }}>
           <Text variant="h3" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{t('customerJob.pricesFromProfessionals')}</Text>
           {confirming ? (
-            <View style={{ backgroundColor: theme.colors.primary + '12', borderRadius: theme.borderRadius.xl, padding: 16, marginBottom: 14 }} accessibilityRole="alert">
+            <View style={{ backgroundColor: theme.colors.primarySoft, borderRadius: theme.borderRadius.xl, padding: 16, marginBottom: 14 }} accessibilityRole="alert">
               <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary}>
                 {t('customerJob.bookFor', { name: confirming.worker.name, price: formatMoney(confirming.amount, confirming.currency, locale) })}
               </Text>
@@ -152,8 +162,8 @@ export default function CustomerJobScreen() {
               </View>
             </View>
           ) : null}
-          {offers.data?.length ? offers.data.map((o) => (
-            <OfferCard key={o.id} offer={o} locale={locale} onChoose={() => setConfirming(o)} disabled={busy || !!confirming} />
+          {offers.data?.length ? offers.data.map((o, index) => (
+            <OfferCard key={o.id} index={index} offer={o} locale={locale} onChoose={() => setConfirming(o)} disabled={busy || !!confirming} />
           )) : offers.loading && !offers.data ? <LoadingState message={t('customerJob.checkingForPrices')} /> : (
             <Text variant="body" color={theme.colors.textSecondary}>{t('customerJob.noPricesYetThis')}</Text>
           )}
@@ -221,15 +231,15 @@ export default function CustomerJobScreen() {
       </View>
 
       {worker ? (
-        <TouchableOpacity onPress={() => router.push(`/worker/${worker.id}` as any)} accessibilityRole="button" accessibilityLabel={t('customerJob.viewSProfile', { name: worker.user.name })} activeOpacity={0.8}
-          style={{ marginTop: 24, backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16, flexDirection: 'row', alignItems: 'center' }}>
+        <Card onPress={() => router.push(`/worker/${worker.id}` as any)} accessibilityLabel={t('customerJob.viewSProfile', { name: worker.user.name })}
+          style={{ marginTop: 24, flexDirection: 'row', alignItems: 'center' }}>
           <Avatar name={worker.user.name} imageUrl={worker.user.profileImageUrl} size="lg" />
           <View style={{ marginStart: 14, flex: 1 }}>
             <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary}>{worker.user.name}</Text>
             <Text variant="bodySmall" color={theme.colors.textSecondary}>{worker.isVerified ? t('customerJob.idChecked') : t('customerJob.professional')}{worker.rating ? `  ·  ${worker.rating.toFixed(1)} ★` : ''}</Text>
           </View>
           <FavoriteHeart workerId={worker.id} />
-        </TouchableOpacity>
+        </Card>
       ) : null}
 
       {['AWAITING_CONFIRMATION', 'COMPLETED'].includes(job.status) ? <ReportProblem jobId={job.id} onDone={reload} /> : null}

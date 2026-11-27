@@ -18,6 +18,29 @@ export class AnalyzeRequestDto {
   photoUploadIds?: string[];
 }
 
+export class ProjectScopeDto {
+  @IsString() @IsNotEmpty() @MaxLength(64)
+  categoryId: string;
+
+  @IsIn(['NEW_BUILD', 'RENOVATION', 'INSTALLATION', 'MAINTENANCE'])
+  workType: 'NEW_BUILD' | 'RENOVATION' | 'INSTALLATION' | 'MAINTENANCE';
+
+  @IsOptional() @IsString() @MaxLength(4000)
+  description?: string;
+
+  @IsOptional() @IsArray() @ArrayMaxSize(4) @IsString({ each: true })
+  photoUploadIds?: string[];
+
+  @IsOptional() @IsIn(['en', 'ur', 'ar'])
+  locale?: 'en' | 'ur' | 'ar';
+}
+
+export class IdOcrDto {
+  /** A completed VERIFICATION upload: the front of the ID card. */
+  @IsString() @IsNotEmpty() @MaxLength(64)
+  uploadId: string;
+}
+
 export class TranscribeDto {
   /** A completed JOB_AUDIO upload. */
   @IsString() @IsNotEmpty() @MaxLength(64)

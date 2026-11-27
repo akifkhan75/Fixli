@@ -62,6 +62,20 @@ export const signupUser = createAsyncThunk<
   }
 });
 
+export const loginWithCode = createAsyncThunk<
+  { user: IUser; token: string },
+  { phone: string; countryCode: CountryCode; code: string },
+  { rejectValue: string }
+>('auth/loginWithCode', async (args, { rejectWithValue }) => {
+  try {
+    const res = await api.loginWithCode(args.phone, args.countryCode, args.code);
+    await saveTokens(res.token, res.refreshToken);
+    return { user: res.user, token: res.token };
+  } catch (error: any) {
+    return rejectWithValue(friendlyAuthError(error));
+  }
+});
+
 /** Validates the stored session with the server (refreshing it if needed). No session = signed out. */
 export const restoreSession = createAsyncThunk<
   { user: IUser; token: string } | null,
@@ -139,6 +153,20 @@ const authSlice = createSlice({
         state.authFlowState = 'LOGIN';
       })
       .addCase(loginUser.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload ?? t('auth.loginFailed');
+      })
+      .addCase(loginWithCode.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(loginWithCode.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.currentUser = action.payload.user;
+        state.token = action.payload.token;
+        state.authFlowState = 'LOGIN';
+      })
+      .addCase(loginWithCode.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload ?? t('auth.loginFailed');
       })

@@ -41,6 +41,7 @@ export class JobLifecycleSweeper implements OnModuleInit, OnModuleDestroy {
     return this.lease.runExclusive('job-lifecycle', 5 * 60_000, async () => ({
       autoConfirmed: await this.jobs.autoConfirmDue(now),
       cashAutoConfirmed: await this.payments.autoConfirmDue(now),
+      cashReminders: await this.payments.remindDue(now),
       workersPausedForBalance: await this.ledger.refreshBlocks(now),
       locationPointsDeleted: await this.location.purgeOld(now),
     }));

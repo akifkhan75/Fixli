@@ -18,7 +18,7 @@ env:
 
 # 1. Ask for help (opens the request screen with the trade and problem already chosen).
 - openLink: fixli:///request-service?categoryId=${output.categoryId}&issue=${output.issue}
-- assertVisible: "What needs fixing?"
+- assertVisible: "What do you need done?"
 - tapOn: "Continue"
 - assertVisible: "Show us"
 - tapOn: "Skip for now"

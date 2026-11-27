@@ -47,6 +47,7 @@ export class ChatService {
       include: {
         participants: { select: { id: true, name: true, profileImageUrl: true } },
         jobRequest: { select: { id: true, title: true, status: true } },
+        project: { select: { id: true, title: true, status: true } },
         messages: { take: 1, orderBy: { createdAt: 'desc' } },
       },
       orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
@@ -73,6 +74,7 @@ export class ChatService {
         return {
           id: item.id,
           job: item.jobRequest,
+          project: item.project,
           counterpart: other,
           participants: item.participants,
           lastMessage: item.messages[0] ? await this.present(item.messages[0]) : null,
@@ -90,7 +92,7 @@ export class ChatService {
   async requireConversation(id: string, userId: string) {
     const conversation = await this.prisma.conversation.findFirst({
       where: { id, participants: { some: { id: userId } } },
-      include: { participants: { select: { id: true, name: true } }, jobRequest: { select: { id: true, title: true } } },
+      include: { participants: { select: { id: true, name: true } }, jobRequest: { select: { id: true, title: true } }, project: { select: { id: true, title: true } } },
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
     return conversation;
@@ -100,6 +102,13 @@ export class ChatService {
   async conversationForJob(jobId: string, userId: string) {
     const c = await this.prisma.conversation.findFirst({ where: { jobRequestId: jobId, participants: { some: { id: userId } } }, select: { id: true } });
     if (!c) throw new NotFoundException({ code: 'NO_CHAT_YET', message: 'Chat opens once the job is booked.' });
+    return c;
+  }
+
+  /** The chat for a project: it opens when a professional is hired. */
+  async conversationForProject(projectId: string, userId: string) {
+    const c = await this.prisma.conversation.findFirst({ where: { projectId, participants: { some: { id: userId } } }, select: { id: true } });
+    if (!c) throw new NotFoundException({ code: 'NO_CHAT_YET', message: 'Chat opens once a professional is hired.' });
     return c;
   }
 
@@ -119,7 +128,7 @@ export class ChatService {
       items: await Promise.all(items.map((m) => this.present(m))),
       nextCursor,
       conversation: {
-        id: conversation.id, job: conversation.jobRequest, counterpart: other,
+        id: conversation.id, job: conversation.jobRequest, project: conversation.project, counterpart: other,
         isReadOnly: conversation.isReadOnly, closedAt: conversation.closedAt,
         blocked: other ? await this.blocks.between(userId, other.id) : false,
       },

@@ -82,6 +82,9 @@ describe('Every route enforces who may call it (e2e)', () => {
     (app as any).set('trust proxy', true);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: true } }));
     await app.init();
+    // One fixed loopback port: letting supertest open a new port per request can, on a busy machine,
+    // reach some other program listening there and report its 404 as ours.
+    await app.listen(0, '127.0.0.1');
     prisma = app.get(PrismaService);
     routes = discover(app);
     await account('customer', 'customer');

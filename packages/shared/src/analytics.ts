@@ -24,7 +24,7 @@ const slug: PropKind = { kind: 'slug' };
 
 const ROLE = e('customer', 'worker');
 const JOB_STATUS = e('ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED', 'CANCELLED');
-const OUTBOX_KIND = e('chat', 'job_action', 'job_request');
+const OUTBOX_KIND = e('chat', 'job_action', 'job_request', 'project_create');
 
 export const ANALYTICS_EVENTS = {
   // Core funnel

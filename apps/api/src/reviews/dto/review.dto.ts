@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 
 /** Tags a customer can give a professional. */
 export const WORKER_REVIEW_TAGS = ['ON_TIME', 'FRIENDLY', 'CLEAN', 'FAIR_PRICE', 'SKILLED', 'EXPLAINED_WELL'] as const;
@@ -7,8 +7,14 @@ export const CUSTOMER_REVIEW_TAGS = ['RESPECTFUL', 'CLEAR_INSTRUCTIONS', 'PAID_P
 export const REVIEW_TAGS = [...WORKER_REVIEW_TAGS, ...CUSTOMER_REVIEW_TAGS] as const;
 
 export class CreateReviewDto {
+  /** The finished job… */
+  @ValidateIf((o: CreateReviewDto) => !o.projectId)
   @IsString() @IsNotEmpty() @MaxLength(64)
-  jobRequestId: string;
+  jobRequestId?: string;
+
+  /** …or the finished project being reviewed. */
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(64)
+  projectId?: string;
 
   @IsInt() @Min(1) @Max(5)
   rating: number;

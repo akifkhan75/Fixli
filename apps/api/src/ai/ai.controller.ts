@@ -2,7 +2,7 @@ import { Controller, Post, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AiService } from './ai.service';
-import { AnalyzeRequestDto, QuoteDraftDto, SafetyCheckDto, TranscribeDto } from './dto/analyze-request.dto';
+import { AnalyzeRequestDto, IdOcrDto, ProjectScopeDto, QuoteDraftDto, SafetyCheckDto, TranscribeDto } from './dto/analyze-request.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -25,6 +25,20 @@ export class AiController {
   @ApiOperation({ summary: 'Turn an uploaded voice note into text the user can edit' })
   transcribe(@CurrentUser('id') userId: string, @Body() dto: TranscribeDto) {
     return this.aiService.transcribe(userId, dto.uploadId, dto.locale);
+  }
+
+  @Post('project-scope')
+  @Roles('customer')
+  @ApiOperation({ summary: 'Suggest a title and payment stages for a project (suggestion only)' })
+  projectScope(@CurrentUser('id') userId: string, @Body() dto: ProjectScopeDto) {
+    return this.aiService.suggestProjectScope(userId, dto);
+  }
+
+  @Post('id-ocr')
+  @Roles('worker')
+  @ApiOperation({ summary: 'Read the ID number from your ID photo so you need not type it (off unless enabled)' })
+  idOcr(@CurrentUser('id') userId: string, @Body() dto: IdOcrDto) {
+    return this.aiService.readIdNumber(userId, dto.uploadId);
   }
 
   @Post('safety-check')

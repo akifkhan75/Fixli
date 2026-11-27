@@ -5,7 +5,8 @@ import { PrismaService } from '../database/prisma.service';
 import { CashLimits, CountryConfigService } from './country-config.service';
 import { NotificationService } from '../notifications/notifications.service';
 
-export type LedgerType = 'COMMISSION_OWED' | 'COMMISSION_SETTLED' | 'ADJUSTMENT';
+/** ESCROW_CREDIT: money Fixli held for a project stage and now owes the professional. */
+export type LedgerType = 'COMMISSION_OWED' | 'COMMISSION_SETTLED' | 'ADJUSTMENT' | 'ESCROW_CREDIT';
 
 export interface LedgerPost {
   workerId: string;

@@ -24,13 +24,13 @@ function App() {
           <div className="container hero-content">
             <div className="hero-badge animate-fade-in">
               <Sparkles size={16} style={{ marginRight: 8 }} />
-              Home repairs in Pakistan
+              Repairs, installation and building work in Pakistan
             </div>
             <h1 className="hero-title animate-fade-in-delayed">
-              Get it fixed.<br />Get it done.
+              Any work.<br />Done right.
             </h1>
             <p className="hero-subtitle animate-fade-in-delayed">
-              Tell us what is wrong, see the price from each nearby professional, then choose. Plumbing, electrical and more.
+              Say what you need, see prices from nearby professionals, then choose. From a leaking tap to wiring a new house.
             </p>
             <div className="hero-actions animate-fade-in-delayed">
               <span className="btn btn-outline" role="status">The app is coming soon to the App Store and Google Play</span>
@@ -44,8 +44,8 @@ function App() {
             <div className="features-grid">
               <div className="feature-card">
                 <div className="feature-icon"><Zap size={24} /></div>
-                <h3 className="feature-title">1. Tell us the problem</h3>
-                <p className="feature-text">Tap what is wrong, add a photo or a voice note, and choose when you want someone to come.</p>
+                <h3 className="feature-title">1. Say what you need</h3>
+                <p className="feature-text">Tap a picture, add a photo or a voice note, and choose when. For bigger work, post a project and professionals and companies send prices.</p>
               </div>
               <div className="feature-card">
                 <div className="feature-icon"><Wrench size={24} /></div>
@@ -54,8 +54,8 @@ function App() {
               </div>
               <div className="feature-card">
                 <div className="feature-icon"><Banknote size={24} /></div>
-                <h3 className="feature-title">3. Pay the professional in cash</h3>
-                <p className="feature-text">When the work is done, pay the agreed price directly to the professional and confirm it in the app.</p>
+                <h3 className="feature-title">3. Pay when the work is done</h3>
+                <p className="feature-text">Pay the agreed price to the professional and confirm it in the app. Larger projects are paid stage by stage, after you approve each one.</p>
               </div>
             </div>
           </div>

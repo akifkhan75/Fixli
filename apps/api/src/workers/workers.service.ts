@@ -17,6 +17,8 @@ const PUBLIC_WORKER_SELECT = {
   rating: true,
   bio: true,
   experienceYears: true,
+  businessName: true,
+  teamSize: true,
   languages: true,
   hasInsurance: true,
   isVerified: true,
@@ -158,7 +160,8 @@ export class WorkersService {
       if (!cur?.hourlyRate) throw new BadRequestException({ code: 'HOURLY_RATE_REQUIRED', message: 'Enter your hourly rate.' });
     }
 
-    await this.prisma.worker.update({ where: { id: userId }, data: dto });
+    const businessName = dto.businessName === undefined ? undefined : dto.businessName.trim() || null;
+    await this.prisma.worker.update({ where: { id: userId }, data: { ...dto, businessName } });
     return this.findOwn(userId);
   }
 

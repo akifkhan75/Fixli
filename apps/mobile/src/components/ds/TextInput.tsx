@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Animated,
   Platform,
+  StyleProp,
+  ViewStyle,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { Text } from './Text';
@@ -17,6 +19,8 @@ export interface TextInputProps extends RNTextInputProps {
   error?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  /** Spacing around the whole field (label and error included). */
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
 export const TextInput = ({
@@ -28,6 +32,7 @@ export const TextInput = ({
   onBlur,
   style,
   value,
+  containerStyle,
   ...props
 }: TextInputProps) => {
   const theme = useTheme();
@@ -64,7 +69,7 @@ export const TextInput = ({
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, containerStyle]}>
       {label && (
         <Text variant="bodySmall" weight="medium" style={{ color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }}>
           {label}

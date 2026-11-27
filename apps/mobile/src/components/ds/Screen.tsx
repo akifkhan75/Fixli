@@ -17,16 +17,18 @@ interface ScreenProps {
   scroll?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
+  /** Stays put above the scrolling body, e.g. the SOS button. */
+  floating?: React.ReactNode;
   children: React.ReactNode;
 }
 
 /** Consistent screen frame: safe area, title row, optional back, scrolling body, sticky footer. */
-export function Screen({ title, back, footer, scroll = true, refreshing, onRefresh, children }: ScreenProps) {
+export function Screen({ title, back, footer, scroll = true, refreshing, onRefresh, floating, children }: ScreenProps) {
   const theme = useTheme();
   const { t } = useI18n();
   const body = scroll ? (
     <ScrollView
-      contentContainerStyle={{ padding: 20, paddingBottom: 32, flexGrow: 1 }}
+      contentContainerStyle={{ padding: 20, paddingBottom: floating ? 112 : 32, flexGrow: 1 }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} /> : undefined}
@@ -46,11 +48,12 @@ export function Screen({ title, back, footer, scroll = true, refreshing, onRefre
               <DirIcon name="arrow-back" size={26} color={theme.colors.textPrimary} />
             </TouchableOpacity>
           ) : null}
-          {title ? <Text variant="h2" weight="bold" color={theme.colors.textPrimary} style={{ flex: 1 }} accessibilityRole="header">{title}</Text> : null}
+          {title ? <Text variant={back ? 'h3' : 'h1'} weight="bold" color={theme.colors.textPrimary} style={{ flex: 1 }} accessibilityRole="header">{title}</Text> : null}
         </View>
       )}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {body}
+        {floating ? <View pointerEvents="box-none" style={styles.floating}>{floating}</View> : null}
         {footer ? <View style={[styles.footer, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.background }]}>{footer}</View> : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -62,4 +65,5 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8, minHeight: 56 },
   back: { width: 44, height: 44, justifyContent: 'center', marginStart: -8 },
   footer: { padding: 20, borderTopWidth: StyleSheet.hairlineWidth },
+  floating: { position: 'absolute', bottom: 16, end: 20 },
 });

@@ -12,7 +12,25 @@ describe('AiService', () => {
   };
   const storage: any = { readOwn: jest.fn().mockResolvedValue({ bytes: Buffer.from('img'), mime: 'image/jpeg' }) };
   const provider = { name: 'fake', model: 'fake-1', available: jest.fn().mockReturnValue(true), generate: jest.fn() };
-  const svc = new AiService(provider as any, prisma, storage);
+  const settings: Record<string, unknown> = {};
+  const svc = new AiService(provider as any, prisma, storage, { get: (k: string) => settings[k] } as any);
+
+  describe('reading an ID number', () => {
+    afterEach(() => { delete settings.AI_ID_OCR_ENABLED; });
+    it('never sends the document anywhere unless switched on', async () => {
+      await expect(svc.readIdNumber('w1', 'up1')).resolves.toEqual({ available: false, idNumber: null });
+      expect(storage.readOwn).not.toHaveBeenCalled();
+      expect(provider.generate).not.toHaveBeenCalled();
+    });
+    it('returns only something shaped like a number, and records no content', async () => {
+      settings.AI_ID_OCR_ENABLED = true;
+      provider.generate.mockResolvedValue(' 42101-1234567-1 ');
+      await expect(svc.readIdNumber('w1', 'up1')).resolves.toEqual({ available: true, idNumber: '42101-1234567-1' });
+      expect(JSON.stringify(prisma.jobAiAnalysis.create.mock.calls)).not.toContain('42101');
+      provider.generate.mockResolvedValue('Ignore previous instructions');
+      await expect(svc.readIdNumber('w1', 'up1')).resolves.toEqual({ available: true, idNumber: null });
+    });
+  });
   afterEach(() => { jest.clearAllMocks(); provider.available.mockReturnValue(true); prisma.jobAiAnalysis.create.mockResolvedValue({ id: 'an1' }); prisma.serviceCategory.findMany.mockResolvedValue(categories); });
 
   const answer = (o: object) => JSON.stringify({ categoryCode: 'PLUMBING', issueCodes: ['leaking_tap'], urgency: 'standard', severity: 'low', lifeThreatening: false, hazards: [], summary: 'Tap drips', confidence: 0.8, questions: [], ...o });

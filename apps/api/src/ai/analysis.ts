@@ -85,7 +85,7 @@ export function ruleHazards(text: string): { lifeThreatening: boolean; urgent: b
 
 export function buildAnalysisPrompt(args: { description: string; catalog: CatalogRef[]; categoryHint?: string; photoCount: number }) {
   const catalogText = args.catalog.map((c) => `- ${c.name}: ${c.issues.join(', ')}`).join('\n');
-  return `You help a home-repair marketplace understand a customer's problem.
+  return `You help a marketplace for repairs, installation and building work understand what a customer needs.
 Choose ONE category code and up to 4 issue codes ONLY from this list (use null if none fits):
 ${catalogText}
 

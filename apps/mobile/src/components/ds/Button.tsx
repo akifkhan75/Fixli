@@ -1,25 +1,21 @@
 import React from 'react';
-import {
-  TouchableOpacity,
-  TouchableOpacityProps,
-  ActivityIndicator,
-  StyleSheet,
-  ViewStyle,
-} from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { ActivityIndicator, GestureResponderEvent, PressableProps, StyleProp, ViewStyle } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
+import { PressableScale } from '../motion/PressableScale';
 import { Text } from './Text';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+/** `accent` is the orange highlight: at most one per screen (docs/22). */
+export type ButtonVariant = 'primary' | 'secondary' | 'tinted' | 'accent' | 'outline' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
-export interface ButtonProps extends TouchableOpacityProps {
+export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   title: string;
   loading?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const Button = ({
@@ -35,98 +31,66 @@ export const Button = ({
   ...props
 }: ButtonProps) => {
   const theme = useTheme();
+  const c = theme.colors;
+  const inactive = !!disabled || loading;
 
-  const handlePress = (e: any) => {
-    if (disabled || loading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress?.(e);
+  const palette: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
+    primary: { bg: c.primary, fg: c.onPrimary },
+    secondary: { bg: c.surfaceElevated, fg: c.textPrimary },
+    tinted: { bg: c.primarySoft, fg: c.primaryText },
+    accent: { bg: c.accent, fg: c.onAccent },
+    outline: { bg: 'transparent', fg: c.textPrimary, border: c.borderLight },
+    ghost: { bg: 'transparent', fg: c.primaryText },
+    danger: { bg: c.error, fg: c.onPrimary },
   };
+  const { bg, fg, border } = palette[variant];
+  // Loading keeps the button's colour; only a truly unavailable one is greyed out.
+  const greyed = !!disabled && !loading;
 
-  // Determine colors based on variant
-  let backgroundColor: string = theme.colors.primary;
-  let textColor: string = '#FFF';
-  let borderColor: string = 'transparent';
-
-  switch (variant) {
-    case 'primary':
-      backgroundColor = theme.colors.primary;
-      textColor = '#FFF';
-      break;
-    case 'secondary':
-      backgroundColor = theme.colors.surfaceElevated;
-      textColor = theme.colors.textPrimary;
-      break;
-    case 'outline':
-      backgroundColor = 'transparent';
-      borderColor = theme.colors.border;
-      textColor = theme.colors.textPrimary;
-      break;
-    case 'ghost':
-      backgroundColor = 'transparent';
-      textColor = theme.colors.primaryText;
-      break;
-    case 'danger':
-      backgroundColor = theme.colors.error;
-      textColor = '#FFF';
-      break;
-  }
-
-  // Determine sizing
-  let paddingVertical = theme.spacing.md;
-  let paddingHorizontal = theme.spacing.xl;
-  let textVariant: 'bodySmall' | 'body' | 'bodyLarge' = 'body';
   // Touch targets: at least 48 pt, 56 pt for the big primary buttons (doc 27 F7.5).
-  let minHeight = 52;
+  const sizing = {
+    sm: { minHeight: 48, paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.lg, text: 'bodySmall' as const },
+    md: { minHeight: 52, paddingVertical: theme.spacing.md, paddingHorizontal: theme.spacing.xl, text: 'body' as const },
+    lg: { minHeight: 56, paddingVertical: theme.spacing.lg, paddingHorizontal: theme.spacing['2xl'], text: 'bodyLarge' as const },
+  }[size];
 
-  if (size === 'sm') {
-    paddingVertical = theme.spacing.sm;
-    paddingHorizontal = theme.spacing.lg;
-    textVariant = 'bodySmall';
-    minHeight = 48;
-  } else if (size === 'lg') {
-    paddingVertical = theme.spacing.lg;
-    paddingHorizontal = theme.spacing['2xl'];
-    textVariant = 'bodyLarge';
-    minHeight = 56;
-  }
-
-  const containerStyle: ViewStyle = {
-    backgroundColor: disabled ? theme.colors.surfaceElevated : backgroundColor,
-    borderColor: disabled ? 'transparent' : borderColor,
+  const container: ViewStyle = {
+    backgroundColor: greyed ? c.surfaceElevated : bg,
+    borderColor: greyed ? 'transparent' : border ?? 'transparent',
     borderWidth: variant === 'outline' ? 1.5 : 0,
     borderRadius: theme.borderRadius.lg,
-    minHeight,
-    paddingVertical,
-    paddingHorizontal,
+    minHeight: sizing.minHeight,
+    paddingVertical: sizing.paddingVertical,
+    paddingHorizontal: sizing.paddingHorizontal,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    opacity: disabled ? 0.6 : 1,
     gap: theme.spacing.sm,
   };
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      style={[containerStyle, style]}
-      onPress={handlePress}
-      disabled={disabled || loading}
+    <PressableScale
+      haptics={variant === 'primary' || variant === 'accent' || variant === 'danger' ? 'medium' : 'light'}
       accessible
       accessibilityRole="button"
-      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: inactive, busy: loading }}
       {...props}
+      style={[container, style]}
+      disabled={inactive}
+      onPress={(e: GestureResponderEvent) => { if (!inactive) onPress?.(e); }}
     >
       {loading ? (
-        <ActivityIndicator color={textColor} size="small" />
+        <ActivityIndicator color={fg} size="small" />
       ) : (
         <>
           {leftIcon}
-          <Text variant={textVariant} weight="semibold" style={{ color: textColor }}>
+          <Text variant={sizing.text} weight="semibold" align="center" style={{ color: greyed ? c.textTertiary : fg, flexShrink: 1 }}>
             {title}
           </Text>
           {rightIcon}
         </>
       )}
-    </TouchableOpacity>
+    </PressableScale>
   );
 };

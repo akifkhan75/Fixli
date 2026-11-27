@@ -13,7 +13,7 @@ import { uploadAudio } from '../../services/upload';
 import { transcribeVoice } from '../../services/api';
 import { openSettings } from '../../services/pickPhoto';
 import { useI18n } from '../../hooks/useI18n';
-import { t } from '../../i18n';
+import { PulseRings } from '../../components/motion/PulseRings';
 
 const MAX_MS = 60_000;
 const MIN_MS = 800;
@@ -37,7 +37,7 @@ interface VoiceFieldProps {
  * so the person can correct it (AI output is a suggestion). The recording itself is always kept
  * and sent to the professional, because dialect transcription is imperfect (doc 22 §6.4).
  */
-export function VoiceField({ value, onChange, locale, label = 'Tell us in your own words' }: VoiceFieldProps) {
+export function VoiceField({ value, onChange, locale, label }: VoiceFieldProps) {
   const theme = useTheme();
   const { t } = useI18n();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -115,7 +115,7 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
 
   return (
     <View>
-      <Text variant="body" weight="semibold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{label}</Text>
+      <Text variant="body" weight="semibold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{label ?? t('voiceField.defaultLabel')}</Text>
 
       {!value.audioUploadId ? (
         <Pressable
@@ -127,8 +127,12 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
           accessibilityHint={t('voiceField.pressAndHoldSpeak')}
           style={[styles.hold, { backgroundColor: rec.isRecording ? theme.colors.error + '18' : theme.colors.surface, borderColor: rec.isRecording ? theme.colors.error : theme.colors.border }]}
         >
-          {busy ? <ActivityIndicator color={theme.colors.primary} /> : (
-            <Ionicons name={rec.isRecording ? 'radio-button-on' : 'mic'} size={34} color={rec.isRecording ? theme.colors.error : theme.colors.primary} />
+          {busy ? <ActivityIndicator size="large" color={theme.colors.primary} /> : rec.isRecording ? (
+            <PulseRings icon="mic" size={112} />
+          ) : (
+            <View style={[styles.mic, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="mic" size={34} color={theme.colors.onPrimary} />
+            </View>
           )}
           <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} style={{ marginTop: 8 }}>
             {busy ? t('voiceField.listeningToYourNote') : rec.isRecording ? t('voiceField.recordingSLetGo', { seconds }) : t('voiceField.holdToTalk')}
@@ -169,4 +173,5 @@ const styles = StyleSheet.create({
   hold: { borderWidth: 1.5, borderRadius: 20, paddingVertical: 22, alignItems: 'center', justifyContent: 'center', minHeight: 120 },
   done: { borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  mic: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
 });

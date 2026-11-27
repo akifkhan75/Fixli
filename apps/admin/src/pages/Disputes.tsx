@@ -10,6 +10,7 @@ function Dispute({ id, onChanged }: { id: string; onChanged: () => void }) {
   const { data: d, loading, error, reload } = useLoad(() => getDisputeDetail(id), [id]);
   const [resolution, setResolution] = useState('');
   const [outcome, setOutcome] = useState<'' | 'CONFIRM' | 'VOID'>('');
+  const [stageOutcome, setStageOutcome] = useState<'' | 'RELEASE' | 'REFUND' | 'RESUME'>('');
   const [adjust, setAdjust] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | undefined>();
@@ -23,6 +24,10 @@ function Dispute({ id, onChanged }: { id: string; onChanged: () => void }) {
     if (status !== 'IN_REVIEW') {
       if (!resolution.trim()) return setErr('Write what was decided; both sides see it.');
       if (outcome) body.paymentOutcome = outcome;
+      if (d.project?.stage?.status === 'DISPUTED') {
+        if (!stageOutcome) return setErr('Choose what happens to the stage and its money.');
+        body.stageOutcome = stageOutcome;
+      }
       if (adjust.trim()) {
         const amount = parseMajor(adjust);
         if (amount == null || amount === 0) return setErr('The ledger change must be a number (minus to reduce what the worker owes).');
@@ -40,9 +45,20 @@ function Dispute({ id, onChanged }: { id: string; onChanged: () => void }) {
       </div>
       <div className="detail-grid">
         <div><p className="text-muted">Raised by</p><p>{d.raisedBy.name} ({d.raisedBy.type})</p></div>
-        <div><p className="text-muted">Job</p><p>{d.jobRequest.title ?? 'Job'} · {d.jobRequest.status.toLowerCase()}</p></div>
-        <div><p className="text-muted">Agreed price</p><p>{d.jobRequest.agreedAmount != null ? money(d.jobRequest.agreedAmount, d.jobRequest.agreedCurrency) : '–'}</p></div>
-        <div><p className="text-muted">Payment</p><p>{d.payment ? <>{money(d.payment.amount, d.payment.currency)} <Badge value={d.payment.status} /></> : '–'}</p></div>
+        {d.project ? (
+          <>
+            <div><p className="text-muted">Project</p><p>{d.project.title} · {d.project.status.toLowerCase().replace(/_/g, ' ')}</p></div>
+            <div><p className="text-muted">Stage</p><p>{d.project.stage ? <>{d.project.stage.title} · {money(d.project.stage.amount, d.project.currency)} <Badge value={d.project.stage.status} /></> : '–'}</p></div>
+            <div><p className="text-muted">Paid by</p><p>{d.project.paymentMode === 'ESCROW' ? 'Card, held by Fixli' : 'Directly to the professional'}</p></div>
+            {d.project.stage?.submittedNote ? <div><p className="text-muted">Professional's note</p><p>{d.project.stage.submittedNote}</p></div> : null}
+          </>
+        ) : (
+          <>
+            <div><p className="text-muted">Job</p><p>{d.jobRequest.title ?? 'Job'} · {d.jobRequest.status.toLowerCase()}</p></div>
+            <div><p className="text-muted">Agreed price</p><p>{d.jobRequest.agreedAmount != null ? money(d.jobRequest.agreedAmount, d.jobRequest.agreedCurrency) : '–'}</p></div>
+            <div><p className="text-muted">Payment</p><p>{d.payment ? <>{money(d.payment.amount, d.payment.currency)} <Badge value={d.payment.status} />{d.payment.claimedAmount != null ? <> · customer says they paid {money(d.payment.claimedAmount, d.payment.currency)}</> : null}</> : '–'}</p></div>
+          </>
+        )}
         <div><p className="text-muted">Opened</p><p>{when(d.createdAt)}</p></div>
       </div>
       {d.description ? <p style={{ whiteSpace: 'pre-wrap' }}>{d.description}</p> : null}
@@ -61,7 +77,17 @@ function Dispute({ id, onChanged }: { id: string; onChanged: () => void }) {
               </select>
             </label>
           ) : null}
-          {can('finance.adjust') ? <input className="reason-input" placeholder="Change what the worker owes, e.g. -200 (optional)" value={adjust} onChange={(e) => setAdjust(e.target.value)} /> : null}
+          {d.project?.stage?.status === 'DISPUTED' ? (can('finance.adjust') ? (
+            <label className="text-muted">Disputed stage&nbsp;
+              <select value={stageOutcome} onChange={(e) => setStageOutcome(e.target.value as typeof stageOutcome)}>
+                <option value="">Choose…</option>
+                <option value="RELEASE">{d.project.paymentMode === 'ESCROW' ? 'Pay the professional (release held money)' : 'It was done and paid (book commission)'}</option>
+                <option value="REFUND">{d.project.paymentMode === 'ESCROW' ? 'Refund the customer and cancel the stage' : 'Cancel the stage'}</option>
+                <option value="RESUME">Send the stage back to work</option>
+              </select>
+            </label>
+          ) : <p className="text-muted">Closing this needs someone with finance access: it decides where the money goes.</p>) : null}
+          {can('finance.adjust') && !d.project ? <input className="reason-input" placeholder="Change what the worker owes, e.g. -200 (optional)" value={adjust} onChange={(e) => setAdjust(e.target.value)} /> : null}
           <div className="row-actions">
             {d.status === 'OPEN' ? <button className="btn btn-sm btn-ghost" disabled={busy} onClick={() => act('IN_REVIEW')}>Start review</button> : null}
             <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => act('RESOLVED')}>Resolve</button>

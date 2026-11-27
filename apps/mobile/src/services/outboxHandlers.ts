@@ -104,7 +104,27 @@ export async function submitJobRequest(userId: string, input: CreateJobInput, ti
   return { queued: true };
 }
 
+// ── New project (customer) ───────────────────────────────────────────────────────────────────
+
+export interface ProjectCreatePayload { input: api.CreateProjectInput }
+
+export const projectCreateHandler: OutboxHandler<ProjectCreatePayload> = {
+  describe: (p) => p.input.title,
+  // The input carries its own idempotency key: sending twice makes one project.
+  send: (p) => api.createProject(p.input),
+};
+
+export async function submitProject(userId: string, input: api.CreateProjectInput): Promise<SubmitResult<api.ProjectView>> {
+  if (connectivity.online) {
+    try { return { queued: false, result: await api.createProject(input) }; } catch (e) { if (!isOffline(e)) throw e; }
+  }
+  await outbox.add('project_create', userId, `project:${input.idempotencyKey}`, { input } satisfies ProjectCreatePayload, `prj-${input.idempotencyKey}`);
+  void analytics.track('outbox_queued', { kind: 'project_create' });
+  return { queued: true };
+}
+
 export function registerOutboxHandlers() {
+  outbox.register('project_create', projectCreateHandler);
   outbox.register('job_action', jobActionHandler);
   outbox.register('job_request', jobRequestHandler);
 }

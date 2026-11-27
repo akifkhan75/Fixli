@@ -1,58 +1,70 @@
 import { StaleNote } from '../../src/components/ds/StaleNote';
-import React, { useCallback, useState } from 'react';
-import { View, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, RefreshControl } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
-import { useApi } from '../../src/hooks/useApi';
+import { useI18n } from '../../src/hooks/useI18n';
+import { usePaginated } from '../../src/hooks/usePaginated';
 import { Screen } from '../../src/components/ds/Screen';
-import { Text } from '../../src/components/ds/Text';
+import { SegmentedTabs } from '../../src/components/ds/SegmentedTabs';
+import { JobCard } from '../../src/components/ds/JobCard';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ds/EmptyState';
-import { isFinished, statusIcon, statusSentence } from '../../src/utils/jobStatus';
+import { Button } from '../../src/components/ds/Button';
+import { Entrance } from '../../src/components/motion/Entrance';
+import { isFinished } from '../../src/utils/jobStatus';
+import { ProjectList } from '../../src/components/projects/ProjectList';
 import * as api from '../../src/services/api';
-import { t } from '../../src/i18n';
-import { DirIcon } from '../../src/components/ds/DirIcon';
 
 export default function MyJobsScreen() {
   const theme = useTheme();
-  const [tab, setTab] = useState<'ACTIVE' | 'PAST'>('ACTIVE');
-  const { data, loading, error, reload, staleAt } = useApi(async () => (await api.listJobs()).items, [], { cacheKey: 'customer-bookings' });
+  const { t, locale } = useI18n();
+  const [tab, setTab] = useState<'ACTIVE' | 'PROJECTS' | 'PAST'>('ACTIVE');
+  const { items, loading, error, reload, staleAt, more, hasMore, loadingMore, moreError } = usePaginated(api.listJobsPage, [], { cacheKey: 'customer-bookings-page' });
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
-  const shown = (data ?? []).filter((j) => (tab === 'PAST') === isFinished(j.status));
+  const shown = (items ?? []).filter((j) => (tab === 'PAST') === isFinished(j.status));
+
+  // A tab can be empty on this page while older pages still hold matches: keep looking.
+  useEffect(() => {
+    if (tab !== 'PROJECTS' && items && !shown.length && hasMore && !loadingMore && !moreError) void more();
+  }, [tab, items, shown.length, hasMore, loadingMore, moreError, more]);
 
   return (
-    <Screen title={t('customerBookings.myJobs')} onRefresh={reload} refreshing={loading && !!data}>
+    <Screen title={t('customerBookings.myJobs')} scroll={false}>
       <StaleNote at={staleAt} />
-      <View style={{ flexDirection: 'row', backgroundColor: theme.colors.surface, borderRadius: 10, padding: 3, marginBottom: 20 }} accessibilityRole="tablist">
-        {(['ACTIVE', 'PAST'] as const).map((id) => (
-          <TouchableOpacity key={id} onPress={() => setTab(id)} accessibilityRole="tab" accessibilityState={{ selected: tab === id }}
-            style={{ flex: 1, minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 8, backgroundColor: tab === id ? theme.colors.primary : 'transparent' }}>
-            <Text variant="bodySmall" weight="bold" color={tab === id ? theme.colors.onPrimary : theme.colors.textSecondary}>{id === 'ACTIVE' ? t('customerBookings.active') : t('customerBookings.past')}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {loading && !data ? <LoadingState /> : error && !data ? <ErrorState message={error} onRetry={reload} /> : !shown.length ? (
-        <EmptyState
-          icon="calendar-outline"
-          title={tab === 'ACTIVE' ? t('customerBookings.youDontHaveAny') : t('customerBookings.nothingHereYet')}
-          message={tab === 'ACTIVE' ? t('customerBookings.whenYouAskFor') : t('customerBookings.finishedAndCancelledJobs')}
-          actionLabel={tab === 'ACTIVE' ? t('customerBookings.findAService') : undefined}
-          onAction={tab === 'ACTIVE' ? () => router.push('/(customer)/(home)' as any) : undefined}
+      <SegmentedTabs
+        tabs={[{ id: 'ACTIVE', label: t('customerBookings.active') }, { id: 'PROJECTS', label: t('project.tab') }, { id: 'PAST', label: t('customerBookings.past') }]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === 'PROJECTS' ? <ProjectList viewer="customer" /> : loading && !items ? <LoadingState /> : error && !items ? <ErrorState message={error} onRetry={reload} /> : (
+        <FlatList
+          data={shown}
+          keyExtractor={(j) => j.id}
+          renderItem={({ item, index }) => (
+            <Entrance index={index}>
+              <JobCard job={item} viewer="customer" locale={locale} onPress={() => router.push(`/(customer)/(home)/job/${item.id}` as any)} />
+            </Entrance>
+          )}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ flexGrow: 1 }}
+          initialNumToRender={8}
+          windowSize={7}
+          onEndReached={() => void more()}
+          onEndReachedThreshold={0.4}
+          refreshControl={<RefreshControl refreshing={loading && !!items} onRefresh={reload} tintColor={theme.colors.primary} />}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={theme.colors.primary} style={{ margin: 16 }} /> : moreError ? <Button title={t('sharedSos.tryAgain')} variant="ghost" onPress={() => void more()} /> : null}
+          ListEmptyComponent={loadingMore || (hasMore && !moreError) ? null : (
+            <EmptyState
+              icon="calendar-outline"
+              title={tab === 'ACTIVE' ? t('customerBookings.youDontHaveAny') : t('customerBookings.nothingHereYet')}
+              message={tab === 'ACTIVE' ? t('customerBookings.whenYouAskFor') : t('customerBookings.finishedAndCancelledJobs')}
+              actionLabel={tab === 'ACTIVE' ? t('customerBookings.findAService') : undefined}
+              onAction={tab === 'ACTIVE' ? () => router.push('/(customer)/(home)' as any) : undefined}
+            />
+          )}
         />
-      ) : shown.map((job) => (
-        <TouchableOpacity key={job.id} onPress={() => router.push(`/(customer)/(home)/job/${job.id}` as any)} activeOpacity={0.8} accessibilityRole="button"
-          style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.xl, padding: 16, marginBottom: 14, flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name={statusIcon(job.status)} size={26} color={job.status === 'CANCELLED' ? theme.colors.error : theme.colors.primary} />
-          <View style={{ flex: 1, marginHorizontal: 14 }}>
-            <Text variant="bodyLarge" weight="bold" color={theme.colors.textPrimary} numberOfLines={2}>{job.title ?? job.description}</Text>
-            <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 2 }}>{statusSentence(job.status, 'customer', job.assignedWorker?.user.name)}</Text>
-            <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{new Date(job.createdAt).toLocaleDateString()}</Text>
-          </View>
-          <DirIcon name="chevron-forward" size={20} color={theme.colors.textTertiary} />
-        </TouchableOpacity>
-      ))}
+      )}
     </Screen>
   );
 }

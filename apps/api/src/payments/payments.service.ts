@@ -11,6 +11,8 @@ import { LedgerService } from '../money/ledger.service';
 import { CountryConfigService } from '../money/country-config.service';
 
 const CASH_DONE_STATUSES = ['AWAITING_CONFIRMATION', 'COMPLETED'];
+/** Hours after the professional marks cash received. */
+export const CASH_REMINDER_HOURS = [2, 12, 23];
 
 /**
  * Cash on completion (doc 22 §11.8, doc 25 D13):
@@ -129,11 +131,11 @@ export class PaymentsService {
   }
 
   /** "I didn't pay that" / "the amount is wrong": no commission; ops sorts it out (F6). */
-  async disputePayment(paymentId: string, customerId: string, reason: string) {
+  async disputePayment(paymentId: string, customerId: string, reason: string, claimedAmount?: number) {
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId }, include: { jobRequest: { select: { id: true, customerId: true, assignedWorkerId: true, title: true } } } });
     if (!payment || payment.jobRequest.customerId !== customerId) throw new NotFoundException('Payment not found');
     const dispute = await this.prisma.$transaction(async (tx) => {
-      const r = await tx.payment.updateMany({ where: { id: paymentId, status: 'MARKED_BY_WORKER' }, data: { status: 'DISPUTED' } });
+      const r = await tx.payment.updateMany({ where: { id: paymentId, status: 'MARKED_BY_WORKER' }, data: { status: 'DISPUTED', claimedAmount } });
       if (r.count === 0) throw new ConflictException({ code: 'PAYMENT_NOT_PENDING', message: 'This payment can no longer be disputed here. Please contact support.' });
       return tx.dispute.create({
         data: { jobRequestId: payment.jobRequestId, raisedById: customerId, category: 'PAYMENT', reason: reason.trim(), paymentId, amountHeld: payment.amount },
@@ -148,6 +150,33 @@ export class PaymentsService {
     }
     this.realtime.emitToUsers([customerId, payment.jobRequest.assignedWorkerId ?? ''], 'job.updated', { jobId: payment.jobRequestId });
     return { paymentId, status: 'DISPUTED', disputeId: dispute.id };
+  }
+
+  /**
+   * The customer who hasn't answered "did you pay?" is asked again after 2, 12 and 23 hours
+   * (doc 26 9.2). A late sweep sends only the newest reminder that is due.
+   */
+  async remindDue(now = new Date()): Promise<number> {
+    const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600_000);
+    const due = await this.prisma.payment.findMany({
+      where: { method: 'CASH', status: 'MARKED_BY_WORKER', OR: CASH_REMINDER_HOURS.map((h, i) => ({ reminderStage: { lt: i + 1 }, markedAt: { lte: hoursAgo(h) } })) },
+      select: { id: true, markedAt: true, reminderStage: true, amount: true, currency: true, jobRequestId: true, jobRequest: { select: { customerId: true, title: true } } },
+      take: 100,
+    });
+    let n = 0;
+    for (const p of due) {
+      const stage = CASH_REMINDER_HOURS.filter((h) => p.markedAt! <= hoursAgo(h)).length;
+      // Conditional: another instance, or a confirmation, may have got there first.
+      const claimed = await this.prisma.payment.updateMany({ where: { id: p.id, status: 'MARKED_BY_WORKER', reminderStage: p.reminderStage }, data: { reminderStage: stage } });
+      if (!claimed.count) continue;
+      await this.notifications.notify({
+        type: 'payment.cash_marked', userIds: [p.jobRequest.customerId], eventKey: `payment.reminder:${p.id}:${stage}`,
+        params: { title: p.jobRequest.title ?? 'your job', price: { minor: p.amount, currency: p.currency } },
+        data: { url: routes.customerJob(p.jobRequestId), jobId: p.jobRequestId },
+      });
+      n++;
+    }
+    return n;
   }
 
   /** Cash marked but not confirmed for CASH_AUTO_CONFIRM_HOURS, no open dispute: confirm it. */

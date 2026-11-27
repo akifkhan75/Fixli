@@ -42,6 +42,7 @@ import { SafetyModule } from './safety/safety.module';
 import { MoneyModule } from './money/money.module';
 import { SmsModule } from './sms/sms.module';
 import { FeatureGuard } from './common/features/feature.guard';
+import { ProjectsModule } from './projects/projects.module';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { FeatureGuard } from './common/features/feature.guard';
     SafetyModule,
     MoneyModule,
     SmsModule,
+    ProjectsModule,
   ],
   controllers: [AppController, AppConfigController],
   providers: [

@@ -37,16 +37,21 @@ export class EarningsService {
   constructor(private readonly prisma: PrismaService, private readonly countries: CountryConfigService) {}
 
   private async totals(workerId: string, since: Date) {
-    const [paid, commission] = await Promise.all([
+    const [paid, commission, stages] = await Promise.all([
       this.prisma.payment.aggregate({
         where: { status: 'CONFIRMED', confirmedAt: { gte: since }, jobRequest: { assignedWorkerId: workerId } },
         _sum: { amount: true }, _count: true,
       }),
       this.prisma.ledgerEntry.aggregate({ where: { workerId, type: 'COMMISSION_OWED', createdAt: { gte: since } }, _sum: { amount: true } }),
+      // Project stages paid in the period (card or direct) are earnings too.
+      this.prisma.projectPayment.aggregate({
+        where: { status: 'RELEASED', releasedAt: { gte: since }, milestone: { project: { awardedWorkerId: workerId } } },
+        _sum: { amount: true }, _count: true,
+      }),
     ]);
-    const gross = paid._sum.amount ?? 0;
+    const gross = (paid._sum.amount ?? 0) + (stages._sum.amount ?? 0);
     const fee = commission._sum.amount ?? 0;
-    return { gross, commission: fee, net: gross - fee, jobs: paid._count };
+    return { gross, commission: fee, net: gross - fee, jobs: paid._count + stages._count };
   }
 
   async summary(workerId: string, period: 'week' | 'month' = 'week', now = new Date()) {

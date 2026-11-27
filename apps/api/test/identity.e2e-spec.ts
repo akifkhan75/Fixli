@@ -27,7 +27,7 @@ describe('Identity: OTP signup & password reset (e2e)', () => {
   beforeAll(async () => {
     // Config is validated when AppModule is imported, so switch OTP on here rather than via process.env.
     const mod = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(SMS_PROVIDER).useValue({ configured: true, send: async (phone: string, text: string) => { inbox.push({ phone, text }); return { delivered: true }; } })
+      .overrideProvider(SMS_PROVIDER).useValue({ configured: true, send: async (phone: string, text: string) => { inbox.push({ phone, text }); return { ok: true }; } })
       .compile();
     app = mod.createNestApplication();
     app.setGlobalPrefix('api');

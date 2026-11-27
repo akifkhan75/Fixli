@@ -5,6 +5,8 @@ Fixli is an advanced platform (built as a Turborepo Monorepo) designed to bridge
 ## Features
 
 -   **Dual User Roles:** Separate, feature-rich interfaces for Customers and Workers.
+-   **Projects:** New builds, renovations and installations with prices from professionals and companies, payment stages, materials and site visits (docs/30).
+-   **Easy for everyone:** Sign in with a texted code, picture choices, read-aloud and voice input.
 -   **AI Service Analysis:** Customers describe their needs in natural language, and the Gemini API analyzes the request to categorize it, determine urgency, and find matching professionals.
 -   **Live GPS Tracking:** Customers can track workers in real-time as they approach the job site.
 -   **Worker Portfolio & Verification:** Visual gallery for workers to show past work and UI for document verification.

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
+import { useSetupNext } from '../../../src/hooks/useSetupNext';
+import { StepHeader } from '../../../src/components/ds/StepHeader';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -20,6 +21,7 @@ const RADII = () => ([{ id: '3', label: t('workerSetupArea.3Km') }, { id: '5', l
 export default function AreaScreen() {
   const theme = useTheme();
   const me = useApi(api.getWorkerMe);
+  const goNext = useSetupNext();
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [label, setLabel] = useState('');
   const [radius, setRadius] = useState<string[]>(['10']);
@@ -66,14 +68,13 @@ export default function AreaScreen() {
     setSaving(true);
     setError(undefined);
     try {
-      await api.patchWorkerMe({ serviceLat: coords.latitude, serviceLng: coords.longitude, serviceAreaLabel: label.trim() || undefined, serviceRadius: Number(radius[0] ?? 10) });
-      router.back();
+      goNext(await api.patchWorkerMe({ serviceLat: coords.latitude, serviceLng: coords.longitude, serviceAreaLabel: label.trim() || undefined, serviceRadius: Number(radius[0] ?? 10) }));
     } catch (e) { setError(friendlyError(e)); } finally { setSaving(false); }
   };
 
   return (
     <Screen title={t('workerSetupArea.whereYouWork')} back footer={<Button title={t('sharedEditProfile.save')} size="lg" variant="primary" loading={saving} disabled={saving || !coords} onPress={save} />}>
-      <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 16 }}>{t('workerSetupArea.standAtThePlace')}</Text>
+      <StepHeader question={t('workerSetupArea.question')} help={t('workerSetupArea.standAtThePlace')} />
       <Button title={coords ? t('sharedAddressEdit.locationSavedUpdateIt') : t('sharedAddressEdit.useMyCurrentLocation')} variant={coords ? 'secondary' : 'primary'} size="lg" loading={locating} disabled={locating} onPress={locate}
         leftIcon={<Ionicons name="navigate" size={20} color={coords ? theme.colors.primary : '#FFF'} />} />
       {locError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{locError}</Text> : null}

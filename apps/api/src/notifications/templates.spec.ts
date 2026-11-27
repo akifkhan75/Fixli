@@ -3,7 +3,7 @@ import { NotificationType, render } from './templates';
 const TYPES = [...new Set((require('fs').readFileSync(require.resolve('./templates.ts'), 'utf8').match(/^  \| '([a-z_.]+)'/gm) as string[]).map((l) => l.replace(/^  \| '|'$/g, '')))] as NotificationType[];
 const params = {
   title: 'Fix tap', worker: 'Ali', sender: 'Sara', area: 'Gulshan', distance: 2, minutes: 2, doc: 'ID', status: 'RESOLVED', reason: 'wrong ref',
-  price: { minor: 150000, currency: 'PKR' }, commission: { minor: 15000, currency: 'PKR' },
+  price: { minor: 150000, currency: 'PKR' }, stage: 'Wiring', date: '2027-01-05', commission: { minor: 15000, currency: 'PKR' },
 };
 
 describe('notification templates', () => {

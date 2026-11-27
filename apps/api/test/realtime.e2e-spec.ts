@@ -149,11 +149,12 @@ maybe('Realtime + notifications across instances (e2e)', () => {
     expect(cust.got.find((e) => e.type === 'offers.updated')!.data).toEqual({ jobId });
     expect(cust.got.find((e) => e.type === 'notification.created')!.data.title).toBe('آپ کو قیمت ملی');
 
-    // Revising the price refreshes the list but does not buzz the customer again.
+    // A revised price is news too: the list refreshes and the customer is told once more.
     const before = await prisma.notification.count({ where: { userId: ids.cust } });
     await request(A.getHttpServer()).post(`/api/job-requests/${jobId}/offers`).set(as('pro')).send({ amount: 140000 }).expect(201);
     await waitFor(() => cust.got.filter((e) => e.type === 'offers.updated').length >= 2);
-    expect(await prisma.notification.count({ where: { userId: ids.cust } })).toBe(before);
+    await A.get(NotificationService).idle();
+    expect(await prisma.notification.count({ where: { userId: ids.cust } })).toBe(before + 1);
   });
 
   it('booking tells the chosen worker, quietly tells the other one, and updates both screens', async () => {

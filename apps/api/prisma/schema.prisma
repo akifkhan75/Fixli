@@ -141,6 +141,7 @@ model User {
   favoriteWorkers FavoriteWorker[]
   trustedContacts TrustedContact[]
   incidents       Incident[]       @relation("IncidentsReported")
+  projects        Project[]
 
   @@index([email])
 }
@@ -191,6 +192,7 @@ model ServiceCategory {
   subscriptions SubscriptionPlan[]
   priceBands    PriceBand[]
   jobs          JobRequest[]
+  projects      Project[]
 }
 
 model Service {
@@ -224,6 +226,9 @@ model Worker {
   /// Show initials instead of the photo until a customer has booked this worker.
   hidePhotoUntilBooked Boolean          @default(false)
   hasInsurance         Boolean          @default(false)
+  /// Set when this account is a company or crew rather than one person.
+  businessName         String?
+  teamSize             Int?
   equipment            String[]
   isOnline             Boolean          @default(false)
   /// What this worker owes Fixli in commission (minor units, >= 0 in normal use).
@@ -257,8 +262,11 @@ model Worker {
   LedgerEntry   LedgerEntry[]
   Settlement    Settlement[]
   favoritedBy   FavoriteWorker[]
+  projectBids   ProjectBid[]
+  projects      Project[]
 
   @@index([activationStatus])
+  @@index([activationStatus, serviceLat, serviceLng])
 }
 
 model FavoriteWorker {
@@ -356,6 +364,7 @@ model WorkerService {
   category   ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@id([workerId, categoryId])
+  @@index([categoryId])
 }
 
 model JobRequest {
@@ -436,6 +445,8 @@ model JobRequest {
 
   @@unique([customerId, idempotencyKey])
   @@index([customerId])
+  @@index([customerId, createdAt])
+  @@index([assignedWorkerId, status])
   @@index([status])
   @@index([status, categoryId])
 }
@@ -532,10 +543,13 @@ model ChangeOrder {
   updatedAt     DateTime   @updatedAt
 }
 
+/// About a job or a project: exactly one of jobRequestId / projectId is set.
 model Review {
   id           String         @id @default(cuid())
-  jobRequestId String
-  jobRequest   JobRequest     @relation(fields: [jobRequestId], references: [id])
+  jobRequestId String?
+  jobRequest   JobRequest?    @relation(fields: [jobRequestId], references: [id], onDelete: Restrict)
+  projectId    String?
+  project      Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
   reviewerId   String
   reviewer     User           @relation("ReviewsGiven", fields: [reviewerId], references: [id])
   targetId     String
@@ -551,6 +565,7 @@ model Review {
   createdAt    DateTime       @default(now())
 
   @@unique([jobRequestId, reviewerId])
+  @@unique([projectId, reviewerId])
   @@index([targetId])
 }
 
@@ -573,13 +588,14 @@ model Payment {
   autoConfirmed  Boolean    @default(false)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
-
-  /// One payment per job per method: marking cash twice returns the same row.
-  @@unique([jobRequestId, method])
   /// Amount the customer says they actually paid, when they dispute the worker's figure.
   claimedAmount  Int?
   /// 0 none, 1 (+2h), 2 (+12h), 3 (+23h) reminders sent to the customer.
   reminderStage  Int        @default(0)
+
+  /// One payment per job per method: marking cash twice returns the same row.
+  @@unique([jobRequestId, method])
+  @@index([status, markedAt])
 }
 
 model LedgerEntry {
@@ -621,31 +637,41 @@ model Settlement {
   @@index([status, createdAt])
 }
 
+/// About a job or a project milestone: exactly one of jobRequestId / projectId is set.
 model Dispute {
-  id           String     @id @default(cuid())
-  jobRequestId String
-  jobRequest   JobRequest @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  id           String      @id @default(cuid())
+  jobRequestId String?
+  jobRequest   JobRequest? @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestoneId  String?
   raisedById   String
-  raisedBy     User       @relation("DisputesRaised", fields: [raisedById], references: [id])
-  category     String     @default("OTHER")
+  raisedBy     User        @relation("DisputesRaised", fields: [raisedById], references: [id])
+  category     String      @default("OTHER")
   reason       String
   description  String?
   amountHeld   Int?
   evidenceKeys String[]
   /// Set when the dispute is about a cash payment ("I didn't pay that").
   paymentId    String?
-  status       String     @default("OPEN") // OPEN, IN_REVIEW, RESOLVED, CLOSED
+  status       String      @default("OPEN") // OPEN, IN_REVIEW, RESOLVED, CLOSED
   resolution   String?
   resolvedById String?
   resolvedAt   DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([projectId])
+  @@index([jobRequestId, status])
+  @@index([status, createdAt])
 }
 
 model Conversation {
   id            String      @id @default(cuid())
   jobRequestId  String?
   jobRequest    JobRequest? @relation(fields: [jobRequestId], references: [id])
+  projectId     String?
+  project       Project?    @relation(fields: [projectId], references: [id])
   lastMessageAt DateTime?
   isReadOnly    Boolean     @default(false)
   /// When it became read-only (some days after the job ended). A dispute reopens it.
@@ -656,6 +682,8 @@ model Conversation {
   participants User[]
   messages     Message[]
   blocks       Block[]
+
+  @@index([projectId])
 }
 
 model Message {
@@ -1083,4 +1111,233 @@ model PhoneVerification {
   consumedAt DateTime?
 
   @@index([phone, purpose, createdAt])
+}
+
+// ── Projects: larger work (new builds, renovations, installations) ──────────
+
+enum ProjectStatus {
+  DRAFT
+  OPEN
+  AWARDED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectWorkType {
+  NEW_BUILD
+  RENOVATION
+  INSTALLATION
+  MAINTENANCE
+}
+
+enum ProjectPropertyType {
+  HOUSE
+  APARTMENT
+  SHOP
+  OFFICE
+  OTHER
+}
+
+/// ESCROW: the customer pays each stage into Fixli by card before it starts.
+/// DIRECT: the customer pays the professional themselves (cash/bank) after approving a stage.
+enum ProjectPaymentMode {
+  ESCROW
+  DIRECT
+}
+
+enum MilestoneStatus {
+  PENDING
+  /// ESCROW only: the money is held.
+  FUNDED
+  IN_PROGRESS
+  SUBMITTED
+  /// DIRECT only: work accepted, payment to the professional still to be recorded.
+  APPROVED
+  /// Done and paid.
+  RELEASED
+  DISPUTED
+  CANCELLED
+}
+
+model Project {
+  id                  String              @id @default(cuid())
+  customerId          String
+  customer            User                @relation(fields: [customerId], references: [id])
+  categoryId          String
+  category            ServiceCategory     @relation(fields: [categoryId], references: [id])
+  title               String
+  description         String
+  workType            ProjectWorkType
+  propertyType        ProjectPropertyType @default(HOUSE)
+  status              ProjectStatus       @default(DRAFT)
+  paymentMode         ProjectPaymentMode  @default(DIRECT)
+  /// Address snapshot: workers see area/city until they are hired.
+  addressId           String?
+  location            String?
+  latitude            Float?
+  longitude           Float?
+  area                String?
+  city                String?
+  /// Integer minor units of `currency`; both optional ("not sure yet").
+  budgetMin           Int?
+  budgetMax           Int?
+  currency            String
+  /// ASAP | THIS_MONTH | LATER
+  startWhen           String              @default("ASAP")
+  /// [{ "title": "...", "percent": 30 }] suggested stages; a starting point for bids.
+  suggestedMilestones Json?
+  /// What the customer said, as text they saw and confirmed.
+  audioKey            String?
+  audioTranscript     String?
+  photoKeys           String[]
+  awardedWorkerId     String?
+  awardedWorker       Worker?             @relation(fields: [awardedWorkerId], references: [id])
+  awardedBidId        String?
+  agreedAmount        Int?
+  idempotencyKey      String?
+  publishedAt         DateTime?
+  awardedAt           DateTime?
+  completedAt         DateTime?
+  cancelReason        String?
+  cancelledById       String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  bids          ProjectBid[]
+  milestones    ProjectMilestone[]
+  materials     ProjectMaterial[]
+  visits        ProjectVisit[]
+  invites       ProjectInvite[]
+  conversations Conversation[]
+  reviews       Review[]
+  disputes      Dispute[]
+
+  @@unique([customerId, idempotencyKey])
+  @@index([customerId, createdAt])
+  @@index([status, categoryId])
+  @@index([awardedWorkerId, status])
+}
+
+/// A professional who was told about an open project (who may therefore see and bid on it).
+model ProjectInvite {
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId   String
+  distanceKm Float?
+  declinedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@id([projectId, workerId])
+  @@index([workerId, createdAt])
+}
+
+model ProjectBid {
+  id           String      @id @default(cuid())
+  projectId    String
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId     String
+  worker       Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  totalAmount  Int
+  currency     String
+  durationDays Int
+  note         String?
+  /// [{ "title": "...", "amount": 100000 }]; amounts add up to totalAmount.
+  milestones   Json
+  status       OfferStatus @default(PENDING)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([projectId, workerId])
+  @@index([projectId, status])
+  @@index([workerId, status])
+}
+
+model ProjectMilestone {
+  id            String          @id @default(cuid())
+  projectId     String
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  position      Int
+  title         String
+  amount        Int
+  status        MilestoneStatus @default(PENDING)
+  evidenceKeys  String[]
+  submittedNote String?
+  changesNote   String?
+  fundedAt      DateTime?
+  startedAt     DateTime?
+  submittedAt   DateTime?
+  approvedAt    DateTime?
+  releasedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  payments ProjectPayment[]
+
+  @@unique([projectId, position])
+  @@index([status, submittedAt])
+  @@index([status, approvedAt])
+}
+
+/// Money for one project stage: a card charge held by Fixli (CARD) or a direct payment (DIRECT).
+model ProjectPayment {
+  id                String           @id @default(cuid())
+  milestoneId       String
+  milestone         ProjectMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  /// CARD | DIRECT
+  method            String
+  amount            Int
+  currency          String
+  /// PENDING, HELD, RELEASED, REFUND_PENDING, REFUNDED, FAILED, EXPIRED
+  status            String
+  /// Fixli's fee, set when the money is released.
+  commission        Int?
+  provider          String?
+  /// Checkout session id.
+  providerRef       String?          @unique
+  /// The provider's payment id, needed to refund.
+  providerPaymentId String?
+  checkoutUrl       String?
+  checkoutExpiresAt DateTime?
+  paidAt            DateTime?
+  releasedAt        DateTime?
+  refundedAt        DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([milestoneId, status])
+  @@index([status, releasedAt])
+}
+
+/// Materials list (bill of quantities) for a project.
+model ProjectMaterial {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  quantity   Float
+  unit       String?
+  /// customer | worker: who buys it
+  providedBy String
+  isReady    Boolean  @default(false)
+  addedById  String
+  createdAt  DateTime @default(now())
+
+  @@index([projectId])
+}
+
+/// A planned site visit; long work takes several.
+model ProjectVisit {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scheduledAt DateTime
+  note        String?
+  /// PLANNED, DONE, CANCELLED
+  status      String   @default("PLANNED")
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId, scheduledAt])
 }

@@ -34,6 +34,12 @@ export class ChatController {
     return this.chatService.conversationForJob(jobId, userId);
   }
 
+  @Get('by-project/:projectId')
+  @ApiOperation({ summary: "The project's chat (opens once a professional is hired)" })
+  forProject(@Param('projectId') projectId: string, @CurrentUser('id') userId: string) {
+    return this.chatService.conversationForProject(projectId, userId);
+  }
+
   @Get(':id/messages')
   @ApiOperation({ summary: 'Messages in a conversation you belong to' })
   @ApiQuery({ name: 'cursor', required: false })
