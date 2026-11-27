@@ -73,7 +73,10 @@ describe('Authorization (e2e)', () => {
     electricalId = (await prisma.serviceCategory.findUniqueOrThrow({ where: { name: 'ELECTRICAL' } })).id;
     for (const who of ['custA', 'custB']) {
       addressIds[who] = (await prisma.address.create({
-        data: { userId: ids[who], streetAddress: `House 1 ${who}`, city: 'Karachi', area: 'Gulshan', country: 'PK', isDefault: true },
+        data: {
+          userId: ids[who], streetAddress: `House 1 ${who}`, city: 'Karachi', area: 'Gulshan', country: 'PK',
+          latitude: 24.92, longitude: 67.09, isDefault: true,
+        },
       })).id;
     }
   });
