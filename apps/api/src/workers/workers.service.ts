@@ -166,8 +166,19 @@ export class WorkersService {
       dto.equipment === undefined
         ? undefined
         : [...new Map(dto.equipment.map((e) => e.trim()).filter(Boolean).map((e) => [e.toLowerCase(), e.slice(0, 60)])).values()].slice(0, 30);
-    await this.prisma.worker.update({ where: { id: userId }, data: { ...dto, businessName, ...(equipment !== undefined ? { equipment } : {}) } });
+    // Going offline drops the last reported live position so stale coordinates never match.
+    const offline = dto.isOnline === false ? { currentLat: null, currentLng: null, locationUpdatedAt: null } : {};
+    await this.prisma.worker.update({ where: { id: userId }, data: { ...dto, businessName, ...(equipment !== undefined ? { equipment } : {}), ...offline } });
     return this.findOwn(userId);
+  }
+
+  /** A worker's live position while online (roadside / immediate matching). Ignored if offline. */
+  async setLocation(userId: string, lat: number, lng: number) {
+    const r = await this.prisma.worker.updateMany({
+      where: { id: userId, isOnline: true },
+      data: { currentLat: lat, currentLng: lng, locationUpdatedAt: new Date() },
+    });
+    return { accepted: r.count > 0 };
   }
 
   async setSkills(userId: string, dto: SetSkillsDto) {

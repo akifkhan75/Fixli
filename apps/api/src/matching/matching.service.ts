@@ -6,7 +6,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
-import { availableDuring, matchScore } from './rules';
+import { availableDuring, matchScore, requiresTow } from './rules';
 
 interface Candidate {
   id: string;
@@ -44,14 +44,17 @@ export class MatchingService {
       where: { id: jobId },
       select: {
         id: true, status: true, customerId: true, categoryId: true, latitude: true, longitude: true, city: true,
-        area: true, title: true, scheduledFrom: true, scheduledTo: true, isEmergency: true,
+        area: true, title: true, scheduledFrom: true, scheduledTo: true, isEmergency: true, issueCodes: true, addressId: true,
       },
     });
     if (!job || job.status !== 'MATCHES_FOUND' || !job.categoryId) return 0;
 
     const factor = round === 2 ? this.num('REMATCH_RADIUS_FACTOR', 1.5) : 1;
     const limit = this.num('MATCH_NOTIFY_LIMIT', 10);
-    const candidates = await this.findCandidates(job, factor);
+    // Only a current-location pin (no saved address) and soon-to-start uses a worker's live position.
+    // Saved-address jobs — including SOS — keep matching by the worker's declared service area.
+    const useLive = job.addressId == null && (job.scheduledFrom ?? new Date()).getTime() <= Date.now() + 3600_000;
+    const candidates = await this.findCandidates(job, factor, { useLive, requireTow: requiresTow(job.issueCodes) });
 
     const from = job.scheduledFrom ?? new Date();
     const to = job.scheduledTo ?? new Date(from.getTime() + 2 * 3600_000);
@@ -107,7 +110,10 @@ export class MatchingService {
   private async findCandidates(
     job: { id: string; customerId: string; categoryId: string | null; latitude: number | null; longitude: number | null; city: string | null },
     factor: number,
+    opts: { useLive: boolean; requireTow: boolean } = { useLive: false, requireTow: false },
   ): Promise<Candidate[]> {
+    const freshBefore = new Date(Date.now() - this.num('WORKER_LOCATION_FRESH_MINUTES', 15) * 60_000);
+    const towSql = opts.requireTow ? Prisma.sql`\n        AND w."canTow" = true` : Prisma.empty;
     const base = Prisma.sql`
       FROM "Worker" w
       JOIN "User" u ON u.id = w.id
@@ -117,7 +123,7 @@ export class MatchingService {
         AND w."balanceBlocked" = false
         AND u.status = 'ACTIVE'
         AND w.id <> ${job.customerId}
-        AND ${BlocksService.notBlockedSql(job.customerId)}
+        AND ${BlocksService.notBlockedSql(job.customerId)}${towSql}
         AND NOT EXISTS (SELECT 1 FROM "JobMatch" m WHERE m."jobRequestId" = ${job.id} AND m."workerId" = w.id)`;
 
     if (job.latitude != null && job.longitude != null) {
@@ -125,17 +131,28 @@ export class MatchingService {
       const lng = job.longitude;
       const latDeg = (MAX_RADIUS_KM * factor) / 111;
       const lngDeg = latDeg / Math.max(0.2, Math.cos((lat * Math.PI) / 180));
-      // Bounding box first (index), exact great-circle distance second, all in the database.
+      // For an immediate job, match from the worker's fresh live position if they have one;
+      // otherwise (or for a scheduled job) from their base service area. Computed once, reused
+      // in both the bounding box and the distance.
+      // locationUpdatedAt is a tz-naive column holding UTC wall-clock (Prisma's convention); read
+      // it back AT TIME ZONE 'UTC' so the freshness comparison is correct whatever the DB session zone.
+      const effLat = opts.useLive
+        ? Prisma.sql`(CASE WHEN (w."locationUpdatedAt" AT TIME ZONE 'UTC') >= ${freshBefore} AND w."currentLat" IS NOT NULL THEN w."currentLat" ELSE w."serviceLat" END)`
+        : Prisma.sql`w."serviceLat"`;
+      const effLng = opts.useLive
+        ? Prisma.sql`(CASE WHEN (w."locationUpdatedAt" AT TIME ZONE 'UTC') >= ${freshBefore} AND w."currentLng" IS NOT NULL THEN w."currentLng" ELSE w."serviceLng" END)`
+        : Prisma.sql`w."serviceLng"`;
+      // Bounding box first, exact great-circle distance second, all in the database.
       return this.prisma.$queryRaw<Candidate[]>`
         SELECT * FROM (
           SELECT w.id, w.rating, w."serviceRadius" AS radius, w.timezone,
             (6371 * acos(least(1, greatest(-1,
-              cos(radians(${lat})) * cos(radians(w."serviceLat")) * cos(radians(w."serviceLng") - radians(${lng}))
-              + sin(radians(${lat})) * sin(radians(w."serviceLat"))))))::float8 AS distance_km,
+              cos(radians(${lat})) * cos(radians(${effLat})) * cos(radians(${effLng}) - radians(${lng}))
+              + sin(radians(${lat})) * sin(radians(${effLat}))))))::float8 AS distance_km,
             (SELECT count(*) FROM "Review" r WHERE r."targetId" = w.id) AS rating_count
           ${base}
-            AND w."serviceLat" BETWEEN ${lat - latDeg} AND ${lat + latDeg}
-            AND w."serviceLng" BETWEEN ${lng - lngDeg} AND ${lng + lngDeg}
+            AND ${effLat} BETWEEN ${lat - latDeg} AND ${lat + latDeg}
+            AND ${effLng} BETWEEN ${lng - lngDeg} AND ${lng + lngDeg}
         ) c
         WHERE c.distance_km <= c.radius * ${factor}
         ORDER BY c.distance_km ASC
@@ -160,10 +177,11 @@ export class MatchingService {
   async nearestForSos(jobId: string, attempt: number): Promise<{ workerId: string; distanceKm: number | null } | null> {
     const job = await this.prisma.jobRequest.findUnique({
       where: { id: jobId },
-      select: { id: true, customerId: true, categoryId: true, latitude: true, longitude: true, city: true },
+      select: { id: true, customerId: true, categoryId: true, latitude: true, longitude: true, city: true, issueCodes: true, addressId: true },
     });
     if (!job?.categoryId) return null;
-    const candidates = await this.findCandidates(job, 1);
+    // A pin-based SOS uses the nearest worker's live position; a saved-address one keeps to base area.
+    const candidates = await this.findCandidates(job, 1, { useLive: job.addressId == null, requireTow: requiresTow(job.issueCodes) });
     if (!candidates.length) return null;
     const now = new Date();
     const [hours, busy] = await Promise.all([

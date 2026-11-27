@@ -242,6 +242,13 @@ model Worker {
   serviceLng           Float?
   serviceAreaLabel     String?
   serviceRadius        Int              @default(10)
+  /// Can carry a vehicle on a truck/trailer (self-declared). Towing jobs match only these.
+  canTow               Boolean          @default(false)
+  /// Last reported live position while online, used for immediate/roadside matching only.
+  /// Cleared when the worker goes offline. Never returned to customers.
+  currentLat           Float?
+  currentLng           Float?
+  locationUpdatedAt    DateTime?
   pricingModel         PricingModel?
   /// Integer minor units in `currency`.
   minimumCallOutFee    Int?

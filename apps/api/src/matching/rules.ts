@@ -43,6 +43,15 @@ export function matchScore(a: { distanceKm: number | null; radiusKm: number; rat
   return Math.round((0.6 * closeness + 0.4 * quality) * 10_000) / 10_000;
 }
 
+/**
+ * Common problems that need a worker who can carry the vehicle (a tow truck/trailer), not just
+ * any mechanic. Matching filters to workers who declared `canTow`. One place to add more codes.
+ */
+const TOW_ISSUES = new Set(['car_towing']);
+export function requiresTow(issueCodes: string[] | null | undefined): boolean {
+  return (issueCodes ?? []).some((c) => TOW_ISSUES.has(c));
+}
+
 /** Haversine distance in km (used for tests and for display rounding). */
 export function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const r = (x: number) => (x * Math.PI) / 180;

@@ -345,7 +345,7 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
       expect(profile.body.badges[0].verifiedAt).toBeTruthy();
       expect(profile.body.portfolio[0].photos[0]).toMatch(/\/files\/public\/portfolio\//);
       expect(profile.body).toMatchObject({ bio: 'Ten years of plumbing.', serviceAreaLabel: 'Gulshan, Karachi', ratingCount: 0, jobsCompleted: 0 });
-      expect(JSON.stringify(profile.body)).not.toMatch(/@test\.com|phone|serviceLat|serviceLng|documentKeys|verification\//);
+      expect(JSON.stringify(profile.body)).not.toMatch(/@test\.com|phone|serviceLat|serviceLng|currentLat|currentLng|locationUpdatedAt|documentKeys|verification\//);
 
       const list = await http().get('/api/workers').set(as('cust')).expect(200);
       expect(list.body.find((w: any) => w.id === ids.work)).toBeTruthy();

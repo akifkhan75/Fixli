@@ -238,6 +238,7 @@ export const CATALOG: CatalogCategory[] = [
     issues: [
       i('car_wont_start', 'Car will not start', 'گاڑی اسٹارٹ نہیں ہو رہی', 'السيارة لا تعمل'),
       i('roadside_breakdown', 'Broken down on the road', 'راستے میں گاڑی خراب ہو گئی', 'تعطلت السيارة على الطريق'),
+      i('car_towing', 'Need a tow', 'گاڑی ٹو کرانی ہے', 'بحاجة إلى سحب السيارة'),
       i('flat_tyre', 'Flat tyre or puncture', 'ٹائر پنکچر ہے', 'إطار مثقوب'),
       i('battery_dead', 'Battery dead or weak', 'بیٹری ختم یا کمزور ہے', 'البطارية فارغة أو ضعيفة'),
       i('car_overheating', 'Engine overheating', 'انجن زیادہ گرم ہو رہا ہے', 'ارتفاع حرارة المحرك'),

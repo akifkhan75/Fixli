@@ -2,7 +2,7 @@ import { Controller, Get, Param, Patch, Put, Post, Delete, Body, Query } from '@
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { WorkersService } from './workers.service';
 import {
-  CreatePortfolioDto, SetHoursDto, SetSkillsDto, SubmitVerificationDto, UpdateWorkerDto, WorkerQueryDto,
+  CreatePortfolioDto, SetHoursDto, SetSkillsDto, SubmitVerificationDto, UpdateLocationDto, UpdateWorkerDto, WorkerQueryDto,
 } from './dto/update-worker.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -32,6 +32,13 @@ export class WorkersController {
   @ApiOperation({ summary: 'Update own profile' })
   update(@CurrentUser('id') id: string, @Body() dto: UpdateWorkerDto) {
     return this.workers.update(id, dto);
+  }
+
+  @Patch('me/location')
+  @Roles('worker')
+  @ApiOperation({ summary: 'Report own live position while online (roadside / immediate matching)' })
+  setLocation(@CurrentUser('id') id: string, @Body() dto: UpdateLocationDto) {
+    return this.workers.setLocation(id, dto.latitude, dto.longitude);
   }
 
   @Put('me/skills')

@@ -49,7 +49,7 @@ interface Draft {
   slot?: Slot;
   addressId?: string;
   /** A one-off current-location pin (roadside / "I'm here now"), used instead of a saved address. */
-  pin?: { latitude: number; longitude: number; area?: string; city?: string };
+  pin?: { latitude: number; longitude: number; area?: string; city?: string; landmark?: string };
   /** Generated once per request: resending after a dropped connection never creates a second job. */
   idempotencyKey: string;
 }
@@ -151,6 +151,8 @@ export default function RequestServiceScreen() {
           longitude: pos.coords.longitude,
           area: place?.district ?? place?.subregion ?? undefined,
           city: place?.city ?? place?.region ?? undefined,
+          // Keep any landmark the person already typed when they re-pin.
+          landmark: d.pin?.landmark,
         },
         addressId: undefined,
       });
@@ -217,7 +219,7 @@ export default function RequestServiceScreen() {
         audioUploadId: d.voice.audioUploadId,
         audioTranscript: d.voice.audioUploadId ? d.voice.transcript.trim() || undefined : undefined,
         ...(d.pin
-          ? { latitude: d.pin.latitude, longitude: d.pin.longitude, area: d.pin.area, city: d.pin.city }
+          ? { latitude: d.pin.latitude, longitude: d.pin.longitude, area: d.pin.area, city: d.pin.city, landmark: d.pin.landmark?.trim() || undefined }
           : { addressId: address!.id }),
         when: d.when,
         date: d.when === 'SCHEDULED' ? d.date : undefined,
@@ -392,6 +394,12 @@ export default function RequestServiceScreen() {
           </TouchableOpacity>
           {locError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginBottom: 8 }}>{locError}</Text> : null}
           {locDenied ? <Button title={t('sharedAddressEdit.openSettings')} variant="ghost" onPress={() => Linking.openSettings()} /> : null}
+          {d.pin ? (
+            <View style={{ marginBottom: 8 }}>
+              <TextInput label={t('customerRequestService.landmarkForPin')} placeholder={t('sharedAddressEdit.eGOppositeThe')} value={d.pin.landmark ?? ''} onChangeText={(v) => set({ pin: { ...d.pin!, landmark: v } })} maxLength={200} />
+              <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 4 }}>{t('customerRequestService.landmarkHint')}</Text>
+            </View>
+          ) : null}
 
           {addresses.data?.length ? <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 8, marginBottom: 10 }}>{t('customerRequestService.orASavedAddress')}</Text> : null}
           {addresses.loading && !addresses.data ? <LoadingState /> : (addresses.data ?? []).map((a) => {

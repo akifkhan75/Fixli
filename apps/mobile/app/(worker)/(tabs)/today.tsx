@@ -16,6 +16,7 @@ import { useI18n } from '../../../src/hooks/useI18n';
 import { formatMoney } from '../../../src/utils/money';
 import { NotificationBell } from '../../../src/components/ds/NotificationBell';
 import { useLiveReload } from '../../../src/hooks/useRealtime';
+import { useLocationHeartbeat } from '../../../src/hooks/useLocationHeartbeat';
 import { useNotifications } from '../../../src/hooks/useNotifications';
 import { EmptyState, ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
 import { statusSentence } from '../../../src/utils/jobStatus';
@@ -52,6 +53,8 @@ export default function TodayScreen() {
   const { askForPush } = useNotifications();
 
   const w = me.data;
+  // While online, broadcast live position so roadside / immediate requests match from here.
+  useLocationHeartbeat(!!w?.isOnline);
   const setOnline = async (value: boolean) => {
     setToggling(true);
     setToggleError(undefined);
