@@ -12,7 +12,8 @@ import { initSentry } from './observability/sentry';
 async function bootstrap() {
   initSentry(); // first, so a failure while starting is reported too
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // rawBody: the card provider signs the exact bytes it sends (payment webhook).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   const isProd = process.env.NODE_ENV === 'production';
 
   // Behind a load balancer the client IP comes from X-Forwarded-For; needed for per-IP rate limits.

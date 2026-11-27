@@ -247,7 +247,11 @@ export function ChatThreadScreen() {
   return (
     <Screen title={other?.name ?? t('chatListScreen.chat')} back scroll={false} footer={composer}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 6 }}>
-        {meta?.job ? (
+        {meta?.project ? (
+          <TouchableOpacity style={{ flex: 1 }} accessibilityRole="button" onPress={() => router.push((me?.type === 'worker' ? routes.workerProject(meta.project!.id) : routes.customerProject(meta.project!.id)) as any)}>
+            <Text variant="bodySmall" color={theme.colors.primaryText} numberOfLines={1}>{meta.project.title} ›</Text>
+          </TouchableOpacity>
+        ) : meta?.job ? (
           <TouchableOpacity style={{ flex: 1 }} accessibilityRole="button" onPress={() => router.push(routes.jobFor(meta.job!.id, me?.type === 'worker' ? 'worker' : 'customer') as any)}>
             <Text variant="bodySmall" color={theme.colors.primaryText} numberOfLines={1}>{meta.job.title ?? t('chatThread.viewJob')} ›</Text>
           </TouchableOpacity>

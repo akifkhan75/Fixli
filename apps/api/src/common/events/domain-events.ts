@@ -9,7 +9,8 @@ export interface DomainEventMap {
   /** A worker answered a direct request (accepted or declined). SOS dispatch listens. */
   'job.direct_answered': { jobId: string; workerId: string; accepted: boolean };
   'admin.verification_submitted': { caseId: string; workerId: string };
-  'admin.dispute_opened': { disputeId: string; jobId: string };
+  /** About a job or a project. */
+  'admin.dispute_opened': { disputeId: string; jobId?: string; projectId?: string };
   'admin.incident_reported': { incidentId: string; type: string };
 }
 

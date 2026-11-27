@@ -6,7 +6,7 @@ import { randomInt } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { SMS_PROVIDER, SmsProvider } from '../safety/sms.provider';
 
-export type OtpPurpose = 'SIGNUP' | 'PASSWORD_RESET';
+export type OtpPurpose = 'SIGNUP' | 'PASSWORD_RESET' | 'LOGIN';
 
 const BCRYPT_COST = process.env.NODE_ENV === 'test' ? 4 : 10;
 export const OTP_TTL_MINUTES = 10;
@@ -54,12 +54,19 @@ export class OtpService {
     // caller still sees identical limits and responses, so the endpoint reveals nothing.
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     const codeHash = await bcrypt.hash(code, BCRYPT_COST);
-    await this.prisma.$transaction([
+    const [, row] = await this.prisma.$transaction([
       // Only one live code per phone + purpose (partial unique index).
       this.prisma.phoneVerification.updateMany({ where: { phone, purpose, consumedAt: null }, data: { consumedAt: new Date() } }),
       this.prisma.phoneVerification.create({ data: { phone, purpose, codeHash, ip, expiresAt: new Date(now + OTP_TTL_MINUTES * 60_000), consumedAt: deliver ? null : new Date() } }),
     ]);
-    if (deliver) await this.sms.send(phone, `Your Fixli code is ${code}. It expires in ${OTP_TTL_MINUTES} minutes. Never share it with anyone.`);
+    if (deliver) {
+      const sent = await this.sms.send(phone, `Your Fixli code is ${code}. It expires in ${OTP_TTL_MINUTES} minutes. Never share it with anyone.`);
+      if (this.sms.configured && !sent.ok) {
+        // Don't leave the person waiting for a code that never left, or make them sit out the cooldown.
+        await this.prisma.phoneVerification.delete({ where: { id: row.id } });
+        throw new ServiceUnavailableException({ code: 'SMS_UNAVAILABLE', message: 'We cannot send codes right now. Please try again later.' });
+      }
+    }
     return { resendInSeconds: OTP_COOLDOWN_SECONDS, expiresInMinutes: OTP_TTL_MINUTES };
   }
 

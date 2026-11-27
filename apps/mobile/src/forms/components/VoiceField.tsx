@@ -10,10 +10,10 @@ import { friendlyError } from '../../hooks/useApi';
 import { Text } from '../../components/ds/Text';
 import { TextInput } from '../../components/ds/TextInput';
 import { uploadAudio } from '../../services/upload';
-import { transcribeVoice } from '../../services/api';
+import { ApiError, transcribeVoice } from '../../services/api';
 import { openSettings } from '../../services/pickPhoto';
 import { useI18n } from '../../hooks/useI18n';
-import { t } from '../../i18n';
+import { PulseRings } from '../../components/motion/PulseRings';
 
 const MAX_MS = 60_000;
 const MIN_MS = 800;
@@ -37,7 +37,7 @@ interface VoiceFieldProps {
  * so the person can correct it (AI output is a suggestion). The recording itself is always kept
  * and sent to the professional, because dialect transcription is imperfect (doc 22 §6.4).
  */
-export function VoiceField({ value, onChange, locale, label = 'Tell us in your own words' }: VoiceFieldProps) {
+export function VoiceField({ value, onChange, locale, label }: VoiceFieldProps) {
   const theme = useTheme();
   const { t } = useI18n();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -45,6 +45,8 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
   const player = useAudioPlayer(value.audioUri ?? null);
   const [busy, setBusy] = useState<'upload' | null>(null);
   const [error, setError] = useState<string | undefined>();
+  /** Transcription failed but the recording is kept — show as hint, not a hard failure. */
+  const [hint, setHint] = useState<string | undefined>();
   const [denied, setDenied] = useState(false);
   const startedAt = useRef(0);
   const starting = useRef(false);
@@ -59,6 +61,7 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
     if (starting.current || busy) return;
     starting.current = true;
     setError(undefined);
+    setHint(undefined);
     setDenied(false);
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
@@ -98,10 +101,14 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
       try {
         const { text } = await transcribeVoice(id, locale);
         onChange({ audioUploadId: id, audioUri: uri, transcript: text || value.transcript });
-        if (!text) setError(t('voiceField.weCouldntHearAny'));
+        if (!text) setHint(t('voiceField.weCouldntHearAny'));
       } catch (e) {
-        // The recording still goes to the professional; only the text is missing.
-        setError(t('voiceField.yourRecordingIsStill', { error: friendlyError(e) }));
+        // The recording still goes to the professional; only auto-typing is missing.
+        const soft = e instanceof ApiError && e.code === 'AI_UNAVAILABLE';
+        const msg = soft
+          ? t('voiceField.voiceTypingUnavailable')
+          : t('voiceField.yourRecordingIsStill', { error: friendlyError(e) });
+        if (soft) setHint(msg); else setError(msg);
       }
     } catch (e) {
       setError(friendlyError(e));
@@ -115,7 +122,7 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
 
   return (
     <View>
-      <Text variant="body" weight="semibold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{label}</Text>
+      <Text variant="body" weight="semibold" color={theme.colors.textPrimary} style={{ marginBottom: 12 }}>{label ?? t('voiceField.defaultLabel')}</Text>
 
       {!value.audioUploadId ? (
         <Pressable
@@ -127,8 +134,12 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
           accessibilityHint={t('voiceField.pressAndHoldSpeak')}
           style={[styles.hold, { backgroundColor: rec.isRecording ? theme.colors.error + '18' : theme.colors.surface, borderColor: rec.isRecording ? theme.colors.error : theme.colors.border }]}
         >
-          {busy ? <ActivityIndicator color={theme.colors.primary} /> : (
-            <Ionicons name={rec.isRecording ? 'radio-button-on' : 'mic'} size={34} color={rec.isRecording ? theme.colors.error : theme.colors.primary} />
+          {busy ? <ActivityIndicator size="large" color={theme.colors.primary} /> : rec.isRecording ? (
+            <PulseRings icon="mic" size={112} />
+          ) : (
+            <View style={[styles.mic, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="mic" size={34} color={theme.colors.onPrimary} />
+            </View>
           )}
           <Text variant="bodyLarge" weight="semibold" color={theme.colors.textPrimary} style={{ marginTop: 8 }}>
             {busy ? t('voiceField.listeningToYourNote') : rec.isRecording ? t('voiceField.recordingSLetGo', { seconds }) : t('voiceField.holdToTalk')}
@@ -159,6 +170,7 @@ export function VoiceField({ value, onChange, locale, label = 'Tell us in your o
         </View>
       ) : null}
 
+      {hint ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>{hint}</Text> : null}
       {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{error}</Text> : null}
       {denied ? <TouchableOpacity onPress={openSettings} accessibilityRole="button" style={{ marginTop: 6 }}><Text variant="bodySmall" weight="semibold" color={theme.colors.primaryText}>{t('voice.openSettings')}</Text></TouchableOpacity> : null}
     </View>
@@ -169,4 +181,5 @@ const styles = StyleSheet.create({
   hold: { borderWidth: 1.5, borderRadius: 20, paddingVertical: 22, alignItems: 'center', justifyContent: 'center', minHeight: 120 },
   done: { borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  mic: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
 });

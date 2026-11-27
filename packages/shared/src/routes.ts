@@ -14,6 +14,8 @@ export const routes = {
   workerToday: () => '/(worker)/(tabs)/today',
   workerEarnings: () => '/(worker)/(tabs)/earnings',
   workerDocuments: () => '/(worker-setup)/setup/documents',
+  customerProject: (projectId: string) => `/(customer)/(home)/project/${projectId}`,
+  workerProject: (projectId: string) => `/(worker)/project/${projectId}`,
 } as const;
 
 /** Route patterns, for the app's "every link has a screen" test: `:id` stands for any segment. */
@@ -25,4 +27,6 @@ export const ROUTE_PATTERNS = [
   '/(worker)/(tabs)/today',
   '/(worker)/(tabs)/earnings',
   '/(worker-setup)/setup/documents',
+  '/(customer)/(home)/project/:id',
+  '/(worker)/project/:id',
 ] as const;

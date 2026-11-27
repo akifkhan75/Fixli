@@ -9,18 +9,24 @@ import { useLiveReload } from '../../../src/hooks/useRealtime';
 import { Screen } from '../../../src/components/ds/Screen';
 import { Text } from '../../../src/components/ds/Text';
 import { Button } from '../../../src/components/ds/Button';
-import { ChipChoice } from '../../../src/components/ds/ChipChoice';
+import { SegmentedTabs } from '../../../src/components/ds/SegmentedTabs';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AnimatedNumber } from '../../../src/components/motion/AnimatedNumber';
 import { SettleUpForm } from '../../../src/components/ds/SettleUpForm';
 import { EmptyState, ErrorState, LoadingState } from '../../../src/components/ds/EmptyState';
 import { formatMoney } from '../../../src/utils/money';
 import * as api from '../../../src/services/api';
 import { t, tn } from '../../../src/i18n';
 
-const ENTRY_LABEL: Record<api.LedgerItem['type'], string> = {
-  COMMISSION_OWED: 'Fixli fee',
-  COMMISSION_SETTLED: 'You paid Fixli',
-  ADJUSTMENT: 'Correction',
-};
+function entryLabel(type: api.LedgerItem['type']) {
+  switch (type) {
+    case 'COMMISSION_OWED': return t('ledger.commission');
+    case 'COMMISSION_SETTLED': return t('ledger.settled');
+    case 'ADJUSTMENT': return t('ledger.adjustment');
+    case 'ESCROW_CREDIT': return t('ledger.escrowCredit');
+    default: return t('workerEarnings.entry');
+  }
+}
 
 /** Real numbers only: what customers paid you, Fixli's fee, and what you still owe Fixli. */
 export default function WorkerEarningsScreen() {
@@ -55,20 +61,22 @@ export default function WorkerEarningsScreen() {
 
   return (
     <Screen title={t('worker.earnings')} onRefresh={reloadAll} refreshing={summary.loading && !!s}>
-      <ChipChoice options={[{ id: 'week', label: t('workerEarnings.thisWeek') }, { id: 'month', label: t('workerEarnings.thisMonth') }]} selectedIds={[period]} onChange={(v) => v[0] && setPeriod(v[0] as 'week' | 'month')} />
+      <SegmentedTabs tabs={[{ id: 'week', label: t('workerEarnings.thisWeek') }, { id: 'month', label: t('workerEarnings.thisMonth') }]} value={period} onChange={setPeriod} />
 
-      <View style={{ backgroundColor: theme.colors.primary, borderRadius: theme.borderRadius.xl, padding: 20, marginTop: 16 }}>
-        <Text variant="bodySmall" color="rgba(255,255,255,0.85)">{t('workerEarnings.customersPaidYou')}</Text>
-        <Text variant="h1" weight="extrabold" color="#FFFFFF" style={{ marginTop: 4 }}>{m(s.gross)}</Text>
-        <Text variant="bodySmall" color="rgba(255,255,255,0.85)" style={{ marginTop: 8 }}>
+      <LinearGradient colors={theme.gradients.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: theme.borderRadius['2xl'], padding: 20 }}>
+        <Text variant="bodySmall" color={theme.colors.onPrimary}>{t('workerEarnings.customersPaidYou')}</Text>
+        <AnimatedNumber variant="display" value={s.gross} format={m} color={theme.colors.onPrimary} style={{ marginTop: 4 }} />
+        <Text variant="bodySmall" color={theme.colors.onPrimary} style={{ marginTop: 8, opacity: 0.9 }}>
           {tn('common.jobs', s.jobs)} · {t('workerEarnings.feeAndNet', { fee: m(s.commission), net: m(s.net) })}
         </Text>
-        <Text variant="caption" color="rgba(255,255,255,0.75)" style={{ marginTop: 6 }}>{t('workerEarnings.today', { amount: m(s.today.gross) })}</Text>
-      </View>
+        <Text variant="caption" color={theme.colors.onPrimary} style={{ marginTop: 6, opacity: 0.85 }}>{t('workerEarnings.today', { amount: m(s.today.gross) })}</Text>
+      </LinearGradient>
 
       <View style={{ backgroundColor: s.limits.blocked ? theme.colors.error + '18' : theme.colors.surface, borderColor: s.limits.blocked ? theme.colors.error : s.limits.overSoft ? theme.colors.warning : theme.colors.border, borderWidth: 1.5, borderRadius: theme.borderRadius.xl, padding: 16, marginTop: 16 }}>
-        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('workerEarnings.youOweFixli')}</Text>
-        <Text variant="h2" weight="bold" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{m(s.owed)}</Text>
+        {/* Card payments Fixli holds can leave the balance in the professional's favour. */}
+        <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{s.owed < 0 ? t('workerEarnings.fixliOwesYou') : t('workerEarnings.youOweFixli')}</Text>
+        <Text variant="h2" weight="bold" tabular color={s.owed < 0 ? theme.colors.successText : theme.colors.textPrimary} style={{ marginTop: 4 }}>{m(Math.abs(s.owed))}</Text>
+        {s.owed < 0 ? <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>{t('workerEarnings.payoutNote')}</Text> : null}
         <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
           {t('workerEarnings.feeRule', { percent: (s.commissionRule.rateBps / 100).toFixed(0), min: m(s.commissionRule.minMinor), max: m(s.commissionRule.maxMinor) })}
         </Text>
@@ -101,7 +109,7 @@ export default function WorkerEarningsScreen() {
         <View key={it.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
           <Ionicons name={it.type === 'COMMISSION_SETTLED' ? 'checkmark-circle-outline' : it.type === 'ADJUSTMENT' ? 'swap-horizontal-outline' : 'receipt-outline'} size={22} color={theme.colors.textSecondary} />
           <View style={{ flex: 1 }}>
-            <Text variant="body" weight="semibold" color={theme.colors.textPrimary}>{ENTRY_LABEL[it.type] ?? t('workerEarnings.entry')}{it.jobTitle ? ` · ${it.jobTitle}` : ''}</Text>
+            <Text variant="body" weight="semibold" color={theme.colors.textPrimary}>{entryLabel(it.type)}{it.jobTitle ? ` · ${it.jobTitle}` : !it.jobRequestId && it.type !== 'ADJUSTMENT' && it.note ? ` · ${it.note}` : ''}</Text>
             <Text variant="caption" color={theme.colors.textTertiary}>{new Date(it.createdAt).toLocaleDateString(locale, { day: 'numeric', month: 'short' })}{it.note && it.type === 'ADJUSTMENT' ? ` · ${it.note}` : ''}</Text>
           </View>
           <Text variant="body" weight="bold" color={it.amount > 0 ? theme.colors.textPrimary : theme.colors.successText}>

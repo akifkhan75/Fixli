@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { COUNTRIES, isCountryCode, type CommissionRule } from '@fixli/shared';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 
 export interface CashLimits { softMinor: number; hardMinor: number; maxDaysOwed: number }
@@ -40,12 +41,16 @@ export class CountryConfigService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async get(countryCode: string | null | undefined): Promise<CountryMoney> {
+  /**
+   * Inside a transaction, pass `db`: asking the pool for a second connection while holding one
+   * deadlocks as soon as every connection is in a transaction (500s under concurrent payments).
+   */
+  async get(countryCode: string | null | undefined, db: Prisma.TransactionClient = this.prisma): Promise<CountryMoney> {
     const code = (countryCode ?? 'PK').toUpperCase();
     const hit = this.cache.get(code);
     if (hit && hit.at > Date.now() - TTL_MS) return hit.value;
 
-    const row = await this.prisma.countryConfig.findUnique({ where: { countryCode: code } });
+    const row = await db.countryConfig.findUnique({ where: { countryCode: code } });
     const ref = isCountryCode(code) ? COUNTRIES[code] : COUNTRIES.PK;
     const d = DEFAULTS[code] ?? DEFAULTS.PK;
     const value: CountryMoney = {
@@ -61,9 +66,9 @@ export class CountryConfigService {
     return value;
   }
 
-  forWorker = async (workerId: string) => {
-    const u = await this.prisma.user.findUnique({ where: { id: workerId }, select: { countryCode: true } });
-    return this.get(u?.countryCode);
+  forWorker = async (workerId: string, db: Prisma.TransactionClient = this.prisma) => {
+    const u = await db.user.findUnique({ where: { id: workerId }, select: { countryCode: true } });
+    return this.get(u?.countryCode, db);
   };
 
   invalidate() {

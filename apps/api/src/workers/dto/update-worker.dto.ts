@@ -6,6 +6,9 @@ import {
 /** Everything a worker may change about their own profile. Rating, verification and status are not here. */
 export class UpdateWorkerDto {
   @IsOptional() @IsString() @MaxLength(600) bio?: string;
+  /** For a company or crew; an empty string clears it. */
+  @IsOptional() @IsString() @MaxLength(80) businessName?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(500) teamSize?: number;
   @IsOptional() @IsInt() @Min(0) @Max(60) experienceYears?: number;
   @IsOptional() @IsArray() @ArrayMaxSize(8) @IsString({ each: true }) @MaxLength(40, { each: true }) languages?: string[];
   @IsOptional() @IsIn(['FEMALE', 'MALE']) gender?: 'FEMALE' | 'MALE';
@@ -27,7 +30,7 @@ export class UpdateWorkerDto {
 }
 
 export class SetSkillsDto {
-  @IsArray() @ArrayMaxSize(8) @IsString({ each: true }) @MaxLength(64, { each: true }) categoryIds: string[];
+  @IsArray() @ArrayMaxSize(12) @IsString({ each: true }) @MaxLength(64, { each: true }) categoryIds: string[];
 }
 
 class DayHours {

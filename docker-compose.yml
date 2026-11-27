@@ -56,7 +56,8 @@ services:
   api:
     <<: *node
     container_name: fixli-api
-    command: sh -c "pnpm run db:generate && pnpm run dev:api"
+    # Fresh node:22 images have no pnpm until corepack enable (deps only enabled it in its own container).
+    command: sh -c "corepack enable && pnpm run db:generate && pnpm run dev:api"
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-fixli}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fixli}?schema=public
@@ -66,6 +67,14 @@ services:
       PORT: 3002
       NODE_ENV: ${NODE_ENV:-development}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:-none}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
+      PAYMENTS_PROVIDER: ${PAYMENTS_PROVIDER:-none}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      AI_ID_OCR_ENABLED: ${AI_ID_OCR_ENABLED:-false}
     ports:
       - '3002:3002'
     depends_on:
@@ -77,7 +86,8 @@ services:
   admin:
     <<: *node
     container_name: fixli-admin
-    command: sh -c "cd apps/admin && pnpm run dev -- --host 0.0.0.0 --port 5173"
+    # pnpm run … -- … can forward a literal "--" into Vite 8 and break --host/--port.
+    command: sh -c "corepack enable && cd apps/admin && pnpm exec vite --host 0.0.0.0 --port 5173"
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-development}
@@ -90,7 +100,7 @@ services:
   web:
     <<: *node
     container_name: fixli-web
-    command: sh -c "cd apps/web && pnpm run dev -- --host 0.0.0.0 --port 5174"
+    command: sh -c "corepack enable && cd apps/web && node scripts/build-legal.mjs && pnpm exec vite --host 0.0.0.0 --port 5174"
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-development}

@@ -8,6 +8,7 @@ export type RealtimeEvent =
   | 'job.updated'
   | 'offers.updated'
   | 'feed.updated'
+  | 'project.updated'
   // chat
   | 'message.created'
   | 'message.read'

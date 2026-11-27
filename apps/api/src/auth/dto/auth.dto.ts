@@ -59,6 +59,20 @@ export class LoginDto extends DeviceDto {
   password: string;
 }
 
+export class CodeLoginDto extends DeviceDto {
+  @ApiProperty({ example: '0300 1234567' })
+  @IsString() @IsNotEmpty() @MaxLength(32)
+  phone: string;
+
+  @ApiProperty({ example: 'PK' })
+  @IsString() @Length(2, 2)
+  countryCode: string;
+
+  @ApiProperty({ example: '123456' })
+  @IsString() @Length(6, 6)
+  code: string;
+}
+
 export class AdminLoginDto extends DeviceDto {
   @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(254)
   email: string;

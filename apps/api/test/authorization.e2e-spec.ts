@@ -33,11 +33,12 @@ describe('Authorization (e2e)', () => {
       },
     });
     if (type === 'worker') {
-      // A genuinely matchable worker: approved, online, Karachi, plumbing + electrical, works every day.
+      // A genuinely matchable worker: approved, online, located in Karachi, plumbing + electrical, works every day.
       const cats = await prisma.serviceCategory.findMany({ where: { name: { in: ['PLUMBING', 'ELECTRICAL'] } }, select: { id: true } });
       await prisma.worker.create({
         data: {
           id: user.id, activationStatus: 'ACTIVE', isVerified: true, isOnline: true, serviceAreaLabel: 'Karachi',
+          serviceLat: 24.928, serviceLng: 67.095, serviceRadius: 10,
           services: { create: cats.map((c) => ({ categoryId: c.id })) },
           workingHours: { create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMinute: 0, endMinute: 1440 })) },
         },
@@ -73,7 +74,10 @@ describe('Authorization (e2e)', () => {
     electricalId = (await prisma.serviceCategory.findUniqueOrThrow({ where: { name: 'ELECTRICAL' } })).id;
     for (const who of ['custA', 'custB']) {
       addressIds[who] = (await prisma.address.create({
-        data: { userId: ids[who], streetAddress: `House 1 ${who}`, city: 'Karachi', area: 'Gulshan', country: 'PK', isDefault: true },
+        data: {
+          userId: ids[who], streetAddress: `House 1 ${who}`, city: 'Karachi', area: 'Gulshan', country: 'PK',
+          latitude: 24.92, longitude: 67.09, isDefault: true,
+        },
       })).id;
     }
   });

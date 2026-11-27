@@ -11,17 +11,20 @@ import { ChipChoice } from './ChipChoice';
 import * as api from '../../services/api';
 import { t, tn } from '../../i18n';
 
-const TAG_LABEL: Record<string, string> = {
-  ON_TIME: 'On time', FRIENDLY: 'Friendly', CLEAN: 'Left it clean', FAIR_PRICE: 'Fair price', SKILLED: 'Skilled', EXPLAINED_WELL: 'Explained well',
-  RESPECTFUL: 'Respectful', CLEAR_INSTRUCTIONS: 'Clear instructions', PAID_PROMPTLY: 'Paid promptly', EASY_ACCESS: 'Easy to find / access',
-};
+const tagLabels = (): Record<string, string> => ({
+  ON_TIME: t('reviewTag.onTime'), FRIENDLY: t('reviewTag.friendly'), CLEAN: t('reviewTag.clean'), FAIR_PRICE: t('reviewTag.fairPrice'),
+  SKILLED: t('reviewTag.skilled'), EXPLAINED_WELL: t('reviewTag.explained'), RESPECTFUL: t('reviewTag.respectful'),
+  CLEAR_INSTRUCTIONS: t('reviewTag.clearInstructions'), PAID_PROMPTLY: t('reviewTag.paidPromptly'), EASY_ACCESS: t('reviewTag.easyAccess'),
+});
 
 /**
  * Rate the other side of a completed job. The server decides who is reviewed (never sent from
  * here). A professional's review of a customer is private.
  */
-export function ReviewForm({ jobId, targetName, reviewing, onSubmitted }: {
-  jobId: string;
+export function ReviewForm({ jobId, projectId, targetName, reviewing, onSubmitted }: {
+  /** Exactly one of these: what is being reviewed. */
+  jobId?: string;
+  projectId?: string;
   targetName: string;
   /** Who is being reviewed: decides which tags make sense. */
   reviewing: 'worker' | 'customer';
@@ -33,14 +36,14 @@ export function ReviewForm({ jobId, targetName, reviewing, onSubmitted }: {
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const options = (reviewing === 'worker' ? api.WORKER_REVIEW_TAGS : api.CUSTOMER_REVIEW_TAGS).map((id) => ({ id, label: TAG_LABEL[id] }));
+  const options = (reviewing === 'worker' ? api.WORKER_REVIEW_TAGS : api.CUSTOMER_REVIEW_TAGS).map((id) => ({ id, label: tagLabels()[id] }));
 
   const handleSubmit = async () => {
     if (rating === 0) return;
     setBusy(true);
     setError(null);
     try {
-      await api.submitReview({ jobRequestId: jobId, rating, comment: comment.trim() || undefined, tags: tags.length ? tags : undefined });
+      await api.submitReview({ ...(projectId ? { projectId } : { jobRequestId: jobId! }), rating, comment: comment.trim() || undefined, tags: tags.length ? tags : undefined });
       void analytics.track('review_submitted', { rating, side: reviewing === 'worker' ? 'customer' : 'worker' });
       onSubmitted?.();
     } catch (e) {

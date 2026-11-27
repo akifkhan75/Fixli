@@ -11,6 +11,7 @@ import { JobAccessService } from '../common/access/job-access.service';
 import { AuditService } from '../common/audit/audit.service';
 import { CreateDisputeDto, ResolveDisputeDto } from './dto/dispute.dto';
 import { DomainEvents } from '../common/events/domain-events';
+import { MilestonesService } from '../projects/milestones.service';
 
 const STATUS_TEXT: Record<string, string> = { IN_REVIEW: 'support is looking into it', RESOLVED: 'resolved', CLOSED: 'closed' };
 
@@ -31,6 +32,7 @@ export class DisputesService {
     private readonly realtime: RealtimeService,
     private readonly ledger: LedgerService,
     private readonly payments: PaymentsService,
+    private readonly milestones: MilestonesService,
   ) {}
 
   async createDispute(user: { id: string; type: string }, dto: CreateDisputeDto) {
@@ -64,7 +66,7 @@ export class DisputesService {
     });
     this.events.emit('admin.dispute_opened', {
       disputeId: dispute.id,
-      jobId: dispute.jobRequestId,
+      jobId: job.id,
     });
     // Reopen the job's chat while the problem is looked at.
     await this.prisma.conversation.updateMany({ where: { jobRequestId: job.id, isReadOnly: true }, data: { isReadOnly: false, closedAt: null } });
@@ -93,12 +95,15 @@ export class DisputesService {
                 { raisedById: user.id },
                 { jobRequest: { customerId: user.id } },
                 { jobRequest: { assignedWorkerId: user.id } },
+                { project: { customerId: user.id } },
+                { project: { awardedWorkerId: user.id } },
               ],
             }),
       },
       include: {
         raisedBy: { select: { id: true, name: true, type: true } },
         jobRequest: { select: { id: true, status: true, description: true } },
+        project: { select: { id: true, status: true, title: true } },
       },
     });
     if (!dispute) throw new NotFoundException('Dispute not found');
@@ -109,7 +114,7 @@ export class DisputesService {
   async getUserDisputes(userId: string) {
     return stripKeys(await this.prisma.dispute.findMany({
       where: { raisedById: userId },
-      include: { jobRequest: { select: { id: true, status: true } } },
+      include: { jobRequest: { select: { id: true, status: true } }, project: { select: { id: true, status: true, title: true } } },
       orderBy: { createdAt: 'desc' },
       take: 50,
     }));
@@ -120,10 +125,14 @@ export class DisputesService {
       include: {
         raisedBy: { select: { id: true, name: true, type: true } },
         jobRequest: { select: { id: true, customerName: true, status: true } },
+        project: { select: { id: true, title: true, status: true, customer: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
-    }));
+    })).map(({ project, ...d }) => (project
+      // The console lists every dispute the same way; a project stands in the job column.
+      ? { ...d, jobRequest: { id: project.id, customerName: project.customer.name, status: project.status }, projectTitle: project.title }
+      : d));
   }
 
   async updateDisputeStatus(id: string, dto: ResolveDisputeDto, adminId: string) {
@@ -132,6 +141,10 @@ export class DisputesService {
     if (before.status === 'RESOLVED' || before.status === 'CLOSED') {
       throw new ConflictException({ code: 'DISPUTE_CLOSED', message: 'This dispute is already closed.' });
     }
+    if (before.projectId) return this.updateProjectDispute(before, dto, adminId);
+    if (dto.stageOutcome) throw new BadRequestException({ code: 'NOT_A_PROJECT_DISPUTE', message: 'This dispute is not about a project stage.' });
+    const jobRequestId = before.jobRequestId!;
+    const jobRequest = before.jobRequest!;
     if (dto.ledgerAdjustment) await this.staff.assert({ id: adminId, type: 'admin' }, 'finance.adjust');
     if (dto.paymentOutcome && !before.paymentId) throw new BadRequestException({ code: 'NOT_A_PAYMENT_DISPUTE', message: 'This dispute is not about a payment.' });
     const closing = dto.status === 'RESOLVED' || dto.status === 'CLOSED';
@@ -150,12 +163,12 @@ export class DisputesService {
         },
       });
       if (r.count === 0) throw new ConflictException({ code: 'DISPUTE_CHANGED', message: 'Someone else just updated this dispute. Refresh and try again.' });
-      if (dto.ledgerAdjustment && before.jobRequest.assignedWorkerId) {
-        const job = await tx.jobRequest.findUniqueOrThrow({ where: { id: before.jobRequestId }, select: { agreedCurrency: true, currency: true } });
+      if (dto.ledgerAdjustment && jobRequest.assignedWorkerId) {
+        const job = await tx.jobRequest.findUniqueOrThrow({ where: { id: jobRequestId }, select: { agreedCurrency: true, currency: true } });
         await this.ledger.post(tx, {
-          workerId: before.jobRequest.assignedWorkerId, type: 'ADJUSTMENT', amount: dto.ledgerAdjustment.amount,
+          workerId: jobRequest.assignedWorkerId, type: 'ADJUSTMENT', amount: dto.ledgerAdjustment.amount,
           currency: job.agreedCurrency ?? job.currency, idempotencyKey: `dispute:${id}:adjustment`,
-          jobRequestId: before.jobRequestId, createdById: adminId, note: dto.ledgerAdjustment.note,
+          jobRequestId: jobRequestId, createdById: adminId, note: dto.ledgerAdjustment.note,
         });
       }
       return tx.dispute.findUniqueOrThrow({ where: { id } });
@@ -171,16 +184,59 @@ export class DisputesService {
       before: { status: before.status, resolution: before.resolution },
       after: { status: after.status, resolution: after.resolution, paymentOutcome: dto.paymentOutcome, adjustment: dto.ledgerAdjustment },
     });
-    const parties = [before.jobRequest.customerId, before.jobRequest.assignedWorkerId].filter((u): u is string => !!u);
+    const parties = [jobRequest.customerId, jobRequest.assignedWorkerId].filter((u): u is string => !!u);
     // Each side gets a link to their own job screen.
     for (const u of parties) {
       await this.notifications.notify({
         type: 'dispute.updated', userIds: [u], eventKey: `dispute.updated:${id}:${dto.status}`,
-        params: { title: before.jobRequest.title ?? 'your job', status: STATUS_TEXT[dto.status] },
-        data: { url: routes.jobFor(before.jobRequestId, u === before.jobRequest.customerId ? 'customer' : 'worker'), jobId: before.jobRequestId },
+        params: { title: jobRequest.title ?? 'your job', status: STATUS_TEXT[dto.status] },
+        data: { url: routes.jobFor(jobRequestId, u === jobRequest.customerId ? 'customer' : 'worker'), jobId: jobRequestId },
       });
     }
-    this.realtime.emitToUsers(parties, 'job.updated', { jobId: before.jobRequestId });
+    this.realtime.emitToUsers(parties, 'job.updated', { jobId: jobRequestId });
+    const { evidenceKeys, ...rest } = after;
+    return { ...rest, evidenceCount: evidenceKeys.length };
+  }
+
+  /** A disputed project stage: closing it requires saying what happens to the stage and its money. */
+  private async updateProjectDispute(
+    before: { id: string; status: string; projectId: string | null; milestoneId: string | null; resolution: string | null; paymentId: string | null },
+    dto: ResolveDisputeDto,
+    adminId: string,
+  ) {
+    if (dto.paymentOutcome) throw new BadRequestException({ code: 'NOT_A_PAYMENT_DISPUTE', message: 'This dispute is not about a cash payment.' });
+    if (dto.ledgerAdjustment) throw new BadRequestException({ code: 'USE_STAGE_OUTCOME', message: 'Choose what happens to the stage; use a ledger adjustment on the professional for anything extra.' });
+    const closing = dto.status === 'RESOLVED' || dto.status === 'CLOSED';
+    const milestone = before.milestoneId ? await this.prisma.projectMilestone.findUnique({ where: { id: before.milestoneId }, select: { status: true } }) : null;
+    if (closing && milestone?.status === 'DISPUTED') {
+      if (!dto.stageOutcome) throw new BadRequestException({ code: 'STAGE_OUTCOME_REQUIRED', message: 'Choose: pay the professional, refund the customer, or send the stage back to work.' });
+      await this.staff.assert({ id: adminId, type: 'admin' }, 'finance.adjust');
+      // Money moves first: if it cannot, the dispute stays open to try again.
+      await this.milestones.resolveDispute(before.milestoneId!, dto.stageOutcome);
+    }
+    const r = await this.prisma.dispute.updateMany({
+      where: { id: before.id, status: before.status },
+      data: { status: dto.status, resolution: dto.resolution, resolvedById: closing ? adminId : undefined, resolvedAt: closing ? new Date() : undefined },
+    });
+    if (r.count === 0) throw new ConflictException({ code: 'DISPUTE_CHANGED', message: 'Someone else just updated this dispute. Refresh and try again.' });
+    const [after, project] = await Promise.all([
+      this.prisma.dispute.findUniqueOrThrow({ where: { id: before.id } }),
+      this.prisma.project.findUniqueOrThrow({ where: { id: before.projectId! }, select: { id: true, title: true, customerId: true, awardedWorkerId: true } }),
+    ]);
+    await this.audit.record({
+      actorId: adminId, action: 'dispute.updated', entityType: 'Dispute', entityId: before.id,
+      before: { status: before.status, resolution: before.resolution },
+      after: { status: after.status, resolution: after.resolution, stageOutcome: dto.stageOutcome },
+    });
+    const parties = [project.customerId, project.awardedWorkerId].filter((u): u is string => !!u);
+    for (const u of parties) {
+      await this.notifications.notify({
+        type: 'dispute.updated', userIds: [u], eventKey: `dispute.updated:${before.id}:${dto.status}`,
+        params: { title: project.title, status: STATUS_TEXT[dto.status] },
+        data: { url: u === project.customerId ? routes.customerProject(project.id) : routes.workerProject(project.id), projectId: project.id },
+      });
+    }
+    this.realtime.emitToUsers(parties, 'project.updated', { projectId: project.id });
     const { evidenceKeys, ...rest } = after;
     return { ...rest, evidenceCount: evidenceKeys.length };
   }

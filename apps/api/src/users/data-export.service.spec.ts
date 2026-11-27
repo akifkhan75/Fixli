@@ -9,7 +9,7 @@ describe('DataExportService', () => {
     user: { findUnique: jest.fn() },
     address: m(), trustedContact: m(), favoriteWorker: m([{ createdAt: 'd', worker: { user: { name: 'Bilal' } } }]),
     jobRequest: m([{ id: 'j1', customerId: 'u1', assignedWorkerId: 'w1', description: 'tap' }, { id: 'j2', customerId: 'c2', assignedWorkerId: 'u1', description: 'pipe' }]),
-    message: m(), review: m(), dispute: m(), incident: m(), notification: m(), session: m(), payment: m(),
+    message: m(), review: m(), dispute: m(), incident: m(), notification: m(), session: m(), payment: m(), project: m(), projectBid: m(),
     worker: { findUnique: jest.fn() },
   };
   const audit = { record: jest.fn() };

@@ -160,11 +160,12 @@ describe('Matching, offers and booking (e2e)', () => {
       expect((await prisma.jobRequest.findUniqueOrThrow({ where: { id: jobId } })).matchRound).toBe(2);
     });
 
-    it('a request with no GPS is matched by city', async () => {
+    it('rejects a request whose address has no map location', async () => {
       const addr = await prisma.address.create({ data: { userId: ids.cust2, streetAddress: 'No GPS', city: 'Karachi', country: 'PK' } });
-      await prisma.worker.update({ where: { id: ids.mid }, data: { serviceAreaLabel: 'Nazimabad, Karachi' } });
-      const job = (await http().post('/api/job-requests').set(as('cust2')).send({ categoryId: plumbingId, issueCodes: ['leaking_tap'], addressId: addr.id, when: 'TODAY', idempotencyKey: key() }).expect(201)).body;
-      expect(await matchedWorkers(job.id)).toEqual(['mid']);
+      const res = await http().post('/api/job-requests').set(as('cust2'))
+        .send({ categoryId: plumbingId, issueCodes: ['leaking_tap'], addressId: addr.id, when: 'TODAY', idempotencyKey: key() })
+        .expect(400);
+      expect(res.body.error.code).toBe('LOCATION_REQUIRED');
     });
   });
 

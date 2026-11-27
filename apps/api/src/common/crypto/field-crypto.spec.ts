@@ -25,6 +25,13 @@ describe('field-crypto', () => {
     const flipped = Buffer.from(ct, 'base64url'); flipped[0] ^= 1;
     expect(() => decryptField([p, iv, tag, flipped.toString('base64url')].join(':'))).toThrow();
   });
+  it('refuses a shortened authentication tag, even one that matches', () => {
+    const [p, iv, tag, ct] = encryptField('secret-id').split(':');
+    for (const bytes of [4, 8, 12, 15]) {
+      const short = Buffer.from(tag, 'base64url').subarray(0, bytes).toString('base64url');
+      expect(() => decryptField([p, iv, short, ct].join(':'))).toThrow();
+    }
+  });
   it('fails with the wrong key', () => {
     const enc = encryptField('abc');
     process.env.FIELD_ENCRYPTION_KEY = OTHER;

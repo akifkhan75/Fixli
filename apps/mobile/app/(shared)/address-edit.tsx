@@ -49,6 +49,7 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
 
   const streetError = submitted && !street.trim() ? 'Enter your street or house number.' : undefined;
   const cityError = submitted && !city.trim() ? 'Enter your city.' : undefined;
+  const coordsError = submitted && !coords ? t('sharedAddressEdit.locationRequired') : undefined;
 
   const useMyLocation = async () => {
     setLocError(undefined);
@@ -79,14 +80,14 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
 
   const save = async () => {
     setSubmitted(true);
-    if (!street.trim() || !city.trim()) return;
+    if (!street.trim() || !city.trim() || !coords) return;
     setSaving(true);
     setError(undefined);
     try {
       const body = {
         label: label[0] ?? 'Home', /* i18n-ignore: stored id, not text shown */ streetAddress: street.trim(), city: city.trim(), country: countryCode,
         area: area.trim() || undefined, buildingDetail: building.trim() || undefined, landmark: landmark.trim() || undefined,
-        latitude: coords?.latitude, longitude: coords?.longitude, isDefault,
+        latitude: coords.latitude, longitude: coords.longitude, isDefault,
       };
       if (id) await api.updateAddress(id, body); else await api.createAddress(body);
       router.back();
@@ -115,6 +116,7 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
         leftIcon={<Ionicons name="navigate" size={20} color={theme.colors.primary} />}
       />
       {locError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{locError}</Text> : null}
+      {coordsError ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 8 }}>{coordsError}</Text> : null}
       {denied ? <Button title={t('sharedAddressEdit.openSettings')} variant="ghost" onPress={openSettings} /> : null}
 
       <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>{t('sharedAddressEdit.thisIsMy')}</Text>

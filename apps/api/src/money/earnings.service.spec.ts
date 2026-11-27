@@ -21,7 +21,7 @@ describe('time helpers', () => {
 
 describe('EarningsService', () => {
   const prisma: any = {
-    worker: { findUniqueOrThrow: jest.fn() }, payment: { aggregate: jest.fn() }, ledgerEntry: { aggregate: jest.fn(), findMany: jest.fn() }, settlement: { findFirst: jest.fn() },
+    worker: { findUniqueOrThrow: jest.fn() }, payment: { aggregate: jest.fn() }, ledgerEntry: { aggregate: jest.fn(), findMany: jest.fn() }, settlement: { findFirst: jest.fn() }, projectPayment: { aggregate: jest.fn() },
   };
   const countries = { forWorker: jest.fn() };
   const svc = new EarningsService(prisma, countries as any);
@@ -31,6 +31,13 @@ describe('EarningsService', () => {
     prisma.payment.aggregate.mockResolvedValue({ _sum: { amount: 100_000 }, _count: 4 });
     prisma.ledgerEntry.aggregate.mockResolvedValue({ _sum: { amount: 12_000 } });
     prisma.settlement.findFirst.mockResolvedValue(null);
+    prisma.projectPayment.aggregate.mockResolvedValue({ _sum: { amount: null }, _count: 0 });
+  });
+
+  it('counts paid project stages as earnings', async () => {
+    prisma.worker.findUniqueOrThrow.mockResolvedValue({ timezone: 'Asia/Karachi', ledgerBalance: -88_000, owedSince: null, balanceBlocked: false });
+    prisma.projectPayment.aggregate.mockResolvedValue({ _sum: { amount: 50_000 }, _count: 1 });
+    expect(await svc.summary('w1')).toMatchObject({ gross: 150_000, net: 138_000, jobs: 5, owed: -88_000 });
   });
 
   it('summary: earned is income, net is income minus commission, and the limits show where they stand', async () => {

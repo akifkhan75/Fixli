@@ -7,6 +7,7 @@ exports[`Every route enforces who may call it (e2e) the public routes are a shor
   "GET /api/files/public/*",
   "GET /api/health",
   "GET /api/health/ready",
+  "GET /api/payments/card/return",
   "GET /api/service-catalog/categories",
   "GET /api/service-catalog/categories/:id",
   "GET /api/service-packages",
@@ -17,12 +18,15 @@ exports[`Every route enforces who may call it (e2e) the public routes are a shor
   "POST /api/auth/admin/totp/activate",
   "POST /api/auth/admin/totp/setup",
   "POST /api/auth/login",
+  "POST /api/auth/login/code",
+  "POST /api/auth/login/code/start",
   "POST /api/auth/password/forgot",
   "POST /api/auth/password/reset",
   "POST /api/auth/phone/start",
   "POST /api/auth/phone/verify",
   "POST /api/auth/refresh",
   "POST /api/auth/signup",
+  "POST /api/payments/stripe/webhook",
   "PUT /api/files/upload",
 ]
 `;

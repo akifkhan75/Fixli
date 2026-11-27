@@ -1,13 +1,14 @@
 import React from 'react';
-import { Text as RNText, TextProps as RNTextProps, StyleSheet } from 'react-native';
+import { Text as RNText, TextProps as RNTextProps } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { getLocale } from '../../i18n';
 
 /**
  * Nastaliq stacks its marks tall: at a normal line height Urdu lines collide. Text in Urdu uses
- * the Noto Nastaliq Urdu face (it has four weights) at 1.7x line height; other languages keep Inter.
+ * the Noto Nastaliq Urdu face (it has four weights) at 2.1x line height; other languages keep Inter.
+ * (1.7x cut off the tails of letters on Android, worst in headings.)
  */
-export const URDU_LINE_HEIGHT = 1.7;
+export const URDU_LINE_HEIGHT = 2.1;
 const URDU_FONT: Record<string, string> = {
   normal: 'NotoNastaliqUrdu_400Regular',
   medium: 'NotoNastaliqUrdu_500Medium',
@@ -17,6 +18,7 @@ const URDU_FONT: Record<string, string> = {
 };
 
 export type TextVariant =
+  | 'display'
   | 'h1'
   | 'h2'
   | 'h3'
@@ -31,6 +33,8 @@ export interface TextProps extends RNTextProps {
   /** Leave unset to follow the reading direction (right edge in Urdu/Arabic). */
   align?: 'left' | 'center' | 'right' | 'justify';
   weight?: 'normal' | 'medium' | 'semibold' | 'bold' | 'extrabold';
+  /** Digits of equal width, so changing prices and counters don't wobble. */
+  tabular?: boolean;
 }
 
 export const Text = ({
@@ -38,6 +42,7 @@ export const Text = ({
   color,
   align,
   weight,
+  tabular,
   style,
   children,
   ...props
@@ -48,6 +53,11 @@ export const Text = ({
   let defaultWeight: NonNullable<TextProps['weight']> = 'normal';
 
   switch (variant) {
+    case 'display':
+      fontSize = theme.fontSize['5xl'];
+      defaultWeight = 'bold';
+      tabular ??= true;
+      break;
     case 'h1':
       fontSize = theme.fontSize['4xl'];
       defaultWeight = 'bold';
@@ -95,6 +105,8 @@ export const Text = ({
   }
 
   const urdu = getLocale() === 'ur';
+  // Tight tracking suits large Latin titles; in Arabic script it would break the joins.
+  const tracking = getLocale() === 'en' && (variant === 'display' || variant === 'h1' || variant === 'h2') ? -0.5 : 0;
   if (urdu) fontFamily = URDU_FONT[activeWeight] ?? URDU_FONT.normal;
 
   return (
@@ -106,6 +118,8 @@ export const Text = ({
           // 'auto' follows the text's own direction, so Urdu/Arabic align right without every screen asking.
           textAlign: align ?? 'auto',
           fontFamily,
+          letterSpacing: tracking,
+          ...(tabular ? { fontVariant: ['tabular-nums' as const] } : {}),
           ...(urdu ? { lineHeight: Math.round(fontSize * URDU_LINE_HEIGHT) } : {}),
         },
         style,

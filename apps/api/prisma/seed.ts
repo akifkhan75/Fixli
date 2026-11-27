@@ -20,15 +20,14 @@ async function main() {
 
   // Real catalog (idempotent), then look up what the demo data needs.
   await seedCatalog(prisma);
-  const catPlumbing = await prisma.serviceCategory.findUniqueOrThrow({ where: { name: 'PLUMBING' } });
-  const catElectrical = await prisma.serviceCategory.findUniqueOrThrow({ where: { name: 'ELECTRICAL' } });
+  const categories = await prisma.serviceCategory.findMany({ where: { isActive: true }, select: { id: true } });
 
   // Users
-  const cust1 = await prisma.user.create({
+  await prisma.user.create({
     data: { id: 'cust1', name: 'Alice Customer', phone: '+923001234567', countryCode: 'PK', locale: 'en', password: hashedPassword, type: 'customer' },
   });
 
-  const worker1 = await prisma.user.create({
+  await prisma.user.create({
     data: { id: 'w1', name: 'Bob Worker', phone: '+923112345678', countryCode: 'PK', locale: 'en', password: hashedPassword, type: 'worker' },
   });
 
@@ -37,18 +36,13 @@ async function main() {
   });
   console.log('Dev logins (password: password123): customer 0300 1234567 · worker 0311 2345678 · admin admin@fixli.dev');
 
-  // Workers
+  // Workers — every catalog category so local demos match whatever the customer picks.
   await prisma.worker.create({
     data: {
       id: 'w1', activationStatus: 'ACTIVE', isOnline: true, rating: 4.8, isVerified: true, currency: 'PKR',
       pricingModel: 'CALLOUT_PLUS_QUOTE', minimumCallOutFee: 150000, serviceLat: 24.9215, serviceLng: 67.0925,
-      serviceAreaLabel: 'Gulshan-e-Iqbal, Karachi', serviceRadius: 25, bio: 'Dev demo plumber and electrician.',
-      services: {
-        create: [
-          { categoryId: catPlumbing.id },
-          { categoryId: catElectrical.id }
-        ]
-      },
+      serviceAreaLabel: 'Gulshan-e-Iqbal, Karachi', serviceRadius: 25, bio: 'Dev demo worker for local marketplace testing.',
+      services: { create: categories.map((c) => ({ categoryId: c.id })) },
       // Open every day, all day, so the demo worker is matchable whenever you test.
       workingHours: { create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMinute: 0, endMinute: 1440 })) },
     },

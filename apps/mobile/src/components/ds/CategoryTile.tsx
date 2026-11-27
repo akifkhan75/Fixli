@@ -1,65 +1,56 @@
 import React from 'react';
-import { TouchableOpacity, View, StyleSheet, Dimensions } from 'react-native';
+import { StyleProp, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
+import { PressableScale } from '../motion/PressableScale';
+import { categoryTint } from '../../utils/categoryTint';
 import { Text } from './Text';
-import { t } from '../../i18n';
+import { useI18n } from '../../hooks/useI18n';
 
 export interface CategoryTileProps {
-  id: string;
+  /** Stable catalog key such as PLUMBING; picks the tile's colour. */
+  code?: string;
   name: string;
   icon?: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
+  selected?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
-const { width } = Dimensions.get('window');
-// Calculate 2 columns with spacing (20 padding on each side of screen, 16 gap between tiles)
-const TILE_WIDTH = (width - 40 - 16) / 2;
-
-export const CategoryTile = ({ name, icon = 'construct', onPress }: CategoryTileProps) => {
+/** A big picture button: the colour and icon identify the trade before any word is read. */
+export const CategoryTile = ({ code, name, icon = 'construct', onPress, selected, style }: CategoryTileProps) => {
   const theme = useTheme();
+  const { t } = useI18n();
+  const tint = categoryTint(code, theme.categoryColors);
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.8}
+    <PressableScale
       style={[
-        styles.container,
         {
-          backgroundColor: theme.colors.surfaceElevated,
-          width: TILE_WIDTH,
-          borderRadius: theme.borderRadius['2xl'],
+          minHeight: 118,
+          paddingVertical: theme.spacing.md,
+          paddingHorizontal: theme.spacing.sm,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme.colors.surface,
+          borderRadius: theme.borderRadius.xl,
+          borderWidth: 2,
+          borderColor: selected ? theme.colors.primary : 'transparent',
         },
+        theme.mode === 'light' ? theme.shadows.sm : null,
+        style,
       ]}
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
       accessibilityLabel={t('categoryTile.serviceCategory', { name })}
     >
-      <View style={[styles.iconContainer, { backgroundColor: theme.colors.primary + '15' }]}>
-        <Ionicons name={icon} size={32} color={theme.colors.primary} />
+      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: tint + '1F', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={30} color={tint} />
       </View>
-      <Text variant="bodyLarge" weight="semibold" style={{ marginTop: theme.spacing.md }}>
+      <Text variant="bodySmall" weight="semibold" align="center" numberOfLines={2} style={{ marginTop: theme.spacing.sm }}>
         {name}
       </Text>
-    </TouchableOpacity>
+    </PressableScale>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    height: 120,
-    padding: 16,
-    justifyContent: 'center',
-    shadowColor: 'rgba(10,18,40,0.06)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

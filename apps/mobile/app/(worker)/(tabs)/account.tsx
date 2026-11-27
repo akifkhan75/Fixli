@@ -71,6 +71,7 @@ export default function WorkerAccountScreen() {
       <GroupedList title={t('workerAccount.yourProfile')} items={[
         { id: 'setup', label: t('workerAccount.skillsAreaHoursAnd'), icon: 'construct-outline', onPress: go('/setup') },
         { id: 'about', label: t('workerAccount.aboutYouAndYour'), icon: 'person-outline', onPress: go('/setup/about') },
+        { id: 'tools', label: t('workerAccount.toolsYouBring'), icon: 'build-outline', value: w.equipment?.length ? String(w.equipment.length) : undefined, onPress: go('/setup/tools') },
         { id: 'portfolio', label: t('workerAccount.photosOfYourPast'), icon: 'images-outline', value: w.portfolio.length ? String(w.portfolio.length) : undefined, onPress: go('/setup/portfolio') },
         { id: 'docs', label: t('workerAccount.idAndSelfie'), icon: 'id-card-outline', onPress: go('/setup/documents') },
         { id: 'public', label: t('workerAccount.seeHowCustomersSee'), icon: 'eye-outline', onPress: go(`/worker/${w.id}`) },

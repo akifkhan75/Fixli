@@ -41,6 +41,7 @@ The original concept supplied for this project is preserved in the PRD and featu
 25. 25_OWNER_DECISIONS.md — living list of owner decisions and open questions
 26. 26_COMPREHENSIVE_PENDING_PLAN.md — master plan for all pending items & edge cases
 27. 27_AUDIT_REMEDIATION_PLAN.md — phase-wise plan (R0–R7) fixing the 2026-11-13 full-audit findings
+30. 30_PROJECTS_AND_GO_LIVE.md — projects module, known limits, and the owner's go-live checklist
 
 ## Recommended technology direction
 - Mobile: React Native + Expo + TypeScript

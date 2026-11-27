@@ -158,11 +158,14 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
   });
 
   describe('addresses', () => {
-    const addr = (over: object = {}) => ({ label: 'Home', streetAddress: 'House 12, Street 4', city: 'Karachi', country: 'pk', ...over });
+    const addr = (over: object = {}) => ({
+      label: 'Home', streetAddress: 'House 12, Street 4', city: 'Karachi', country: 'pk',
+      latitude: 24.92, longitude: 67.09, ...over,
+    });
     const created: string[] = [];
 
     it('the first address becomes the default; country is normalised; postal code is optional', async () => {
-      const a = await http().post('/api/addresses').set(as('cust2')).send(addr({ area: 'Gulshan Block 13', landmark: 'Near the mosque', latitude: 24.92, longitude: 67.09 })).expect(201);
+      const a = await http().post('/api/addresses').set(as('cust2')).send(addr({ area: 'Gulshan Block 13', landmark: 'Near the mosque' })).expect(201);
       expect(a.body).toMatchObject({ isDefault: true, country: 'PK', area: 'Gulshan Block 13', postalCode: null });
       created.push(a.body.id);
     });
@@ -179,8 +182,12 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
       expect(list.body[0].isDefault).toBe(true);
     });
 
-    it('rejects half a coordinate pair and bad ranges', async () => {
-      await http().post('/api/addresses').set(as('cust2')).send(addr({ latitude: 24.9 })).expect(400);
+    it('rejects missing coords, half a coordinate pair, and bad ranges', async () => {
+      const noGps = await http().post('/api/addresses').set(as('cust2'))
+        .send({ label: 'Home', streetAddress: 'House 12', city: 'Karachi', country: 'pk' }).expect(400);
+      expect(noGps.body.error?.code ?? noGps.body.message).toBeTruthy();
+      await http().post('/api/addresses').set(as('cust2'))
+        .send({ label: 'Home', streetAddress: 'House 12', city: 'Karachi', country: 'pk', latitude: 24.9 }).expect(400);
       await http().post('/api/addresses').set(as('cust2')).send(addr({ latitude: 124.9, longitude: 67 })).expect(400);
     });
 

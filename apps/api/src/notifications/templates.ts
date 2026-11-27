@@ -39,7 +39,22 @@ export type NotificationType =
   | 'dispute.updated'
   | 'job.sos_request'
   | 'sos.searching_wider'
-  | 'job.reassigned';
+  | 'job.reassigned'
+  | 'project.new'
+  | 'project.bid'
+  | 'project.awarded'
+  | 'project.not_chosen'
+  | 'project.stage_funded'
+  | 'project.stage_started'
+  | 'project.stage_submitted'
+  | 'project.changes_requested'
+  | 'project.stage_approved'
+  | 'project.stage_paid'
+  | 'project.completed'
+  | 'project.cancelled'
+  | 'project.disputed'
+  | 'project.refunded'
+  | 'project.visit';
 
 type Locale = 'en' | 'ur' | 'ar';
 export type Money = { minor: number; currency: string };
@@ -47,6 +62,21 @@ type P = Record<string, string | number | Money | undefined>;
 type T = (p: P) => { title: string; body: string };
 
 const en: Record<NotificationType, T> = {
+  'project.new': (p) => ({ title: 'New project near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. Send your price.` }),
+  'project.bid': (p) => ({ title: 'You got a project price', body: `${p.worker} can do "${p.title}" for ${p.price}.` }),
+  'project.awarded': (p) => ({ title: "You're hired!", body: `The customer chose your price for "${p.title}".` }),
+  'project.not_chosen': (p) => ({ title: 'Customer chose someone else', body: `"${p.title}" went to another professional.` }),
+  'project.stage_funded': (p) => ({ title: 'Payment is held: you can start', body: `${p.price} for "${p.stage}" is safe with Fixli.` }),
+  'project.stage_started': (p) => ({ title: 'Work started', body: `"${p.stage}" has started on "${p.title}".` }),
+  'project.stage_submitted': (p) => ({ title: 'Please check the work', body: `"${p.stage}" is ready. Approve it or ask for changes.` }),
+  'project.changes_requested': (p) => ({ title: 'Changes needed', body: `The customer asked for changes to "${p.stage}".` }),
+  'project.stage_approved': (p) => ({ title: 'Work approved', body: `Collect ${p.price} for "${p.stage}", then mark it received.` }),
+  'project.stage_paid': (p) => ({ title: 'Stage paid', body: `${p.price} for "${p.stage}". Fixli's fee: ${p.commission}.` }),
+  'project.completed': (p) => ({ title: 'Project finished', body: `"${p.title}" is complete. Please leave a review.` }),
+  'project.cancelled': (p) => ({ title: 'Project cancelled', body: `"${p.title}" was cancelled.` }),
+  'project.disputed': (p) => ({ title: 'A problem was reported', body: `About "${p.stage}". Fixli support will contact you.` }),
+  'project.refunded': (p) => ({ title: 'Money returned', body: `${p.price} for "${p.stage}" is on its way back to your card.` }),
+  'project.visit': (p) => ({ title: 'Site visit planned', body: `${p.date} for "${p.title}".` }),
   'job.reassigned': (p) => ({ title: 'Finding you another professional', body: `${p.worker} can no longer do "${p.title}". We're asking others near you now.` }),
   'job.sos_request': (p) => ({ title: 'Emergency near you', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} km` : ''}. Can you go now? Answer within ${p.minutes} minutes.` }),
   'sos.searching_wider': (p) => ({ title: 'Still finding help', body: `Nobody nearby could come straight away. We sent "${p.title}" to more professionals; prices will arrive shortly.` }),
@@ -85,6 +115,21 @@ const en: Record<NotificationType, T> = {
 };
 
 const ur: Record<NotificationType, T> = {
+  'project.new': (p) => ({ title: 'آپ کے قریب نیا پروجیکٹ', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ اپنی قیمت بھیجیں۔` }),
+  'project.bid': (p) => ({ title: 'پروجیکٹ کی قیمت ملی', body: `${p.worker} "${p.title}" ${p.price} میں کر سکتے ہیں۔` }),
+  'project.awarded': (p) => ({ title: 'آپ کو کام مل گیا!', body: `گاہک نے "${p.title}" کے لیے آپ کی قیمت منتخب کی۔` }),
+  'project.not_chosen': (p) => ({ title: 'گاہک نے کسی اور کو چنا', body: `"${p.title}" کسی اور ماہر کو ملا۔` }),
+  'project.stage_funded': (p) => ({ title: 'رقم محفوظ ہے: کام شروع کریں', body: `"${p.stage}" کے لیے ${p.price} Fixli کے پاس محفوظ ہیں۔` }),
+  'project.stage_started': (p) => ({ title: 'کام شروع ہو گیا', body: `"${p.title}" میں "${p.stage}" شروع ہو گیا۔` }),
+  'project.stage_submitted': (p) => ({ title: 'کام چیک کریں', body: `"${p.stage}" تیار ہے۔ منظور کریں یا تبدیلی بتائیں۔` }),
+  'project.changes_requested': (p) => ({ title: 'تبدیلی درکار ہے', body: `گاہک نے "${p.stage}" میں تبدیلی کہی ہے۔` }),
+  'project.stage_approved': (p) => ({ title: 'کام منظور', body: `"${p.stage}" کے ${p.price} وصول کریں، پھر وصولی درج کریں۔` }),
+  'project.stage_paid': (p) => ({ title: 'مرحلے کی ادائیگی', body: `"${p.stage}" کے لیے ${p.price}۔ Fixli کی فیس: ${p.commission}۔` }),
+  'project.completed': (p) => ({ title: 'پروجیکٹ مکمل', body: `"${p.title}" مکمل ہو گیا۔ رائے ضرور دیں۔` }),
+  'project.cancelled': (p) => ({ title: 'پروجیکٹ منسوخ', body: `"${p.title}" منسوخ ہو گیا۔` }),
+  'project.disputed': (p) => ({ title: 'ایک مسئلہ رپورٹ ہوا', body: `"${p.stage}" کے بارے میں۔ Fixli سپورٹ رابطہ کرے گی۔` }),
+  'project.refunded': (p) => ({ title: 'رقم واپس', body: `"${p.stage}" کے ${p.price} آپ کے کارڈ پر واپس آ رہے ہیں۔` }),
+  'project.visit': (p) => ({ title: 'سائٹ وزٹ طے ہوا', body: `"${p.title}" کے لیے ${p.date}۔` }),
   'job.reassigned': (p) => ({ title: 'آپ کے لیے دوسرا ماہر', body: `${p.worker} اب "${p.title}" نہیں کر سکتے۔ ہم قریب کے دوسرے ماہرین سے پوچھ رہے ہیں۔` }),
   'job.sos_request': (p) => ({ title: 'آپ کے قریب ایمرجنسی', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} کلومیٹر` : ''}۔ کیا آپ ابھی جا سکتے ہیں؟ ${p.minutes} منٹ میں جواب دیں۔` }),
   'sos.searching_wider': (p) => ({ title: 'مدد تلاش کی جا رہی ہے', body: `قریب کوئی فوراً نہیں آ سکا۔ ہم نے "${p.title}" مزید ماہرین کو بھیج دیا ہے؛ جلد قیمتیں آئیں گی۔` }),
@@ -123,6 +168,21 @@ const ur: Record<NotificationType, T> = {
 };
 
 const ar: Record<NotificationType, T> = {
+  'project.new': (p) => ({ title: 'مشروع جديد بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. أرسل سعرك.` }),
+  'project.bid': (p) => ({ title: 'وصلك سعر للمشروع', body: `يمكن لـ ${p.worker} تنفيذ "${p.title}" مقابل ${p.price}.` }),
+  'project.awarded': (p) => ({ title: 'تم اختيارك!', body: `اختار العميل سعرك لـ "${p.title}".` }),
+  'project.not_chosen': (p) => ({ title: 'اختار العميل شخصاً آخر', body: `ذهب "${p.title}" إلى محترف آخر.` }),
+  'project.stage_funded': (p) => ({ title: 'المبلغ محفوظ: يمكنك البدء', body: `${p.price} لمرحلة "${p.stage}" محفوظة لدى Fixli.` }),
+  'project.stage_started': (p) => ({ title: 'بدأ العمل', body: `بدأت مرحلة "${p.stage}" في "${p.title}".` }),
+  'project.stage_submitted': (p) => ({ title: 'يرجى مراجعة العمل', body: `مرحلة "${p.stage}" جاهزة. وافق أو اطلب تعديلات.` }),
+  'project.changes_requested': (p) => ({ title: 'مطلوب تعديلات', body: `طلب العميل تعديلات على "${p.stage}".` }),
+  'project.stage_approved': (p) => ({ title: 'تمت الموافقة على العمل', body: `استلم ${p.price} لمرحلة "${p.stage}" ثم سجّل الاستلام.` }),
+  'project.stage_paid': (p) => ({ title: 'تم دفع المرحلة', body: `${p.price} لمرحلة "${p.stage}". رسوم Fixli: ${p.commission}.` }),
+  'project.completed': (p) => ({ title: 'اكتمل المشروع', body: `اكتمل "${p.title}". يرجى ترك تقييم.` }),
+  'project.cancelled': (p) => ({ title: 'تم إلغاء المشروع', body: `تم إلغاء "${p.title}".` }),
+  'project.disputed': (p) => ({ title: 'تم الإبلاغ عن مشكلة', body: `بخصوص "${p.stage}". سيتواصل معك دعم Fixli.` }),
+  'project.refunded': (p) => ({ title: 'تم رد المبلغ', body: `${p.price} لمرحلة "${p.stage}" في طريقها إلى بطاقتك.` }),
+  'project.visit': (p) => ({ title: 'تم تحديد زيارة للموقع', body: `${p.date} لمشروع "${p.title}".` }),
   'job.reassigned': (p) => ({ title: 'نبحث لك عن محترف آخر', body: `لم يعد بإمكان ${p.worker} تنفيذ "${p.title}". نسأل محترفين آخرين بالقرب منك.` }),
   'job.sos_request': (p) => ({ title: 'حالة طارئة بالقرب منك', body: `${p.title}${p.area ? ` · ${p.area}` : ''}${p.distance ? ` · ${p.distance} كم` : ''}. هل يمكنك الذهاب الآن؟ أجب خلال ${p.minutes} دقائق.` }),
   'sos.searching_wider': (p) => ({ title: 'ما زلنا نبحث عن مساعدة', body: `لم يتمكن أحد قريب من الحضور فوراً. أرسلنا "${p.title}" إلى محترفين آخرين؛ ستصل الأسعار قريباً.` }),

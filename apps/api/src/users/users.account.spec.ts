@@ -7,12 +7,14 @@ describe('UsersService: account deletion and favourites', () => {
     jobRequest: { findMany: jest.fn(), update: jest.fn() }, jobEvent: { create: jest.fn() }, offer: { updateMany: jest.fn() },
     address: { deleteMany: jest.fn() }, trustedContact: { deleteMany: jest.fn() }, favoriteWorker: { deleteMany: jest.fn() },
     portfolioItem: { deleteMany: jest.fn() }, worker: { update: jest.fn() }, verificationCase: { updateMany: jest.fn() }, user: { update: jest.fn() },
+    projectBid: { updateMany: jest.fn() }, projectInvite: { deleteMany: jest.fn() }, project: { updateMany: jest.fn() },
   };
   const prisma: any = {
     user: { findUnique: jest.fn() }, jobRequest: { count: jest.fn() }, $transaction: jest.fn((fn: any) => fn(tx)),
     favoriteWorker: { findMany: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() }, worker: { findFirst: jest.fn() },
+    project: { count: jest.fn(), findMany: jest.fn() }, projectPayment: { count: jest.fn() },
   };
-  const storage = { deleteOwned: jest.fn() };
+  const storage = { deleteOwned: jest.fn(), removeKeys: jest.fn() };
   const sessions = { revokeAllExcept: jest.fn() };
   const audit = { record: jest.fn() };
   const svc = new UsersService(prisma, storage as any, sessions as any, audit as any);
@@ -23,6 +25,9 @@ describe('UsersService: account deletion and favourites', () => {
     prisma.$transaction.mockImplementation((fn: any) => fn(tx));
     prisma.jobRequest.count.mockResolvedValue(0);
     tx.jobRequest.findMany.mockResolvedValue([]);
+    prisma.project.count.mockResolvedValue(0);
+    prisma.project.findMany.mockResolvedValue([]);
+    prisma.projectPayment.count.mockResolvedValue(0);
   });
   const account = (over: any = {}) => ({ id: 'u1', password: hash, type: 'customer', status: 'ACTIVE', worker: null, ...over });
 
@@ -50,6 +55,27 @@ describe('UsersService: account deletion and favourites', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
+    it('is refused while a project is running, money is held, or Fixli owes the professional', async () => {
+      prisma.user.findUnique.mockResolvedValue(account());
+      prisma.project.count.mockResolvedValue(1);
+      await expect(svc.deleteMe('u1', 'right-Pass-1')).rejects.toMatchObject({ response: { code: 'ACTIVE_JOB' } });
+      prisma.project.count.mockResolvedValue(0);
+      prisma.projectPayment.count.mockResolvedValue(1);
+      await expect(svc.deleteMe('u1', 'right-Pass-1')).rejects.toMatchObject({ response: { code: 'MONEY_PENDING' } });
+      prisma.projectPayment.count.mockResolvedValue(0);
+      prisma.user.findUnique.mockResolvedValue(account({ type: 'worker', worker: { ledgerBalance: -500 } }));
+      await expect(svc.deleteMe('u1', 'right-Pass-1')).rejects.toMatchObject({ response: { code: 'MONEY_PENDING' } });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('erases project descriptions, addresses and files', async () => {
+      prisma.user.findUnique.mockResolvedValue(account());
+      prisma.project.findMany.mockResolvedValue([{ photoKeys: ['p1', 'p2'], audioKey: 'a1' }]);
+      await svc.deleteMe('u1', 'right-Pass-1');
+      expect(tx.project.updateMany.mock.calls[1][0].data).toMatchObject({ description: '', location: null, latitude: null, photoKeys: [], audioKey: null });
+      expect(storage.removeKeys).toHaveBeenCalledWith(['p1', 'p2', 'a1']);
+    });
+
     it('a customer: cancels open requests, erases personal data, signs out, audits', async () => {
       prisma.user.findUnique.mockResolvedValue(account());
       tx.jobRequest.findMany.mockResolvedValue([{ id: 'j1', status: 'CREATED' }]);
@@ -70,7 +96,7 @@ describe('UsersService: account deletion and favourites', () => {
       await svc.deleteMe('u1', 'right-Pass-1');
       expect(tx.offer.updateMany.mock.calls[0][0]).toMatchObject({ where: { workerId: 'u1', status: 'PENDING' }, data: { status: 'WITHDRAWN' } });
       expect(tx.portfolioItem.deleteMany).toHaveBeenCalled();
-      expect(tx.worker.update.mock.calls[0][0].data).toEqual({ isOnline: false, bio: null });
+      expect(tx.worker.update.mock.calls[0][0].data).toEqual({ isOnline: false, bio: null, businessName: null, teamSize: null });
       expect(tx.verificationCase.updateMany.mock.calls[0][0].data).toEqual({ documentKeys: [], reference: null });
     });
   });

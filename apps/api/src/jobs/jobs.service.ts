@@ -167,6 +167,12 @@ export class JobsService {
     ]);
     if (!category) throw new BadRequestException({ code: 'INVALID_CATEGORY', message: 'Please choose a service.' });
     if (!address) throw new BadRequestException({ code: 'INVALID_ADDRESS', message: 'Please choose one of your saved addresses.' });
+    if (address.latitude == null || address.longitude == null) {
+      throw new BadRequestException({
+        code: 'LOCATION_REQUIRED',
+        message: 'This address has no map location. Edit it and tap “Use my current location”, then try again.',
+      });
+    }
 
     const issueCodes = [...new Set(dto.issueCodes ?? [])];
     const issues = category.issues.filter((i) => issueCodes.includes(i.code));

@@ -51,8 +51,12 @@ export function computeWindow(
       return { from: now, to: new Date(now.getTime() + 2 * 3600_000) };
     case 'TODAY': {
       const end = at(y, m, d, 21);
-      // Late in the evening "today" still means "as soon as possible tonight".
-      return { from: now, to: end > new Date(now.getTime() + 3600_000) ? end : at(y, m, d, 23) };
+      // Late in the evening "today" still means "as soon as possible tonight": until 11 PM,
+      // and always at least an hour, so the window never ends before it starts.
+      const soonest = new Date(now.getTime() + 3600_000);
+      if (end > soonest) return { from: now, to: end };
+      const late = at(y, m, d, 23);
+      return { from: now, to: late > soonest ? late : soonest };
     }
     case 'TOMORROW': {
       const [ty, tm, td] = addDays(1);

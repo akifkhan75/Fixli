@@ -23,7 +23,7 @@ export class DataExportService {
     if (!user) throw new NotFoundException('Account not found');
 
     const mine = { OR: [{ customerId: userId }, { assignedWorkerId: userId }] };
-    const [addresses, trustedContacts, favourites, jobs, messages, reviewsGiven, reviewsAbout, disputes, incidents, notifications, devices, payments, worker] = await Promise.all([
+    const [addresses, trustedContacts, favourites, jobs, messages, reviewsGiven, reviewsAbout, disputes, incidents, notifications, devices, payments, worker, projects, projectBids] = await Promise.all([
       this.prisma.address.findMany({ where: { userId }, take: CAP }),
       this.prisma.trustedContact.findMany({ where: { userId }, select: { name: true, phone: true, notifyOnSos: true, createdAt: true }, take: CAP }),
       this.prisma.favoriteWorker.findMany({ where: { customerId: userId }, select: { createdAt: true, worker: { select: { user: { select: { name: true } } } } }, take: CAP }),
@@ -32,9 +32,9 @@ export class DataExportService {
         select: { id: true, title: true, description: true, location: true, area: true, city: true, status: true, whenOption: true, agreedAmount: true, agreedCurrency: true, cancelReason: true, createdAt: true, customerId: true, assignedWorkerId: true },
       }),
       this.prisma.message.findMany({ where: { senderId: userId, isSystem: false }, orderBy: { createdAt: 'desc' }, take: CAP, select: { conversationId: true, text: true, createdAt: true } }),
-      this.prisma.review.findMany({ where: { reviewerId: userId }, take: CAP, select: { jobRequestId: true, rating: true, comment: true, tags: true, createdAt: true } }),
-      this.prisma.review.findMany({ where: { targetId: userId }, take: CAP, select: { jobRequestId: true, rating: true, comment: true, tags: true, createdAt: true } }),
-      this.prisma.dispute.findMany({ where: { raisedById: userId }, take: CAP, select: { jobRequestId: true, category: true, reason: true, description: true, status: true, resolution: true, createdAt: true } }),
+      this.prisma.review.findMany({ where: { reviewerId: userId }, take: CAP, select: { jobRequestId: true, projectId: true, rating: true, comment: true, tags: true, createdAt: true } }),
+      this.prisma.review.findMany({ where: { targetId: userId }, take: CAP, select: { jobRequestId: true, projectId: true, rating: true, comment: true, tags: true, createdAt: true } }),
+      this.prisma.dispute.findMany({ where: { raisedById: userId }, take: CAP, select: { jobRequestId: true, projectId: true, category: true, reason: true, description: true, status: true, resolution: true, createdAt: true } }),
       this.prisma.incident.findMany({ where: { reporterId: userId }, take: CAP, select: { type: true, severity: true, description: true, latitude: true, longitude: true, status: true, createdAt: true } }),
       this.prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: CAP, select: { type: true, title: true, body: true, readAt: true, createdAt: true } }),
       this.prisma.session.findMany({ where: { userId }, select: { deviceName: true, platform: true, createdAt: true, lastUsedAt: true, revokedAt: true }, take: CAP }),
@@ -47,8 +47,17 @@ export class DataExportService {
           workingHours: { select: { weekday: true, startMinute: true, endMinute: true } },
           portfolio: { select: { title: true, description: true } },
           verifications: { select: { type: true, status: true, reason: true, reference: true, createdAt: true } },
+          businessName: true, teamSize: true,
         },
       }),
+      this.prisma.project.findMany({
+        where: { OR: [{ customerId: userId }, { awardedWorkerId: userId }] }, orderBy: { createdAt: 'desc' }, take: CAP,
+        select: {
+          id: true, title: true, description: true, workType: true, status: true, location: true, area: true, city: true, budgetMin: true, budgetMax: true, agreedAmount: true, currency: true, createdAt: true, customerId: true,
+          milestones: { select: { title: true, amount: true, status: true, payments: { select: { method: true, amount: true, status: true, createdAt: true } } } },
+        },
+      }),
+      this.prisma.projectBid.findMany({ where: { workerId: userId }, take: CAP, select: { projectId: true, totalAmount: true, currency: true, durationDays: true, note: true, status: true, createdAt: true } }),
     ]);
 
     await this.audit.record({ actorId: userId, action: 'privacy.data_exported', entityType: 'User', entityId: userId });
@@ -62,6 +71,9 @@ export class DataExportService {
       savedWorkers: favourites.map((f) => ({ name: f.worker.user.name, savedAt: f.createdAt })),
       jobs: jobs.map(({ customerId, assignedWorkerId, ...j }) => ({ ...j, yourRole: customerId === userId ? 'customer' : assignedWorkerId === userId ? 'professional' : undefined })),
       payments,
+      // The exact address belongs to whoever posted the project.
+      projects: projects.map(({ customerId, ...p }) => ({ ...p, location: customerId === userId ? p.location : undefined, yourRole: customerId === userId ? 'customer' : 'professional' })),
+      projectPrices: projectBids,
       messagesYouSent: messages,
       reviewsYouWrote: reviewsGiven,
       reviewsAboutYou: reviewsAbout,

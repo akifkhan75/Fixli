@@ -54,7 +54,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 // Credential endpoints must never trigger a refresh-and-retry loop.
-const NO_REFRESH = ['/auth/login', '/auth/signup', '/auth/refresh', '/auth/admin/login', '/auth/phone/start', '/auth/phone/verify', '/auth/password/forgot', '/auth/password/reset'];
+const NO_REFRESH = ['/auth/login/code', '/auth/login/code/start', '/auth/login', '/auth/signup', '/auth/refresh', '/auth/admin/login', '/auth/phone/start', '/auth/phone/verify', '/auth/password/forgot', '/auth/password/reset'];
 
 async function send(endpoint: string, options: RequestInit, token?: string | null) {
   const authHeaders: Record<string, string> = token === undefined ? await getAuthHeaders() : token ? { Authorization: `Bearer ${token}` } : {};
@@ -104,6 +104,13 @@ export async function login(phone: string, countryCode: CountryCode, password: s
     method: 'POST',
     body: JSON.stringify({ phone, countryCode, password, ...(await getDeviceInfo()) }),
   });
+}
+
+/** Passwordless sign-in: text a code, then exchange it for a session. */
+export const startLoginCode = (phone: string, countryCode: CountryCode) =>
+  request<OtpStarted>('/auth/login/code/start', { method: 'POST', body: JSON.stringify({ phone, countryCode }) });
+export async function loginWithCode(phone: string, countryCode: CountryCode, code: string): Promise<IAuthResponse> {
+  return request<IAuthResponse>('/auth/login/code', { method: 'POST', body: JSON.stringify({ phone, countryCode, code, ...(await getDeviceInfo()) }) });
 }
 
 export async function logoutRemote(): Promise<void> {
@@ -256,8 +263,11 @@ export const transcribeVoice = (uploadId: string, locale?: string) =>
   request<{ text: string }>('/ai/transcribe', { method: 'POST', body: JSON.stringify({ uploadId, locale }) });
 export const getJobView = (id: string) => request<JobView>(`/job-requests/${id}`);
 export const listJobs = (status?: string) => request<Page<JobView>>(`/job-requests${status ? `?status=${status}` : ''}`);
+/** All my jobs, newest first, one page at a time. */
+export const listJobsPage = (cursor?: string) => request<Page<JobView>>(`/job-requests?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
 /** Booked and not finished (on the way, on site, waiting for confirmation…), or finished. */
-export const listJobGroup = (group: 'active' | 'past', limit = 50) => request<Page<JobView>>(`/job-requests?group=${group}&limit=${limit}`);
+export const listJobGroup = (group: 'active' | 'past', limit = 50, cursor?: string) =>
+  request<Page<JobView>>(`/job-requests?group=${group}&limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
 
 export async function updateJobRequest(
   id: string,
@@ -306,7 +316,7 @@ export interface Earnings {
   pendingSettlement: { id: string; amount: number; createdAt: string } | null;
 }
 export const getWorkerEarnings = (period: 'week' | 'month' = 'week') => request<Earnings>(`/workers/me/earnings?period=${period}`);
-export interface LedgerItem { id: string; type: 'COMMISSION_OWED' | 'COMMISSION_SETTLED' | 'ADJUSTMENT'; amount: number; currency: string; balanceAfter: number; jobRequestId: string | null; jobTitle: string | null; note: string | null; createdAt: string }
+export interface LedgerItem { id: string; type: 'COMMISSION_OWED' | 'COMMISSION_SETTLED' | 'ADJUSTMENT' | 'ESCROW_CREDIT'; amount: number; currency: string; balanceAfter: number; jobRequestId: string | null; jobTitle: string | null; note: string | null; createdAt: string }
 export const getLedger = (cursor?: string) => request<{ items: LedgerItem[]; nextCursor: string | null }>(`/workers/me/ledger${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
 export const reportSettlement = (amount: number, rail: string, reference: string) =>
   request<{ id: string; status: string }>('/workers/me/settlements', { method: 'POST', body: JSON.stringify({ amount, rail, reference }) });
@@ -315,7 +325,7 @@ export interface PaymentView { id: string; method: string; amount: number; curre
 /** Worker: "I received the agreed amount in cash". The amount is the job's agreed total (never typed). */
 export const markCashReceived = (jobId: string) => request<PaymentView>(`/job-requests/${jobId}/payments/cash`, { method: 'POST', body: JSON.stringify({}) });
 export const confirmPayment = (paymentId: string) => request<PaymentView>(`/payments/${paymentId}/confirm`, { method: 'POST' });
-export const disputePayment = (paymentId: string, reason: string) => request<{ status: string; disputeId: string }>(`/payments/${paymentId}/dispute`, { method: 'POST', body: JSON.stringify({ reason }) });
+export const disputePayment = (paymentId: string, reason: string, claimedAmount?: number) => request<{ status: string; disputeId: string }>(`/payments/${paymentId}/dispute`, { method: 'POST', body: JSON.stringify({ reason, claimedAmount }) });
 
 export type DisputeCategory = 'PAYMENT' | 'QUALITY' | 'DAMAGE' | 'NO_SHOW' | 'PRICE' | 'BEHAVIOUR' | 'OTHER';
 export const openDispute = (data: { jobRequestId: string; category: DisputeCategory; reason: string; description?: string; evidenceUploadIds?: string[] }) =>
@@ -324,7 +334,7 @@ export const openDispute = (data: { jobRequestId: string; category: DisputeCateg
 export const WORKER_REVIEW_TAGS = ['ON_TIME', 'FRIENDLY', 'CLEAN', 'FAIR_PRICE', 'SKILLED', 'EXPLAINED_WELL'] as const;
 export const CUSTOMER_REVIEW_TAGS = ['RESPECTFUL', 'CLEAR_INSTRUCTIONS', 'PAID_PROMPTLY', 'EASY_ACCESS'] as const;
 /** The person reviewed is always the other side of the job (the server decides; no target id). */
-export const submitReview = (data: { jobRequestId: string; rating: number; comment?: string; tags?: string[] }) =>
+export const submitReview = (data: ({ jobRequestId: string } | { projectId: string }) & { rating: number; comment?: string; tags?: string[] }) =>
   request<{ id: string }>('/reviews', { method: 'POST', body: JSON.stringify(data) });
 
 export interface FavoriteWorker { id: string; workerId: string; worker: { id: string; rating: number; user: { name: string; profileImageUrl: string | null }; services: { category: { name: string } }[] } }
@@ -351,7 +361,7 @@ export async function generateQuoteDraft(jobDescription: string, workerNotes: st
 
 export interface ChatParticipant { id: string; name: string; profileImageUrl: string | null }
 export interface ConversationItem {
-  id: string; job: { id: string; title: string | null; status: string } | null; counterpart: ChatParticipant | null;
+  id: string; job: { id: string; title: string | null; status: string } | null; project?: { id: string; title: string; status: string } | null; counterpart: ChatParticipant | null;
   lastMessage: ChatMessage | null; lastMessageAt: string | null; unreadCount: number;
   isReadOnly: boolean; closedAt: string | null; blockedByMe: boolean;
 }
@@ -360,7 +370,7 @@ export interface ChatMessage {
   isSystem: boolean; systemKey?: string | null; createdAt: string;
   sender: { id: string; name: string } | null; reads: { userId: string; readAt: string }[];
 }
-export interface ConversationMeta { id: string; job: { id: string; title: string | null } | null; counterpart: { id: string; name: string } | null; isReadOnly: boolean; closedAt: string | null; blocked: boolean }
+export interface ConversationMeta { id: string; job: { id: string; title: string | null } | null; project?: { id: string; title: string } | null; counterpart: { id: string; name: string } | null; isReadOnly: boolean; closedAt: string | null; blocked: boolean }
 
 export const getConversations = (cursor?: string) => request<Page<ConversationItem>>(`/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
 export const getConversationMessages = (id: string, cursor?: string) =>
@@ -445,6 +455,7 @@ export type OnboardingStep = 'skills' | 'area' | 'hours' | 'pricing' | 'document
 export interface WorkerMe {
   id: string; rating: number; isVerified: boolean; bio: string | null; experienceYears: number; languages: string[];
   gender: 'FEMALE' | 'MALE' | null; hidePhotoUntilBooked: boolean; isOnline: boolean;
+  equipment: string[];
   serviceLat: number | null; serviceLng: number | null; serviceAreaLabel: string | null; serviceRadius: number;
   pricingModel: 'FIXED' | 'HOURLY' | 'CALLOUT_PLUS_QUOTE' | 'QUOTE' | null;
   minimumCallOutFee: number | null; hourlyRate: number | null; currency: string;
@@ -453,10 +464,11 @@ export interface WorkerMe {
   services: { category: { id: string; name: string; translations?: Record<string, { name?: string }> | null } }[];
   workingHours: { weekday: number; startMinute: number; endMinute: number }[];
   portfolio: { id: string; title: string; description: string | null; photos: string[] }[];
+  businessName?: string | null; teamSize?: number | null;
   verifications: { id: string; type: VerificationType; status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'NEEDS_INFO'; reason: string | null }[];
   onboarding: { steps: Record<OnboardingStep, boolean>; missing: OnboardingStep[]; complete: boolean; percent: number };
 }
-export type WorkerPatch = Partial<Pick<WorkerMe, 'bio' | 'experienceYears' | 'languages' | 'gender' | 'hidePhotoUntilBooked' | 'pricingModel' | 'minimumCallOutFee' | 'hourlyRate' | 'serviceLat' | 'serviceLng' | 'serviceAreaLabel' | 'serviceRadius' | 'isOnline'>>;
+export type WorkerPatch = Partial<Pick<WorkerMe, 'bio' | 'experienceYears' | 'languages' | 'gender' | 'hidePhotoUntilBooked' | 'pricingModel' | 'minimumCallOutFee' | 'hourlyRate' | 'serviceLat' | 'serviceLng' | 'serviceAreaLabel' | 'serviceRadius' | 'isOnline' | 'teamSize' | 'equipment'>> & { businessName?: string };
 
 export const getWorkerMe = () => request<WorkerMe>('/workers/me');
 export const patchWorkerMe = (p: WorkerPatch) => request<WorkerMe>('/workers/me', { method: 'PATCH', body: JSON.stringify(p) });
@@ -471,6 +483,7 @@ export const submitWorkerForReview = () =>
 export interface PublicWorker {
   id: string; rating: number; ratingCount: number; jobsCompleted: number; bio: string | null; experienceYears: number;
   languages: string[]; isVerified: boolean; isOnline: boolean; serviceAreaLabel: string | null; currency: string;
+  equipment: string[];
   pricingModel: WorkerMe['pricingModel']; minimumCallOutFee: number | null; hourlyRate: number | null;
   user: { id: string; name: string; profileImageUrl: string | null };
   services: WorkerMe['services'];
@@ -561,3 +574,86 @@ export async function sendQueued(item: { method: string; endpoint: string; body?
 
 /** True when a failed call means "no connection", i.e. the action can be queued and sent later. */
 export const isOfflineError = (e: unknown) => e instanceof ApiError && e.code === 'OFFLINE';
+
+// ── Projects (larger work) ───────────────────────────────────
+
+export type ProjectStatus = 'DRAFT' | 'OPEN' | 'AWARDED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type StageStatus = 'PENDING' | 'FUNDED' | 'IN_PROGRESS' | 'SUBMITTED' | 'APPROVED' | 'RELEASED' | 'DISPUTED' | 'CANCELLED';
+export type WorkType = 'NEW_BUILD' | 'RENOVATION' | 'INSTALLATION' | 'MAINTENANCE';
+export type PropertyType = 'HOUSE' | 'APARTMENT' | 'SHOP' | 'OFFICE' | 'OTHER';
+export type StartWhen = 'ASAP' | 'THIS_MONTH' | 'LATER';
+export type PaymentMode = 'ESCROW' | 'DIRECT';
+
+export interface CreateProjectInput {
+  categoryId: string; title: string; description?: string; workType: WorkType; propertyType?: PropertyType; addressId: string;
+  budgetMin?: number; budgetMax?: number; startWhen?: StartWhen; photoUploadIds?: string[]; audioUploadId?: string; audioTranscript?: string;
+  suggestedMilestones?: { title: string; percent: number }[]; idempotencyKey: string;
+}
+export interface StagePayment { id: string; method: 'CARD' | 'DIRECT'; status: string; amount: number; checkoutUrl: string | null; paidAt: string | null; releasedAt: string | null }
+export interface ProjectStage {
+  id: string; position: number; title: string; amount: number; status: StageStatus; submittedNote: string | null; changesNote: string | null;
+  submittedAt: string | null; evidence: string[]; payments: StagePayment[];
+}
+export interface ProjectMaterial { id: string; name: string; quantity: number; unit: string | null; providedBy: 'customer' | 'worker'; isReady: boolean; addedById: string }
+export interface ProjectVisit { id: string; scheduledAt: string; note: string | null; status: 'PLANNED' | 'DONE' | 'CANCELLED' }
+export interface ProjectBidMine { id: string; totalAmount: number; durationDays: number; note: string | null; milestones: { title: string; amount: number }[]; status: MyOffer['status'] }
+export interface ProjectView {
+  id: string; viewer: 'customer' | 'hired' | 'candidate'; title: string; description: string; status: ProjectStatus; workType: WorkType; propertyType: PropertyType;
+  paymentMode: PaymentMode; cardAvailable: boolean; currency: string; budgetMin: number | null; budgetMax: number | null; startWhen: StartWhen; agreedAmount: number | null;
+  area: string | null; city: string | null; location: string | null; distanceKm: number | null; createdAt: string;
+  category: NonNullable<JobView['category']>; customer: { id?: string; name: string };
+  awardedWorker: { id: string; rating: number; isVerified: boolean; businessName: string | null; user: { name: string; profileImageUrl: string | null } } | null;
+  suggestedMilestones: { title: string; percent: number }[] | null; photos: string[]; audioUrl: string | null; audioTranscript: string | null;
+  milestones: ProjectStage[]; materials: ProjectMaterial[]; visits: ProjectVisit[]; reviews: { id: string; reviewerId: string; rating: number }[];
+  bidCount?: number; myBid: ProjectBidMine | null;
+}
+export interface ProjectListItem {
+  id: string; title: string; status: ProjectStatus; workType: WorkType; area: string | null; city: string | null; currency: string; agreedAmount: number | null;
+  budgetMin: number | null; budgetMax: number | null; createdAt: string; category: NonNullable<JobView['category']>; bidCount?: number;
+  stages: { total: number; done: number }; currentStage: { title: string; status: StageStatus } | null;
+}
+export interface ProjectFeedItem {
+  id: string; title: string; description: string; workType: WorkType; propertyType: PropertyType; area: string | null; city: string | null; distanceKm: number | null;
+  budgetMin: number | null; budgetMax: number | null; currency: string; startWhen: StartWhen; createdAt: string; category: NonNullable<JobView['category']>;
+  myBid: { id: string; totalAmount: number; status: MyOffer['status'] } | null;
+}
+export interface ProjectBidCard {
+  id: string; totalAmount: number; currency: string; durationDays: number; note: string | null; status: MyOffer['status'];
+  milestones: { title: string; amount: number }[];
+  worker: { id: string; name: string; businessName: string | null; teamSize: number | null; profileImageUrl: string | null; rating: number; ratingCount: number; jobsCompleted: number; isVerified: boolean; experienceYears: number; distanceKm: number | null };
+}
+
+const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) });
+
+export const createProject = (input: CreateProjectInput) => post<ProjectView>('/projects', input);
+export const listProjects = (cursor?: string) => request<Page<ProjectListItem>>(`/projects${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
+export const getProjectFeed = () => request<ProjectFeedItem[]>('/workers/me/projects');
+export const getProject = (id: string) => request<ProjectView>(`/projects/${id}`);
+export const cancelProject = (id: string, reason?: string) => post<{ success: boolean }>(`/projects/${id}/cancel`, { reason });
+export const listProjectBids = (id: string) => request<ProjectBidCard[]>(`/projects/${id}/bids`);
+export const sendProjectBid = (id: string, bid: { totalAmount: number; durationDays: number; note?: string; milestones?: { title: string; amount: number }[] }) =>
+  request<ProjectBidMine>(`/projects/${id}/bids/mine`, { method: 'PUT', body: JSON.stringify(bid) });
+export const withdrawProjectBid = (id: string) => request<{ success: boolean }>(`/projects/${id}/bids/mine`, { method: 'DELETE' });
+export const declineProject = (id: string) => post<{ success: boolean }>(`/projects/${id}/not-interested`);
+export const awardProject = (id: string, bidId: string, paymentMode: PaymentMode) => post<ProjectView>(`/projects/${id}/award`, { bidId, paymentMode });
+
+export const fundStage = (id: string) => post<{ checkoutUrl: string }>(`/project-stages/${id}/fund`);
+export const startStage = (id: string) => post<unknown>(`/project-stages/${id}/start`);
+export const submitStage = (id: string, data: { note?: string; photoUploadIds?: string[] }) => post<unknown>(`/project-stages/${id}/submit`, data);
+export const requestStageChanges = (id: string, note: string) => post<unknown>(`/project-stages/${id}/request-changes`, { note });
+export const approveStage = (id: string) => post<unknown>(`/project-stages/${id}/approve`);
+export const markStagePaid = (id: string) => post<unknown>(`/project-stages/${id}/mark-paid`);
+export const disputeStage = (id: string, reason: string) => post<unknown>(`/project-stages/${id}/dispute`, { reason });
+
+export const addMaterial = (id: string, data: { name: string; quantity: number; unit?: string; providedBy: 'customer' | 'worker' }) => post<ProjectMaterial>(`/projects/${id}/materials`, data);
+export const setMaterialReady = (id: string, materialId: string, isReady: boolean) => request<unknown>(`/projects/${id}/materials/${materialId}`, { method: 'PATCH', body: JSON.stringify({ isReady }) });
+export const removeMaterial = (id: string, materialId: string) => request<unknown>(`/projects/${id}/materials/${materialId}`, { method: 'DELETE' });
+export const addVisit = (id: string, scheduledAt: string, note?: string) => post<ProjectVisit>(`/projects/${id}/visits`, { scheduledAt, note });
+export const updateVisit = (id: string, visitId: string, status: 'DONE' | 'CANCELLED') => request<unknown>(`/projects/${id}/visits/${visitId}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+export const conversationForProject = (id: string) => request<{ id: string }>(`/conversations/by-project/${id}`);
+
+export interface ProjectScope { title: string; stages: { title: string; percent: number }[]; questions: string[] }
+export const suggestProjectScope = (data: { categoryId: string; workType: WorkType; description?: string; photoUploadIds?: string[]; locale?: 'en' | 'ur' | 'ar' }) =>
+  post<{ available: boolean; suggestion: ProjectScope | null }>('/ai/project-scope', data);
+/** Off on the server unless enabled; the app then just asks the person to type the number. */
+export const readIdNumber = (uploadId: string) => post<{ available: boolean; idNumber: string | null }>('/ai/id-ocr', { uploadId });

@@ -48,7 +48,8 @@ export function decryptField(stored: string, withKey?: Buffer): string {
   if (!isEncrypted(stored)) return stored;
   const [iv, tag, ct] = stored.slice(PREFIX.length).split(':');
   if (!iv || !tag || !ct) throw new Error('Malformed encrypted field');
-  const decipher = createDecipheriv('aes-256-gcm', withKey ?? key(), Buffer.from(iv, 'base64url'));
+  // Only the full 16-byte tag counts: Node would otherwise accept a shortened, forgeable one.
+  const decipher = createDecipheriv('aes-256-gcm', withKey ?? key(), Buffer.from(iv, 'base64url'), { authTagLength: 16 });
   decipher.setAuthTag(Buffer.from(tag, 'base64url'));
   return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
 }

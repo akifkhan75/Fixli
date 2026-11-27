@@ -18,7 +18,8 @@ describe('DisputesService', () => {
   const realtime = { emitToUsers: jest.fn() };
   const ledger = { post: jest.fn() };
   const payments = { settleDisputed: jest.fn() };
-  const svc = new DisputesService(prisma, access as any, audit as any, events as any, staff as any, storage as any, notifications as any, realtime as any, ledger as any, payments as any);
+  const milestones = { resolveDispute: jest.fn() };
+  const svc = new DisputesService(prisma, access as any, audit as any, events as any, staff as any, storage as any, notifications as any, realtime as any, ledger as any, payments as any, milestones as any);
   const cust = { id: 'c1', type: 'customer' };
   const job = { id: 'j1', customerId: 'c1', assignedWorkerId: 'w1' };
 

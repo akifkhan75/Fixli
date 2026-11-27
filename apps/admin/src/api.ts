@@ -132,7 +132,7 @@ export const getCase = (id: string) => request<CaseDetail>(`/admin/v1/verificati
 export const decideCase = (id: string, decision: 'APPROVE' | 'REJECT' | 'NEEDS_INFO', reason?: string) =>
   request<{ id: string; status: string }>(`/admin/v1/verification-cases/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision, reason }) });
 
-export interface DisputeRow { id: string; reason: string; description: string | null; status: string; resolution: string | null; createdAt: string; raisedBy: { name: string; type: string }; jobRequest: { id: string; customerName: string; status: string } }
+export interface DisputeRow { id: string; reason: string; description: string | null; status: string; resolution: string | null; createdAt: string; raisedBy: { name: string; type: string }; /** For a project dispute this describes the project. */ jobRequest: { id: string; customerName: string; status: string }; projectTitle?: string }
 export const listDisputes = () => request<DisputeRow[]>('/disputes/all');
 export const updateDispute = (id: string, status: string, resolution?: string) =>
   request(`/disputes/${id}/resolve`, { method: 'PATCH', body: JSON.stringify({ status, resolution }) });
@@ -207,7 +207,7 @@ export const listSettlements = (status = 'PENDING') => request<SettlementRow[]>(
 export const decideSettlement = (id: string, approve: boolean, note?: string) => request(`/admin/v1/settlements/${id}/${approve ? 'confirm' : 'reject'}`, { method: 'POST', body: JSON.stringify(note ? { note } : {}) });
 
 export const getDisputeDetail = (id: string) => request<any>(`/admin/v1/disputes/${id}`);
-export const resolveDispute = (id: string, body: { status: string; resolution?: string; paymentOutcome?: 'CONFIRM' | 'VOID'; ledgerAdjustment?: { amount: number; note: string } }) =>
+export const resolveDispute = (id: string, body: { status: string; resolution?: string; paymentOutcome?: 'CONFIRM' | 'VOID'; stageOutcome?: 'RELEASE' | 'REFUND' | 'RESUME'; ledgerAdjustment?: { amount: number; note: string } }) =>
   request(`/disputes/${id}/resolve`, { method: 'PATCH', body: JSON.stringify(body) });
 
 export const reviewQueue = (hidden = false) => request<any[]>(`/admin/v1/moderation/reviews${hidden ? '?hidden=true' : ''}`);

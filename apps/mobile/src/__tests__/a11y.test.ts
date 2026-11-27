@@ -17,7 +17,7 @@ function walk(dir: string, out: string[] = []) {
 
 function touchables(src: string) {
   const found: { line: number; tag: string; body: string }[] = [];
-  for (const m of src.matchAll(/<(TouchableOpacity|Pressable|TouchableHighlight)\b/g)) {
+  for (const m of src.matchAll(/<(TouchableOpacity|Pressable|PressableScale|TouchableHighlight)\b/g)) {
     let i = m.index! + m[0].length, depth = 0;
     while (i < src.length) {
       const ch = src[i];
@@ -39,6 +39,8 @@ describe('accessibility', () => {
   it('every touchable has an accessibilityRole', () => {
     const missing: string[] = [];
     for (const f of files) for (const t of touchables(readFileSync(f, 'utf8'))) {
+      // PressableScale is a button unless told otherwise.
+      if (t.tag.startsWith('<PressableScale')) continue;
       if (!t.tag.includes('accessibilityRole') && !t.tag.includes('{...')) missing.push(`${rel(f)}:${t.line}`);
     }
     expect(missing).toEqual([]);

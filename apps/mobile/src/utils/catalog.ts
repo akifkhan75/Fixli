@@ -14,3 +14,9 @@ export function localizedName(item: Translatable, locale: SupportedLocale): stri
 export function humanize(code: string): string {
   return code.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
+
+/** A trade's display name from a catalog row (or the row embedded in a job or project). */
+export function catalogName(c: { name: string; translations?: Record<string, { name?: string }> | null } | null | undefined, locale: SupportedLocale): string {
+  if (!c) return '';
+  return localizedName({ name: c.translations?.en?.name ?? humanize(c.name), translations: c.translations }, locale);
+}

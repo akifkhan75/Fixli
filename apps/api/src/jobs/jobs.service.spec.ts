@@ -101,6 +101,13 @@ describe('JobsService', () => {
       await expect(svc.create(customer, dto({ issueCodes: ['made_up'] }))).rejects.toMatchObject({ response: { code: 'INVALID_ISSUE' } });
     });
 
+    it('rejects addresses without map coordinates', async () => {
+      primeCreate();
+      prisma.address.findFirst.mockResolvedValue({ ...address, latitude: null, longitude: null });
+      await expect(svc.create(customer, dto())).rejects.toMatchObject({ response: { code: 'LOCATION_REQUIRED' } });
+      expect(tx.jobRequest.create).not.toHaveBeenCalled();
+    });
+
     it('needs some description of the problem', async () => {
       primeCreate();
       await expect(svc.create(customer, dto({ issueCodes: [], description: 'x' }))).rejects.toMatchObject({ response: { code: 'DESCRIBE_PROBLEM' } });

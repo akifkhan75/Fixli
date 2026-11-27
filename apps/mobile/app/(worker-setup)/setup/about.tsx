@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Switch } from 'react-native';
 import { router } from 'expo-router';
+import { useI18n } from '../../../src/hooks/useI18n';
+import { VoiceField, type VoiceValue } from '../../../src/forms/components/VoiceField';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { useApi, friendlyError } from '../../../src/hooks/useApi';
 import { usePhotoUpload } from '../../../src/hooks/usePhotoUpload';
@@ -23,8 +25,12 @@ const GENDERS = () => ([{ id: 'FEMALE', label: t('workerSetupAbout.woman') }, { 
 export default function AboutScreen() {
   const theme = useTheme();
   const dispatch = useAppDispatch();
+  const { locale } = useI18n();
   const me = useApi(api.getWorkerMe);
   const [bio, setBio] = useState('');
+  const [voice, setVoice] = useState<VoiceValue>({ transcript: '' });
+  const [business, setBusiness] = useState('');
+  const [team, setTeam] = useState('');
   const [years, setYears] = useState('');
   const [languages, setLanguages] = useState<string[]>([]);
   const [gender, setGender] = useState<string[]>(['NONE']);
@@ -38,6 +44,8 @@ export default function AboutScreen() {
     const w = me.data;
     if (!w) return;
     setBio(w.bio ?? '');
+    setBusiness(w.businessName ?? '');
+    setTeam(w.teamSize ? String(w.teamSize) : '');
     setYears(w.experienceYears ? String(w.experienceYears) : '');
     setLanguages(w.languages);
     setGender([w.gender ?? 'NONE']);
@@ -53,6 +61,8 @@ export default function AboutScreen() {
       if (photo) dispatch(setCurrentUser(await api.updateMe({ avatarUploadId: photo.id })));
       await api.patchWorkerMe({
         bio: bio.trim() || undefined,
+        businessName: business.trim(),
+        ...(team ? { teamSize: Math.min(500, Math.max(1, parseInt(team, 10) || 1)) } : {}),
         experienceYears: years ? Math.min(60, parseInt(years, 10) || 0) : 0,
         languages,
         ...(gender[0] && gender[0] !== 'NONE' ? { gender: gender[0] as 'FEMALE' | 'MALE' } : {}),
@@ -71,8 +81,13 @@ export default function AboutScreen() {
       <PhotoButtons onPick={async (s) => { const u = await upload.run(s); if (u) setPhoto({ id: u.id, localUri: u.localUri }); }} busy={upload.busy} error={upload.error} denied={upload.denied} takeLabel={t('workerSetupAbout.takeAProfilePhoto')} />
 
       <View style={{ gap: 16, marginTop: 28 }}>
+        {/* Talking is easier than typing: the words land in the box below, to check or change. */}
+        <VoiceField label={t('workerSetupAbout.sayIt')} value={voice} locale={locale}
+          onChange={(v) => { setVoice(v); if (v.transcript && v.transcript !== voice.transcript) setBio(v.transcript.slice(0, 600)); }} />
         <TextInput label={t('workerSetupAbout.tellCustomersAboutYour')} value={bio} onChangeText={setBio} multiline maxLength={600} style={{ minHeight: 90, textAlignVertical: 'top' }} />
         <TextInput label={t('workerSetupAbout.yearsOfExperience')} keyboardType="number-pad" value={years} onChangeText={(v) => setYears(v.replace(/\D/g, '').slice(0, 2))} />
+        <TextInput label={t('workerSetupAbout.businessName')} value={business} onChangeText={setBusiness} maxLength={80} />
+        <TextInput label={t('workerSetupAbout.teamSize')} keyboardType="number-pad" value={team} onChangeText={(v) => setTeam(v.replace(/\D/g, '').slice(0, 3))} />
       </View>
 
       <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginTop: 24, marginBottom: 8 }}>{t('workerSetupAbout.languagesYouSpeak')}</Text>

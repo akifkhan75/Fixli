@@ -50,6 +50,15 @@ describe('SecretBox', () => {
     expect(() => box.open(parts.join('.'))).toThrow();
     expect(() => new SecretBox(Buffer.alloc(16).toString('base64'), 'x')).toThrow();
   });
+
+  it('refuses a shortened authentication tag, even one that matches', () => {
+    const box = new SecretBox(Buffer.alloc(32, 7).toString('base64'), 'x');
+    const [v, iv, tag, data] = box.seal('JBSWY3DPEHPK3PXP').split('.');
+    for (const bytes of [4, 8, 12, 15]) {
+      const short = Buffer.from(tag, 'base64url').subarray(0, bytes).toString('base64url');
+      expect(() => box.open([v, iv, short, data].join('.'))).toThrow();
+    }
+  });
 });
 
 import { matchTotpStep } from './totp';

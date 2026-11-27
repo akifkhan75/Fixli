@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { friendlyError } from '../../hooks/useApi';
-import { formatMoney } from '../../utils/money';
+import { formatMoney, parseMajorToMinor } from '../../utils/money';
+import { AmountField } from './AmountField';
 import * as api from '../../services/api';
 import { Button } from './Button';
 import { Text } from './Text';
@@ -16,6 +17,7 @@ export function CashConfirmCard({ payment, locale, onDone }: { payment: api.Paym
   const [busy, setBusy] = useState(false);
   const [disputing, setDisputing] = useState(false);
   const [reason, setReason] = useState('');
+  const [paid, setPaid] = useState('');
   const [error, setError] = useState<string | undefined>();
   const amount = formatMoney(payment.amount, payment.currency, locale);
   const act = (fn: () => Promise<unknown>) => async () => {
@@ -35,10 +37,11 @@ export function CashConfirmCard({ payment, locale, onDone }: { payment: api.Paym
         </View>
       ) : (
         <>
+          <AmountField label={t('cashConfirmCard.howMuchPaid', { currency: payment.currency })} value={paid} onChangeText={setPaid} currency={payment.currency} />
           <TextInput label={t('cashConfirmCard.whatsWrong')} value={reason} onChangeText={setReason} placeholder={t('cashConfirmCard.eGIPaid')} maxLength={500} />
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ flex: 1 }}><Button title={t('authSignup.back')} variant="secondary" disabled={busy} onPress={() => setDisputing(false)} /></View>
-            <View style={{ flex: 1 }}><Button title={t('cashConfirmCard.tellFixli')} variant="danger" loading={busy} disabled={busy || reason.trim().length < 3} onPress={act(() => api.disputePayment(payment.id, reason.trim()))} /></View>
+            <View style={{ flex: 1 }}><Button title={t('cashConfirmCard.tellFixli')} variant="danger" loading={busy} disabled={busy || reason.trim().length < 3} onPress={act(() => api.disputePayment(payment.id, reason.trim(), parseMajorToMinor(paid, payment.currency) ?? undefined))} /></View>
           </View>
         </>
       )}

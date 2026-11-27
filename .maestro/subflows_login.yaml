@@ -6,6 +6,7 @@ appId: com.fixli.app
 - extendedWaitUntil:
     visible: "Welcome back"
     timeout: 20000
+- tapOn: "Use my password instead"
 - tapOn:
     id: "phone-input"
 - inputText: ${PHONE}

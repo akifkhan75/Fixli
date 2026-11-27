@@ -1,50 +1,38 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { t } from '../../../src/i18n';
 import { useNotifications } from '../../../src/hooks/useNotifications';
+import { useWorkerAvailableJobs } from '../../../src/hooks/useWorkerAvailableJobs';
+import { tabIcon, tabScreenOptions } from '../../../src/components/ds/tabBar';
 
 export default function WorkerLayout() {
   const theme = useTheme();
   const { chatUnread } = useNotifications();
+  const availableJobs = useWorkerAvailableJobs();
+  const { bottom } = useSafeAreaInsets();
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.border,
-          borderTopWidth: 1,
-          height: 85,
-          paddingBottom: 25,
-          paddingTop: 10,
-        },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textTertiary,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="today"
-        options={{
-          title: t('customerRequestService.today'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="sunny" size={size} color={color} />
-          ),
-        }}
-      />
+    <Tabs screenOptions={tabScreenOptions(theme, bottom)}>
+      <Tabs.Screen name="today" options={{ title: t('customerRequestService.today'), tabBarIcon: tabIcon('sunny', 'sunny-outline', theme) }} />
       <Tabs.Screen
         name="jobs"
         options={{
           title: t('worker.jobs'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="briefcase" size={size} color={color} />
-          ),
+          tabBarIcon: tabIcon('briefcase', 'briefcase-outline', theme),
+          // Dot (not a count) when new / available work is waiting.
+          tabBarBadge: availableJobs > 0 ? '' : undefined,
+          tabBarBadgeStyle: availableJobs > 0
+            ? {
+                minWidth: 8,
+                maxWidth: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: theme.colors.accent,
+                top: 4,
+              }
+            : undefined,
         }}
       />
       <Tabs.Screen
@@ -52,29 +40,11 @@ export default function WorkerLayout() {
         options={{
           title: t('worker.messages'),
           tabBarBadge: chatUnread > 0 ? (chatUnread > 99 ? '99+' : chatUnread) : undefined,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles" size={size} color={color} />
-          ),
+          tabBarIcon: tabIcon('chatbubbles', 'chatbubbles-outline', theme),
         }}
       />
-      <Tabs.Screen
-        name="earnings"
-        options={{
-          title: t('worker.earnings'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: t('customerProfile.account'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
-          ),
-        }}
-      />
+      <Tabs.Screen name="earnings" options={{ title: t('worker.earnings'), tabBarIcon: tabIcon('wallet', 'wallet-outline', theme) }} />
+      <Tabs.Screen name="account" options={{ title: t('customerProfile.account'), tabBarIcon: tabIcon('person', 'person-outline', theme) }} />
     </Tabs>
   );
 }

@@ -11,7 +11,7 @@ env:
     visible: "Welcome back"
     timeout: 20000
 - tapOn: "Create account"
-- tapOn: "I fix things.*"
+- tapOn: "I do work.*"
 - assertVisible: "Your details"
 - tapOn:
     id: "name-input"

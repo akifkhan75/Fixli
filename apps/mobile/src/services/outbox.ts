@@ -17,7 +17,7 @@ import { realtime } from './socket';
  *  - The server says no (4xx other than 408/429): marked "failed" and shown to the person; never
  *    retried silently forever.
  */
-export type OutboxKind = 'job_action' | 'job_request';
+export type OutboxKind = 'job_action' | 'job_request' | 'project_create';
 
 export interface OutboxItem<P = any> {
   id: string;

@@ -3,10 +3,10 @@ import { ReviewsService } from './reviews.service';
 
 describe('ReviewsService', () => {
   const tx = {
-    review: { findUnique: jest.fn(), create: jest.fn(), aggregate: jest.fn() },
+    review: { findFirst: jest.fn(), create: jest.fn(), aggregate: jest.fn() },
     worker: { update: jest.fn() },
   };
-  const prisma = { review: { findMany: jest.fn() }, $transaction: jest.fn((fn: any) => fn(tx)) };
+  const prisma = { review: { findMany: jest.fn() }, project: { findFirst: jest.fn() }, $transaction: jest.fn((fn: any) => fn(tx)) };
   const access = { requireParticipant: jest.fn() };
   const svc = new ReviewsService(prisma as any, access as any);
   const job = { id: 'j1', customerId: 'c1', assignedWorkerId: 'w1', status: 'COMPLETED' };
@@ -26,7 +26,7 @@ describe('ReviewsService', () => {
 
   it('the reviewee is derived: customer reviews the worker, worker reviews the customer', async () => {
     access.requireParticipant.mockResolvedValue(job);
-    tx.review.findUnique.mockResolvedValue(null);
+    tx.review.findFirst.mockResolvedValue(null);
     tx.review.create.mockResolvedValue({});
     tx.review.aggregate.mockResolvedValue({ _avg: { rating: 4.25 } });
     await svc.create({ id: 'c1', type: 'customer' }, { jobRequestId: 'j1', rating: 4 });
@@ -41,8 +41,19 @@ describe('ReviewsService', () => {
 
   it('one review per reviewer per job', async () => {
     access.requireParticipant.mockResolvedValue(job);
-    tx.review.findUnique.mockResolvedValue({ id: 'r1' });
+    tx.review.findFirst.mockResolvedValue({ id: 'r1' });
     await expect(svc.create({ id: 'c1', type: 'customer' }, { jobRequestId: 'j1', rating: 5 })).rejects.toThrow(ConflictException);
+  });
+
+  it('reviews a finished project the same way, and only a finished one', async () => {
+    prisma.project.findFirst.mockResolvedValue({ id: 'p1', status: 'IN_PROGRESS', customerId: 'c1', awardedWorkerId: 'w1' });
+    await expect(svc.create({ id: 'c1', type: 'customer' }, { projectId: 'p1', rating: 5 })).rejects.toThrow(ConflictException);
+    prisma.project.findFirst.mockResolvedValue({ id: 'p1', status: 'COMPLETED', customerId: 'c1', awardedWorkerId: 'w1' });
+    tx.review.create.mockResolvedValue({});
+    tx.review.aggregate.mockResolvedValue({ _avg: { rating: 5 } });
+    await svc.create({ id: 'c1', type: 'customer' }, { projectId: 'p1', rating: 5 });
+    expect(tx.review.create.mock.calls[0][0].data).toMatchObject({ projectId: 'p1', targetId: 'w1', revieweeRole: 'worker' });
+    expect(access.requireParticipant).not.toHaveBeenCalled();
   });
 
   it('admins cannot review', async () => {

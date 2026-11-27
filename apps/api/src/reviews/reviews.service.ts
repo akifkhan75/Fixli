@@ -23,31 +23,28 @@ export class ReviewsService {
   async create(user: { id: string; type: string }, dto: CreateReviewDto) {
     if (user.type === 'admin') throw new ForbiddenException('Admins cannot leave reviews');
 
-    const job = await this.access.requireParticipant(dto.jobRequestId, user);
-    if (job.status !== 'COMPLETED') {
-      throw new ConflictException('You can only review a job after it is completed');
-    }
-    if (!job.assignedWorkerId) throw new ConflictException('This job had no worker to review');
+    if (dto.jobRequestId && dto.projectId) throw new BadRequestException({ code: 'ONE_SUBJECT', message: 'Review one job or one project.' });
+    const subject = dto.projectId ? await this.finishedProject(dto.projectId, user.id) : await this.finishedJob(dto.jobRequestId!, user);
 
     // The reviewee is always the other party; the client never chooses who is reviewed.
-    const targetId = user.id === job.customerId ? job.assignedWorkerId : job.customerId;
-    const allowed: readonly string[] = targetId === job.assignedWorkerId ? WORKER_REVIEW_TAGS : CUSTOMER_REVIEW_TAGS;
+    const targetId = user.id === subject.customerId ? subject.workerId : subject.customerId;
+    const allowed: readonly string[] = targetId === subject.workerId ? WORKER_REVIEW_TAGS : CUSTOMER_REVIEW_TAGS;
     const bad = (dto.tags ?? []).filter((t) => !allowed.includes(t));
     if (bad.length) throw new BadRequestException({ code: 'INVALID_TAGS', message: 'Some tags do not apply to this person.', details: { tags: bad } });
 
     return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.review.findUnique({
-        where: { jobRequestId_reviewerId: { jobRequestId: job.id, reviewerId: user.id } },
+      const existing = await tx.review.findFirst({
+        where: { ...subject.where, reviewerId: user.id },
         select: { id: true },
       });
       if (existing) throw new ConflictException('You have already reviewed this job');
 
       const review = await tx.review.create({
         data: {
-          jobRequestId: job.id,
+          ...subject.where,
           reviewerId: user.id,
           targetId,
-          revieweeRole: targetId === job.assignedWorkerId ? 'worker' : 'customer',
+          revieweeRole: targetId === subject.workerId ? 'worker' : 'customer',
           rating: dto.rating,
           comment: dto.comment,
           tags: dto.tags ?? [],
@@ -55,7 +52,7 @@ export class ReviewsService {
         },
       });
 
-      if (targetId === job.assignedWorkerId) {
+      if (targetId === subject.workerId) {
         // Only published reviews count (moderation can hide one; the rating is then recomputed, F6).
         const agg = await tx.review.aggregate({ where: { targetId, status: 'PUBLISHED', revieweeRole: 'worker' }, _avg: { rating: true } });
         await tx.worker.update({
@@ -65,6 +62,25 @@ export class ReviewsService {
       }
       return review;
     });
+  }
+
+  private async finishedJob(jobId: string, user: { id: string; type: string }) {
+    const job = await this.access.requireParticipant(jobId, user);
+    if (job.status !== 'COMPLETED') {
+      throw new ConflictException('You can only review a job after it is completed');
+    }
+    if (!job.assignedWorkerId) throw new ConflictException('This job had no worker to review');
+    return { customerId: job.customerId, workerId: job.assignedWorkerId, where: { jobRequestId: job.id } };
+  }
+
+  private async finishedProject(projectId: string, userId: string) {
+    const p = await this.prisma.project.findFirst({
+      where: { id: projectId, OR: [{ customerId: userId }, { awardedWorkerId: userId }] },
+      select: { id: true, status: true, customerId: true, awardedWorkerId: true },
+    });
+    if (!p) throw new NotFoundException('Project not found');
+    if (p.status !== 'COMPLETED' || !p.awardedWorkerId) throw new ConflictException('You can only review a project after it is completed');
+    return { customerId: p.customerId, workerId: p.awardedWorkerId, where: { projectId: p.id } };
   }
 
   findByTarget(targetId: string) {

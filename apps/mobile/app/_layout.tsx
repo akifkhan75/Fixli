@@ -34,7 +34,11 @@ registerOutboxHandlers();
 /** Analytics: starts once, and ties events to the pseudonymous user id (never phone or name). */
 function AnalyticsHandler() {
   const currentUser = useAppSelector(selectCurrentUser);
-  useEffect(() => { void AnalyticsService.init().then(() => AnalyticsService.track('app_open')); }, []);
+  useEffect(() => {
+    // One event per launch, through whichever pipeline is configured, once consent has been read.
+    void Promise.all([analytics.init(), AnalyticsService.init()])
+      .then(() => (AnalyticsService.active ? AnalyticsService.track('app_open') : analytics.track('app_open')));
+  }, []);
   useEffect(() => {
     if (currentUser && (currentUser.type === 'customer' || currentUser.type === 'worker')) AnalyticsService.identify(currentUser.id, currentUser.type);
     else AnalyticsService.reset();
@@ -51,10 +55,7 @@ function OutboxHandler() {
 function SocketHandler() {
   const currentUser = useAppSelector(selectCurrentUser);
 
-  useEffect(() => {
-    void analytics.init().then(() => analytics.track('app_open'));
-    return connectivity.start();
-  }, []);
+  useEffect(() => connectivity.start(), []);
 
   useEffect(() => {
     if (!currentUser?.id) {

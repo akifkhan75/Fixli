@@ -37,12 +37,19 @@
     "overrides": {
       "multer": ">=2.3.0 <3",
       "lodash": ">=4.18.0 <5",
-      "js-yaml@4": ">=4.3.2 <5"
+      "js-yaml@4": ">=4.3.2 <5",
+      "follow-redirects@1": ">=1.16.2 <2",
+      "node-forge@1": ">=1.4.1 <2",
+      "body-parser@1": ">=1.20.9 <2",
+      "zod@4": ">=4.6.6 <5",
+      "glob@10": ">=10.5.0 <11"
     },
     "auditConfig": {
       "ignoreGhsas": [
         "GHSA-86w9-cpqp-85rv",
-        "GHSA-vfj7-8cjw-p6xm"
+        "GHSA-vfj7-8cjw-p6xm",
+        "GHSA-mrhx-c7xc-m3w5",
+        "GHSA-qr28-fpjm-wq7f"
       ]
     }
   }

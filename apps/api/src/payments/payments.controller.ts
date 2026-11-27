@@ -1,6 +1,6 @@
 import { Body, Controller, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { PaymentsService } from './payments.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -11,6 +11,10 @@ class MarkCashDto {}
 class DisputePaymentDto {
   @IsString() @MinLength(3) @MaxLength(500)
   reason: string;
+
+  /** What the customer says they actually paid, minor units (shown to support). */
+  @IsOptional() @IsInt() @Min(0) @Max(2_000_000_000)
+  claimedAmount?: number;
 }
 
 @ApiTags('payments')
@@ -39,6 +43,6 @@ export class PaymentsController {
   @Roles('customer')
   @ApiOperation({ summary: "Customer: I didn't pay this / the amount is wrong" })
   dispute(@Param('id') id: string, @CurrentUser('id') customerId: string, @Body() dto: DisputePaymentDto) {
-    return this.payments.disputePayment(id, customerId, dto.reason);
+    return this.payments.disputePayment(id, customerId, dto.reason, dto.claimedAmount);
   }
 }

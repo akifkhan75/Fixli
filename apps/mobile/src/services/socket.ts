@@ -5,7 +5,7 @@ import { getAccessToken, refreshAccessToken } from './session';
 /** What the server sends. Every event arrives wrapped: { id, type, occurredAt, data }. */
 export type RealtimeType =
   | 'notification.created' | 'job.updated' | 'offers.updated' | 'feed.updated'
-  | 'message.created' | 'message.read' | 'conversation.updated' | 'chat.typing';
+  | 'message.created' | 'message.read' | 'conversation.updated' | 'chat.typing' | 'project.updated';
 export interface Envelope<T = any> { id: string; type: RealtimeType; occurredAt: string; data: T }
 /** Local signals: 'resync' = we were offline and may have missed events, so reload. */
 type LocalType = 'resync' | 'status';
@@ -14,7 +14,7 @@ type Listener = (e: Envelope) => void;
 export interface LocationUpdate { jobId: string; workerId: string; latitude: number; longitude: number; heading?: number; etaMinutes: number | null; at: string }
 export type ConnectionStatus = 'offline' | 'connecting' | 'online';
 
-const EVENTS: RealtimeType[] = ['notification.created', 'job.updated', 'offers.updated', 'feed.updated', 'message.created', 'message.read', 'conversation.updated', 'chat.typing'];
+const EVENTS: RealtimeType[] = ['notification.created', 'job.updated', 'offers.updated', 'feed.updated', 'message.created', 'message.read', 'conversation.updated', 'chat.typing', 'project.updated'];
 
 /**
  * One live connection per device (namespace /rt) for jobs, offers, notifications and, later, chat.

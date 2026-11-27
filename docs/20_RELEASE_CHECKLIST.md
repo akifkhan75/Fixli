@@ -1,6 +1,6 @@
 # Fixli — Production Release Checklist
 
-> Status key: `[x]` verified (evidence given), `[~]` partly done or verified only in tests, `[n/a]` not applicable to the cash-only launch, `[ ]` not done. Last reviewed 2026-11-18 (doc 27 R7). Nothing here has been verified on a physical device or against production.
+> Status key: `[x]` verified (evidence given), `[~]` partly done or verified only in tests, `[n/a]` not applicable to the cash-only launch, `[ ]` not done. Last reviewed 2026-11-18 (doc 27 R7). Nothing here has been verified on a physical device or against production. Projects, code sign-in, SMS and card payments (2026-11-27) and the owner actions they need are in [doc 30](30_PROJECTS_AND_GO_LIVE.md).
 
 ## Product
 - [ ] PRD approved
@@ -16,7 +16,7 @@
 - [x] auth hardened — lockout, rotating refresh tokens, authenticated admin socket, phone OTP + reset (R1/R5); unit + e2e; OTP needs an SMS provider (O5)
 - [x] RBAC tested — authorization e2e + AdminRolesGuard/FeatureGuard unit tests
 - [x] rate limits — per-IP throttler, OTP 5 tries / 60 s / 3 per hour; Redis storage when REDIS_URL set
-- [n/a] webhook signatures — no provider webhooks: cash-only launch
+- [~] webhook signatures — Stripe webhook verifies signature and age; unit + e2e with test secret; not tested against Stripe (doc 30)
 - [x] file upload security — signed expiring URLs, key allow-list, size cap, magic-byte check, private docs <= 15 min links (unit-tested)
 - [~] dependency audit — CI runs pnpm audit (R1); results not reviewed in this pass
 - [ ] penetration test
@@ -46,7 +46,7 @@
 - [ ] verification capacity
 - [ ] category demand
 - [ ] support staffing
-- [~] dispute process — in-app report + admin resolve endpoint; no admin UI changes, no SLA defined
+- [~] dispute process — in-app report + admin console resolution, including project stages (release / refund / resume); no SLA defined
 - [ ] cancellation policy
 
 ## Mobile

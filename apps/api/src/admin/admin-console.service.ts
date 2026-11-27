@@ -260,12 +260,27 @@ export class AdminConsoleService {
   async disputeDetail(id: string) {
     const d = await this.prisma.dispute.findUnique({
       where: { id },
-      include: { raisedBy: { select: { id: true, name: true, type: true } }, jobRequest: { select: { id: true, title: true, status: true, agreedAmount: true, agreedCurrency: true, customerId: true, assignedWorkerId: true } } },
+      include: {
+        raisedBy: { select: { id: true, name: true, type: true } },
+        jobRequest: { select: { id: true, title: true, status: true, agreedAmount: true, agreedCurrency: true, customerId: true, assignedWorkerId: true } },
+        project: { select: { id: true, title: true, status: true, paymentMode: true, currency: true, customerId: true, awardedWorkerId: true, milestones: { orderBy: { position: 'asc' }, select: { id: true, title: true, amount: true, status: true, submittedNote: true, evidenceKeys: true } } } },
+      },
     });
     if (!d) throw new NotFoundException('Dispute not found');
-    const { evidenceKeys, ...rest } = d;
+    const { evidenceKeys: raisedEvidence, project, ...rest } = d;
+    const disputed = project?.milestones.find((m) => m.id === d.milestoneId);
+    // For a stage, the photos of the work are the evidence staff need.
+    const evidenceKeys = [...raisedEvidence, ...(disputed?.evidenceKeys ?? [])];
     const payment = d.paymentId ? await this.prisma.payment.findUnique({ where: { id: d.paymentId } }) : null;
-    return { ...rest, payment, evidence: await Promise.all(evidenceKeys.map((k) => this.storage.signedUrlForKey(k, 300))) };
+    return {
+      ...rest,
+      payment,
+      project: project ? {
+        id: project.id, title: project.title, status: project.status, paymentMode: project.paymentMode, currency: project.currency,
+        stage: disputed ? { title: disputed.title, amount: disputed.amount, status: disputed.status, submittedNote: disputed.submittedNote } : null,
+      } : null,
+      evidence: await Promise.all(evidenceKeys.map((k) => this.storage.signedUrlForKey(k, 300))),
+    };
   }
 
   // ── reviews ────────────────────────────────────────────────

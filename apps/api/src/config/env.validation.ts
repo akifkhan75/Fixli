@@ -50,8 +50,20 @@ export interface AppEnv {
   SOS_ACCEPT_SECONDS: number;
   /** SOS: how many workers are asked one by one before normal offers. */
   SOS_DIRECT_TRIES: number;
-  /** Who sends trusted-contact alerts (and OTP later). none = not configured (D-F5). */
-  SMS_PROVIDER: 'none';
+  /** Who sends one-time codes and trusted-contact alerts. none = nothing is sent. */
+  SMS_PROVIDER: 'none' | 'twilio';
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  /** Sending number (E.164) or Messaging Service id (MG…). */
+  TWILIO_FROM?: string;
+  /** Card payments for project stages. none = projects are paid directly only. */
+  PAYMENTS_PROVIDER: 'none' | 'stripe';
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  /** A submitted project stage the customer doesn't answer is approved after this many days. */
+  PROJECT_AUTO_APPROVE_DAYS: number;
+  /** Reads the ID number off a worker's ID photo with the AI provider. Off until the data-processing decision (O9). */
+  AI_ID_OCR_ENABLED: boolean;
   /** Straight-line ETA until a routing provider is configured. */
   AVG_TRAVEL_SPEED_KMH: number;
   /** Staff must use an authenticator app (second factor). Default true; false only for tests. */
@@ -147,8 +159,20 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   const travelSpeed = intIn('AVG_TRAVEL_SPEED_KMH', 20, 5, 120);
   const sosAccept = intIn('SOS_ACCEPT_SECONDS', 180, 30, 900);
   const sosTries = intIn('SOS_DIRECT_TRIES', 3, 1, 10);
-  const sms = str('SMS_PROVIDER') || 'none';
-  if (sms !== 'none') errors.push('SMS_PROVIDER: only "none" is available until a provider is chosen (doc 25 D-F5)');
+  const sms = (str('SMS_PROVIDER') || 'none') as AppEnv['SMS_PROVIDER'];
+  if (!['none', 'twilio'].includes(sms)) errors.push('SMS_PROVIDER must be none or twilio');
+  if (sms === 'twilio') {
+    for (const k of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']) if (!str(k)) errors.push(`${k} is required when SMS_PROVIDER=twilio`);
+  }
+
+  const payments = (str('PAYMENTS_PROVIDER') || 'none') as AppEnv['PAYMENTS_PROVIDER'];
+  if (!['none', 'stripe'].includes(payments)) errors.push('PAYMENTS_PROVIDER must be none or stripe');
+  if (payments === 'stripe') {
+    for (const k of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET']) if (!str(k)) errors.push(`${k} is required when PAYMENTS_PROVIDER=stripe`);
+    // A live key outside production would take real money from a test run.
+    if (nodeEnv !== 'production' && /^(sk|rk)_live_/.test(str('STRIPE_SECRET_KEY'))) errors.push('STRIPE_SECRET_KEY is a live key: use a test key (sk_test_…) outside production');
+  }
+  const autoApproveDays = intIn('PROJECT_AUTO_APPROVE_DAYS', 7, 1, 60);
 
   const unknownFeatures = str('ENABLED_FEATURES').split(',').map((x) => x.trim()).filter((x) => x && !['recurring_jobs', 'properties', 'service_packages', 'subscriptions'].includes(x));
   if (unknownFeatures.length) errors.push(`ENABLED_FEATURES has unknown feature(s): ${unknownFeatures.join(', ')}`);
@@ -203,7 +227,15 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     AVG_TRAVEL_SPEED_KMH: travelSpeed,
     SOS_ACCEPT_SECONDS: sosAccept,
     SOS_DIRECT_TRIES: sosTries,
-    SMS_PROVIDER: 'none',
+    SMS_PROVIDER: sms,
+    TWILIO_ACCOUNT_SID: str('TWILIO_ACCOUNT_SID') || undefined,
+    TWILIO_AUTH_TOKEN: str('TWILIO_AUTH_TOKEN') || undefined,
+    TWILIO_FROM: str('TWILIO_FROM') || undefined,
+    PAYMENTS_PROVIDER: payments,
+    STRIPE_SECRET_KEY: str('STRIPE_SECRET_KEY') || undefined,
+    STRIPE_WEBHOOK_SECRET: str('STRIPE_WEBHOOK_SECRET') || undefined,
+    PROJECT_AUTO_APPROVE_DAYS: autoApproveDays,
+    AI_ID_OCR_ENABLED: str('AI_ID_OCR_ENABLED') === 'true',
     ADMIN_TOTP_REQUIRED: totpRequired,
     TOTP_ENCRYPTION_KEY: totpKey || undefined,
     FRONTEND_URL: str('FRONTEND_URL') || undefined,

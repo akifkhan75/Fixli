@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Image, TouchableOpacity, ScrollView, Linking, Alert } from 'react-native';
+import { View, Image, TouchableOpacity, ScrollView, Linking, Alert, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +26,9 @@ import { analytics } from '../../../src/services/analytics';
 import * as api from '../../../src/services/api';
 import { t, tn } from '../../../src/i18n';
 import { DirIcon } from '../../../src/components/ds/DirIcon';
+import { CategoryTile } from '../../../src/components/ds/CategoryTile';
+import { Entrance } from '../../../src/components/motion/Entrance';
+import { ProgressBar } from '../../../src/components/motion/ProgressBar';
 
 type When = 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED';
 type Slot = 'MORNING' | 'AFTERNOON' | 'EVENING';
@@ -58,6 +61,9 @@ export default function RequestServiceScreen() {
   const theme = useTheme();
   const { t, locale } = useI18n();
   const { config: countryConfig } = useCountry();
+  const { width } = useWindowDimensions();
+  // Three picture tiles per row inside the 20pt gutters.
+  const tileWidth = Math.floor((width - 40 - 24) / 3);
   const catalog = useApi(api.getCatalog, [], { cacheKey: 'catalog' });
   const addresses = useApi(api.getAddresses, [], { cacheKey: 'addresses' });
   useFocusEffect(useCallback(() => { addresses.reload(); }, [addresses.reload]));
@@ -234,20 +240,24 @@ export default function RequestServiceScreen() {
           {emergency ? t('customerRequestService.urgentHelp') : t('customerRequestService.stepOf', { step: d.step + 1, total: STEPS.length })}
         </Text>
       </View>
-      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 24 }} accessibilityRole="progressbar" accessibilityValue={{ min: 1, max: 5, now: d.step + 1 }}>
-        {STEPS.map((s, i) => <View key={s} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i <= d.step ? (emergency ? theme.colors.sos : theme.colors.primary) : theme.colors.border }} />)}
+      <View style={{ marginBottom: 24 }}>
+        <ProgressBar value={(d.step + 1) / STEPS.length} color={emergency ? theme.colors.sos : theme.colors.primary} label={t('customerRequestService.stepOf', { step: d.step + 1, total: STEPS.length })} />
       </View>
 
       {emergency && d.step < 4 ? emergencyCard(false) : null}
 
       {d.step === 0 ? (
-        <View>
+        <Entrance key="step0">
           <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 16 }}>{t('customerHome.whatNeedsFixing')}</Text>
           {!params.categoryId || !category ? (
             <>
               <Text variant="bodySmall" weight="medium" color={theme.colors.textSecondary} style={{ marginBottom: 8 }}>{t('customerRequestService.typeOfHelp')}</Text>
-              <ChipChoice options={(catalog.data ?? []).map((c) => ({ id: c.id, label: catName(c) }))} selectedIds={d.categoryId ? [d.categoryId] : []}
-                onChange={(ids) => set({ categoryId: ids[0], issueCodes: [] })} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                {(catalog.data ?? []).map((c) => (
+                  <CategoryTile key={c.id} code={c.name} name={catName(c)} icon={(c.iconName as any) ?? 'construct'} selected={c.id === d.categoryId}
+                    style={{ width: tileWidth }} onPress={() => set({ categoryId: c.id, issueCodes: [] })} />
+                ))}
+              </View>
             </>
           ) : (
             <Text variant="bodyLarge" weight="semibold" color={theme.colors.primaryText} style={{ marginBottom: 4 }}>{catName(category)}</Text>
@@ -264,11 +274,11 @@ export default function RequestServiceScreen() {
               </View>
             </>
           ) : null}
-        </View>
+        </Entrance>
       ) : null}
 
       {d.step === 1 ? (
-        <View>
+        <Entrance key="step1">
           <Text variant="h1" weight="bold" color={theme.colors.textPrimary}>{t('customerRequestService.showUs')}</Text>
           <Text variant="body" color={theme.colors.textSecondary} style={{ marginTop: 6, marginBottom: 20 }}>{t('customerRequestService.aPhotoHelpsThe')}</Text>
           {d.photos.length ? (
@@ -285,11 +295,11 @@ export default function RequestServiceScreen() {
             </ScrollView>
           ) : null}
           {d.photos.length < MAX_PHOTOS ? <PhotoButtons onPick={addPhoto} busy={photoUp.busy} error={photoUp.error} denied={photoUp.denied} /> : <Text variant="bodySmall" color={theme.colors.textSecondary}>{t('requestService.maxPhotos', { n: MAX_PHOTOS })}</Text>}
-        </View>
+        </Entrance>
       ) : null}
 
       {d.step === 2 ? (
-        <View>
+        <Entrance key="step2">
           <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 20 }}>{t('customerRequestService.whenDoYouNeed')}</Text>
           <ChipChoice options={[{ id: 'NOW', label: t('customerRequestService.now') }, { id: 'TODAY', label: t('customerRequestService.today') }, { id: 'TOMORROW', label: t('customerRequestService.tomorrow') }, { id: 'SCHEDULED', label: t('customerRequestService.chooseADay') }]}
             selectedIds={[d.when]} onChange={(ids) => ids[0] && set({ when: ids[0] as When, ...(ids[0] === 'SCHEDULED' ? {} : { date: undefined }) })} />
@@ -308,11 +318,11 @@ export default function RequestServiceScreen() {
                 selectedIds={d.slot ? [d.slot] : []} onChange={(ids) => set({ slot: ids[0] as Slot | undefined })} />
             </>
           ) : null}
-        </View>
+        </Entrance>
       ) : null}
 
       {d.step === 3 ? (
-        <View>
+        <Entrance key="step3">
           <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 8 }}>{t('customerRequestService.where')}</Text>
           <Text variant="body" color={theme.colors.textSecondary} style={{ marginBottom: 20 }}>{t('customerRequestService.professionalsOnlySeeYour')}</Text>
           {addresses.loading && !addresses.data ? <LoadingState /> : (addresses.data ?? []).map((a) => {
@@ -330,11 +340,11 @@ export default function RequestServiceScreen() {
           })}
           <Button title={addresses.data?.length ? t('customerRequestService.addAnotherAddress') : t('customerRequestService.addYourAddress')} variant={addresses.data?.length ? 'secondary' : 'primary'} size="lg"
             onPress={() => router.push('/address-edit' as any)} leftIcon={<Ionicons name="add" size={22} color={addresses.data?.length ? theme.colors.primary : '#FFF'} />} />
-        </View>
+        </Entrance>
       ) : null}
 
       {d.step === 4 && category ? (
-        <View>
+        <Entrance key="step4">
           <Text variant="h1" weight="bold" color={theme.colors.textPrimary} style={{ marginBottom: 20 }}>{t('customerRequestService.checkAndSend')}</Text>
           {analysis?.safety.lifeThreatening ? emergencyCard(true) : null}
 
@@ -355,7 +365,7 @@ export default function RequestServiceScreen() {
           {[
             { step: 0, icon: 'construct' as const, title: catName(category), body: [issueText, d.description.trim(), d.voice.transcript.trim()].filter(Boolean).join(' · ') || (d.voice.audioUploadId ? t('customerRequestService.voiceAttached') : '') },
             { step: 1, icon: 'camera' as const, title: d.photos.length ? tn('customerRequestService.photos', d.photos.length) : t('customerRequestService.noPhotos'), body: d.voice.audioUploadId ? t('customerRequestService.voiceAttached') : '' },
-            { step: 2, icon: 'calendar' as const, title: d.when === 'NOW' ? t('customerRequestService.now') : d.when === 'TODAY' ? t('customerRequestService.today') : d.when === 'TOMORROW' ? t('customerRequestService.tomorrow') : days.find((x) => x.id === d.date)?.label ?? '', body: d.slot ? { MORNING: 'Morning', AFTERNOON: 'Afternoon', EVENING: 'Evening' }[d.slot] : '' },
+            { step: 2, icon: 'calendar' as const, title: d.when === 'NOW' ? t('customerRequestService.now') : d.when === 'TODAY' ? t('customerRequestService.today') : d.when === 'TOMORROW' ? t('customerRequestService.tomorrow') : days.find((x) => x.id === d.date)?.label ?? '', body: d.slot ? { MORNING: t('customerRequestService.morning812'), AFTERNOON: t('customerRequestService.afternoon125'), EVENING: t('customerRequestService.evening59') }[d.slot] : '' },
             { step: 3, icon: 'location' as const, title: address?.label ?? t('customerRequestService.address'), body: address ? [address.streetAddress, address.area, address.city].filter(Boolean).join(', ') : '' },
           ].map((row) => (
             <TouchableOpacity key={row.step} onPress={() => set({ step: row.step })} accessibilityRole="button" accessibilityLabel={t('customerRequestService.change', { title: row.title, body: row.body })}
@@ -376,7 +386,7 @@ export default function RequestServiceScreen() {
             </Text>
           </View>
           {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
-        </View>
+        </Entrance>
       ) : null}
     </Screen>
   );

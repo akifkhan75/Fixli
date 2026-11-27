@@ -3,7 +3,7 @@ import { JobLifecycleSweeper } from './job-lifecycle.sweeper';
 describe('JobLifecycleSweeper', () => {
   const jobs = { autoConfirmDue: jest.fn() };
   const location = { purgeOld: jest.fn() };
-  const payments = { autoConfirmDue: jest.fn() };
+  const payments = { autoConfirmDue: jest.fn(), remindDue: jest.fn() };
   const ledger = { refreshBlocks: jest.fn() };
   const lease: any = { expect: jest.fn(), runExclusive: jest.fn((_n: string, _t: number, fn: () => unknown) => fn()) };
   const cfg: Record<string, unknown> = {};
@@ -13,14 +13,14 @@ describe('JobLifecycleSweeper', () => {
     jest.resetAllMocks();
     for (const k of Object.keys(cfg)) delete cfg[k];
     lease.runExclusive.mockImplementation((_n: string, _t: number, fn: () => unknown) => fn());
-    jobs.autoConfirmDue.mockResolvedValue(2); payments.autoConfirmDue.mockResolvedValue(1); ledger.refreshBlocks.mockResolvedValue(3); location.purgeOld.mockResolvedValue(4);
+    jobs.autoConfirmDue.mockResolvedValue(2); payments.autoConfirmDue.mockResolvedValue(1); ledger.refreshBlocks.mockResolvedValue(3); location.purgeOld.mockResolvedValue(4); payments.remindDue.mockResolvedValue(5);
   });
 
   it('one sweep runs every housekeeping step under the lease and reports each count', async () => {
     const now = new Date('2026-11-20T10:00:00Z');
-    expect(await make().sweep(now)).toEqual({ autoConfirmed: 2, cashAutoConfirmed: 1, workersPausedForBalance: 3, locationPointsDeleted: 4 });
+    expect(await make().sweep(now)).toEqual({ autoConfirmed: 2, cashAutoConfirmed: 1, cashReminders: 5, workersPausedForBalance: 3, locationPointsDeleted: 4 });
     expect(lease.runExclusive).toHaveBeenCalledWith('job-lifecycle', 300_000, expect.any(Function));
-    for (const fn of [jobs.autoConfirmDue, payments.autoConfirmDue, ledger.refreshBlocks, location.purgeOld]) expect(fn).toHaveBeenCalledWith(now);
+    for (const fn of [jobs.autoConfirmDue, payments.autoConfirmDue, payments.remindDue, ledger.refreshBlocks, location.purgeOld]) expect(fn).toHaveBeenCalledWith(now);
   });
 
   it('another instance holding the lease means nothing runs here', async () => {

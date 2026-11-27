@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, View, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { Modal, View, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { CountryCode, CountryListItem } from '@fixli/shared';
 import { useTheme } from '../../hooks/useTheme';
