@@ -53,8 +53,8 @@ export default function MyJobsScreen() {
           onEndReached={() => void more()}
           onEndReachedThreshold={0.4}
           refreshControl={<RefreshControl refreshing={loading && !!items} onRefresh={reload} tintColor={theme.colors.primary} />}
-          ListFooterComponent={loadingMore ? <ActivityIndicator color={theme.colors.primary} style={{ margin: 16 }} /> : moreError ? <Button title={t('sharedSos.tryAgain')} variant="ghost" onPress={() => void more()} /> : null}
-          ListEmptyComponent={loadingMore || (hasMore && !moreError) ? null : (
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={theme.colors.primary} style={{ margin: 16 }} /> : moreError ? <Button title={t('sharedSos.tryAgain')} variant="ghost" onPress={() => void more()} /> : undefined}
+          ListEmptyComponent={loadingMore || (hasMore && !moreError) ? undefined : (
             <EmptyState
               icon="calendar-outline"
               title={tab === 'ACTIVE' ? t('customerBookings.youDontHaveAny') : t('customerBookings.nothingHereYet')}

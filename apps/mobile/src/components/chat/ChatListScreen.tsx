@@ -74,7 +74,7 @@ export function ChatListScreen() {
           onEndReachedThreshold={0.4}
           initialNumToRender={10}
           windowSize={7}
-          ListFooterComponent={loadingMore ? <ActivityIndicator color={theme.colors.primary} style={{ margin: 16 }} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={theme.colors.primary} style={{ margin: 16 }} /> : undefined}
           ListEmptyComponent={<EmptyState icon="chatbubbles-outline" title={t('chatListScreen.noMessages')} message={t('chatListScreen.onceAJobIs')} />}
         />
       )}

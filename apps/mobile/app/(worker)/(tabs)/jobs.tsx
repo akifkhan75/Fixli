@@ -145,7 +145,7 @@ export default function WorkerJobsScreen() {
           onEndReached={() => void list.more()}
           onEndReachedThreshold={0.4}
           refreshControl={<RefreshControl refreshing={list.loading && !!list.items} onRefresh={list.reload} tintColor={theme.colors.primary} />}
-          ListFooterComponent={list.loadingMore ? <ActivityIndicator color={theme.colors.primary} style={{ margin: 16 }} /> : list.moreError ? <Button title={t('sharedSos.tryAgain')} variant="ghost" onPress={() => void list.more()} /> : null}
+          ListFooterComponent={list.loadingMore ? <ActivityIndicator color={theme.colors.primary} style={{ margin: 16 }} /> : list.moreError ? <Button title={t('sharedSos.tryAgain')} variant="ghost" onPress={() => void list.more()} /> : undefined}
           ListEmptyComponent={<EmptyState icon="briefcase-outline" title={empty.title} message={empty.message} />}
         />
       )}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, type ColorValue } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { ZoomIn, ReduceMotion } from 'react-native-reanimated';
 import type { Theme } from '../../theme';
@@ -26,7 +26,9 @@ export function tabScreenOptions(theme: Theme, bottomInset: number) {
 
 /** Outline when resting, filled on a soft pill when selected: readable without reading the label. */
 export function tabIcon(active: IconName, inactive: IconName, theme: Theme) {
-  return function TabIcon({ color, focused }: { color: React.ComponentProps<typeof Ionicons>['color']; focused: boolean }) {
+  return function TabIcon({ color, focused }: { focused: boolean; color: ColorValue; size: number }) {
+    // React Navigation ColorValue can be null; Ionicons wants a concrete tint.
+    const tint = (color == null ? theme.colors.textTertiary : color) as React.ComponentProps<typeof Ionicons>['color'];
     return (
       <View style={{ width: 56, height: 30, alignItems: 'center', justifyContent: 'center' }}>
         {focused ? (
@@ -35,7 +37,7 @@ export function tabIcon(active: IconName, inactive: IconName, theme: Theme) {
             style={{ position: 'absolute', width: 56, height: 30, borderRadius: 15, backgroundColor: theme.colors.primarySoft }}
           />
         ) : null}
-        <Ionicons name={focused ? active : inactive} size={22} color={color} />
+        <Ionicons name={focused ? active : inactive} size={22} color={tint} />
       </View>
     );
   };

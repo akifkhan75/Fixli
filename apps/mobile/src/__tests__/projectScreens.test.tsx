@@ -40,21 +40,21 @@ describe('project stages', () => {
   it('a card customer pays first, on the provider page', async () => {
     const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never);
     mocked.fundStage.mockResolvedValue({ checkoutUrl: 'https://pay.example/1' });
-    const view = card(project(), stage());
+    const view = await card(project(), stage());
     await act(async () => { fireEvent.press(view.getByText(/^Pay /)); });
     expect(mocked.fundStage).toHaveBeenCalledWith('s1');
     expect(open).toHaveBeenCalledWith('https://pay.example/1');
   });
 
-  it('a card professional cannot start before the money is held', () => {
-    const view = card(project({ viewer: 'hired' }), stage());
+  it('a card professional cannot start before the money is held', async () => {
+    const view = await card(project({ viewer: 'hired' }), stage());
     expect(view.queryByText('Start this stage')).toBeNull();
     expect(view.getByText(/Waiting for the customer's payment/)).toBeTruthy();
   });
 
   it('approving asks first, and only the confirmation releases money', async () => {
-    const view = card(project(), stage({ status: 'SUBMITTED' }));
-    fireEvent.press(view.getByText('Approve this stage'));
+    const view = await card(project(), stage({ status: 'SUBMITTED' }));
+    await act(async () => { fireEvent.press(view.getByText('Approve this stage')); });
     expect(mocked.approveStage).not.toHaveBeenCalled();
     expect(view.getByText(/Approve and release/)).toBeTruthy();
     await act(async () => { fireEvent.press(view.getByText('Approve this stage')); });
@@ -62,26 +62,26 @@ describe('project stages', () => {
   });
 
   it('the customer can send work back with a reason', async () => {
-    const view = card(project(), stage({ status: 'SUBMITTED' }));
-    fireEvent.press(view.getByText('Ask for changes'));
-    fireEvent.changeText(view.getByLabelText('What should be changed?'), 'One socket missing');
+    const view = await card(project(), stage({ status: 'SUBMITTED' }));
+    await act(async () => { fireEvent.press(view.getByText('Ask for changes')); });
+    await act(async () => { fireEvent.changeText(view.getByLabelText('What should be changed?'), 'One socket missing'); });
     await act(async () => { fireEvent.press(view.getByText('Send back for changes')); });
     expect(mocked.requestStageChanges).toHaveBeenCalledWith('s1', 'One socket missing');
   });
 
   it('a direct-payment professional starts, sends work with a note, and confirms the money', async () => {
     const hired = project({ viewer: 'hired', paymentMode: 'DIRECT' });
-    const a = card(hired, stage());
+    const a = await card(hired, stage());
     await act(async () => { fireEvent.press(a.getByText('Start this stage')); });
     expect(mocked.startStage).toHaveBeenCalled();
-    const b = card(hired, stage({ status: 'IN_PROGRESS', changesNote: 'Fix it' }));
+    const b = await card(hired, stage({ status: 'IN_PROGRESS', changesNote: 'Fix it' }));
     expect(b.getByText('Changes asked: Fix it')).toBeTruthy();
-    fireEvent.press(b.getByText('I finished this stage'));
-    fireEvent.changeText(b.getByLabelText('What did you do? (or add a photo)'), 'All done');
+    await act(async () => { fireEvent.press(b.getByText('I finished this stage')); });
+    await act(async () => { fireEvent.changeText(b.getByLabelText('What did you do? (or add a photo)'), 'All done'); });
     await act(async () => { fireEvent.press(b.getByText('Send for approval')); });
     expect(mocked.submitStage).toHaveBeenCalledWith('s1', { note: 'All done', photoUploadIds: [] });
-    const c = card(hired, stage({ status: 'APPROVED' }));
-    fireEvent.press(c.getByText(/^I received/));
+    const c = await card(hired, stage({ status: 'APPROVED' }));
+    await act(async () => { fireEvent.press(c.getByText(/^I received/)); });
     await act(async () => { fireEvent.press(c.getByText(/^I received/)); });
     expect(mocked.markStagePaid).toHaveBeenCalledWith('s1');
   });
@@ -89,16 +89,16 @@ describe('project stages', () => {
   it('shows a plain message when a step fails, and lets a problem be reported', async () => {
     mocked.disputeStage.mockRejectedValue(new Error('x'));
     const onChanged = jest.fn();
-    const view = card(project(), stage({ status: 'IN_PROGRESS' }), onChanged);
-    fireEvent.press(view.getByText('Report a problem'));
-    fireEvent.changeText(view.getByLabelText('What is wrong?'), 'Nobody came');
+    const view = await card(project(), stage({ status: 'IN_PROGRESS' }), onChanged);
+    await act(async () => { fireEvent.press(view.getByText('Report a problem')); });
+    await act(async () => { fireEvent.changeText(view.getByLabelText('What is wrong?'), 'Nobody came'); });
     await act(async () => { fireEvent.press(view.getByText('Tell Fixli')); });
     expect(view.getByRole('alert')).toBeTruthy();
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it('offers nothing on stages that are not current', () => {
-    const view = renderWithStore(<StageCard project={project()} stage={stage()} current={false} onChanged={jest.fn()} index={0} />);
+  it('offers nothing on stages that are not current', async () => {
+    const view = await renderWithStore(<StageCard project={project()} stage={stage()} current={false} onChanged={jest.fn()} index={0} />);
     expect(view.queryByText(/^Pay /)).toBeNull();
     expect(view.queryByText('Report a problem')).toBeNull();
   });
@@ -107,35 +107,35 @@ describe('project stages', () => {
 describe('pricing a project', () => {
   const open = (over: Partial<api.ProjectView> = {}) => project({ viewer: 'candidate', status: 'OPEN', suggestedMilestones: [{ title: 'Pipes', percent: 40 }, { title: 'Fittings', percent: 60 }], ...over });
 
-  it('splits the total into the suggested stages automatically', () => {
+  it('splits the total into the suggested stages automatically', async () => {
     const onSubmit = jest.fn();
-    const view = renderWithStore(<BidForm project={open()} busy={false} onSubmit={onSubmit} />);
-    fireEvent.changeText(view.getByTestId('bid-total'), '1000');
-    fireEvent.press(view.getByText('Send my price'));
+    const view = await renderWithStore(<BidForm project={open()} busy={false} onSubmit={onSubmit} />);
+    await act(async () => { fireEvent.changeText(view.getByTestId('bid-total'), '1000'); });
+    await act(async () => { fireEvent.press(view.getByText('Send my price')); });
     expect(onSubmit).toHaveBeenCalledWith({ totalAmount: 100_000, durationDays: 7, note: undefined, milestones: [{ title: 'Pipes', amount: 40_000 }, { title: 'Fittings', amount: 60_000 }] });
   });
 
-  it('will not send hand-edited stages that do not add up', () => {
+  it('will not send hand-edited stages that do not add up', async () => {
     const onSubmit = jest.fn();
-    const view = renderWithStore(<BidForm project={open()} busy={false} onSubmit={onSubmit} />);
-    fireEvent.changeText(view.getByTestId('bid-total'), '1000');
-    fireEvent.changeText(view.getAllByLabelText('Amount')[0], '100');
-    fireEvent.press(view.getByText('Send my price'));
+    const view = await renderWithStore(<BidForm project={open()} busy={false} onSubmit={onSubmit} />);
+    await act(async () => { fireEvent.changeText(view.getByTestId('bid-total'), '1000'); });
+    await act(async () => { fireEvent.changeText(view.getAllByLabelText('Amount')[0], '100'); });
+    await act(async () => { fireEvent.press(view.getByText('Send my price')); });
     expect(onSubmit).not.toHaveBeenCalled();
     expect(view.getByText(/Stages total/)).toBeTruthy();
-    fireEvent.press(view.getByText('Split the total for me'));
-    fireEvent.press(view.getByText('Send my price'));
+    await act(async () => { fireEvent.press(view.getByText('Split the total for me')); });
+    await act(async () => { fireEvent.press(view.getByText('Send my price')); });
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it('asks how to pay before hiring, offering card only where it works', () => {
+  it('asks how to pay before hiring, offering card only where it works', async () => {
     const bid: api.ProjectBidCard = { id: 'b', totalAmount: 100_000, currency: 'PKR', durationDays: 3, note: 'Copper', status: 'PENDING', milestones: [{ title: 'All', amount: 100_000 }],
       worker: { id: 'w', name: 'Ali Raza', businessName: null, teamSize: 4, profileImageUrl: null, rating: 4.5, ratingCount: 2, jobsCompleted: 3, isVerified: true, experienceYears: 5, distanceKm: 2 } };
     const onHire = jest.fn();
-    const view = renderWithStore(<BidCard bid={bid} cardAvailable={false} busy={false} onHire={onHire} />);
-    fireEvent.press(view.getByText('Hire Ali'));
+    const view = await renderWithStore(<BidCard bid={bid} cardAvailable={false} busy={false} onHire={onHire} />);
+    await act(async () => { fireEvent.press(view.getByText('Hire Ali')); });
     expect(view.queryByText('Pay by card through Fixli')).toBeNull();
-    fireEvent.press(view.getByText('Hire'));
+    await act(async () => { fireEvent.press(view.getByText('Hire')); });
     expect(onHire).toHaveBeenCalledWith('DIRECT');
   });
 });
@@ -148,31 +148,31 @@ describe('materials, visits and lists', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('ticks, removes and adds materials', async () => {
-    const view = renderWithStore(<Materials project={hired} userId="u1" onChanged={jest.fn()} />);
+    const view = await renderWithStore(<Materials project={hired} userId="u1" onChanged={jest.fn()} />);
     await act(async () => { fireEvent.press(view.getByRole('checkbox')); });
     expect(mocked.setMaterialReady).toHaveBeenCalledWith('p1', 'm1', true);
     await act(async () => { fireEvent.press(view.getByLabelText('Remove Wire')); });
     expect(mocked.removeMaterial).toHaveBeenCalledWith('p1', 'm1');
-    fireEvent.press(view.getByText('Add material'));
-    fireEvent.changeText(view.getByLabelText('What is needed'), 'Switches');
+    await act(async () => { fireEvent.press(view.getByText('Add material')); });
+    await act(async () => { fireEvent.changeText(view.getByLabelText('What is needed'), 'Switches'); });
     await act(async () => { fireEvent.press(view.getByText('Add material')); });
     expect(mocked.addMaterial).toHaveBeenCalledWith('p1', { name: 'Switches', quantity: 1, unit: undefined, providedBy: 'customer' });
   });
 
   it('plans and completes visits', async () => {
-    const view = renderWithStore(<Visits project={hired} onChanged={jest.fn()} />);
+    const view = await renderWithStore(<Visits project={hired} onChanged={jest.fn()} />);
     await act(async () => { fireEvent.press(view.getByText('Visit done')); });
     expect(mocked.updateVisit).toHaveBeenCalledWith('p1', 'v1', 'DONE');
-    fireEvent.press(view.getByText('Plan a visit'));
+    await act(async () => { fireEvent.press(view.getByText('Plan a visit')); });
     await act(async () => { fireEvent.press(view.getByText('Plan a visit')); });
     await waitFor(() => expect(mocked.addVisit).toHaveBeenCalled());
     expect(new Date(mocked.addVisit.mock.calls[0][1]).getTime()).toBeGreaterThan(Date.now());
   });
 
-  it('summarises a project in a list for each side', () => {
+  it('summarises a project in a list for each side', async () => {
     const item: api.ProjectListItem = { id: 'p', title: 'Solar roof', status: 'OPEN', workType: 'INSTALLATION', area: 'Gulshan', city: 'Karachi', currency: 'PKR', agreedAmount: null, budgetMin: null, budgetMax: 100_000,
       createdAt: '', category: { id: 'c', name: 'SOLAR', iconName: 'sunny' }, bidCount: 2, stages: { total: 2, done: 1 }, currentStage: { title: 'Panels', status: 'IN_PROGRESS' } };
-    const view = renderWithStore(<ProjectCard project={item} viewer="customer" />);
+    const view = await renderWithStore(<ProjectCard project={item} viewer="customer" />);
     expect(view.getByText('2 prices received')).toBeTruthy();
     expect(view.getByText(/1 of 2 stages done · Panels/)).toBeTruthy();
   });
