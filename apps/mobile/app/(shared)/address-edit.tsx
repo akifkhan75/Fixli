@@ -62,7 +62,18 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
         setLocError(t('sharedAddressEdit.locationIsOffYou'));
         return;
       }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      // getCurrentPositionAsync can hang indefinitely on weak GPS (common on Android), which
+      // leaves the button spinning and the address impossible to save. Cap the wait and fall
+      // back to the last known fix.
+      const fresh = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
+      ]).catch(() => null);
+      const pos = fresh ?? (await Location.getLastKnownPositionAsync().catch(() => null));
+      if (!pos) {
+        setLocError(t('sharedAddressEdit.weCouldntFindYour'));
+        return;
+      }
       setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
       // Fill what we can, but never overwrite what the person already typed.
       const [place] = await Location.reverseGeocodeAsync(pos.coords).catch(() => []);
@@ -80,7 +91,14 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
 
   const save = async () => {
     setSubmitted(true);
-    if (!street.trim() || !city.trim() || !coords) return;
+    // The blocking requirement (missing map location) lives at the top of the form, far from
+    // the Save button in the footer. Echo it next to the button so tapping Save never looks
+    // like it did nothing — the usual "my address won't save" report.
+    if (!street.trim() || !city.trim() || !coords) {
+      setError(!coords ? t('sharedAddressEdit.locationRequired') : t('sharedAddressEdit.checkHighlightedFields'));
+      return;
+    }
+    setError(undefined);
     setSaving(true);
     setError(undefined);
     try {
@@ -108,7 +126,12 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
     <Screen
       title={id ? t('sharedAddressEdit.editAddress') : t('sharedAddressEdit.newAddress')}
       back
-      footer={<Button title={t('sharedAddressEdit.saveAddress')} size="lg" variant="primary" loading={saving} disabled={saving} onPress={save} />}
+      footer={
+        <View>
+          {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginBottom: 10 }}>{error}</Text> : null}
+          <Button title={t('sharedAddressEdit.saveAddress')} size="lg" variant="primary" loading={saving} disabled={saving} onPress={save} />
+        </View>
+      }
     >
       <Button
         title={coords ? t('sharedAddressEdit.locationSavedUpdateIt') : t('sharedAddressEdit.useMyCurrentLocation')}
@@ -131,11 +154,15 @@ function Form({ initial, id, countryCode }: { initial?: api.Address; id?: string
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24 }}>
-        <Text variant="body" weight="medium" color={theme.colors.textPrimary} style={{ flex: 1 }}>{t('sharedAddressEdit.useThisAddressBy')}</Text>
-        <Switch value={isDefault} onValueChange={setIsDefault} accessibilityLabel={t('sharedAddressEdit.useThisAddressBy')} trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
+        <View style={{ flex: 1, marginEnd: 12 }}>
+          <Text variant="body" weight="medium" color={theme.colors.textPrimary}>{t('sharedAddressEdit.useThisAddressBy')}</Text>
+          {/* You can't un-set the only default here; you pick a different address as default instead.
+              Without this hint, turning the switch off and saving looks like "my change didn't save". */}
+          {initial?.isDefault ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{t('sharedAddressEdit.alreadyDefaultHint')}</Text> : null}
+        </View>
+        <Switch value={isDefault} onValueChange={setIsDefault} disabled={initial?.isDefault === true} accessibilityLabel={t('sharedAddressEdit.useThisAddressBy')} trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
       </View>
 
-      {error ? <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>{error}</Text> : null}
       {id ? <View style={{ marginTop: 24 }}><Button title={t('sharedAddressEdit.deleteThisAddress')} variant="danger" onPress={remove} disabled={saving} /></View> : null}
     </Screen>
   );

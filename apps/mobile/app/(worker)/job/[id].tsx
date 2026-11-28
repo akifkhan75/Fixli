@@ -1,6 +1,6 @@
 import { StaleNote } from '../../../src/components/ds/StaleNote';
 import React, { useState, useEffect } from 'react';
-import { View } from 'react-native';
+import { View, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -196,9 +196,25 @@ export default function WorkerJobScreen() {
       </View>
       <View style={{ marginTop: 20 }}>
         <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>{t('workerJob.where')}</Text>
-        {/* The exact address is only sent once you are booked on the job. */}
-        <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{job.location ?? [job.area, job.city].filter(Boolean).join(', ')}</Text>
-        {!job.location ? <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{t('workerJob.youllSeeTheFull')}</Text> : null}
+        {/* The exact address or pin is only sent once you are booked on the job. */}
+        {(() => {
+          const booked = job.latitude != null && job.longitude != null;
+          const where = job.location ?? [job.area, job.city].filter(Boolean).join(', ');
+          return (
+            <>
+              {where ? <Text variant="bodyLarge" color={theme.colors.textPrimary} style={{ marginTop: 4 }}>{where}</Text> : null}
+              {booked ? (
+                <Button
+                  title={t('workerJob.directions')} variant="secondary" size="sm" style={{ marginTop: 10, alignSelf: 'flex-start' }}
+                  leftIcon={<Ionicons name="navigate" size={18} color={theme.colors.primary} />}
+                  onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${job.latitude},${job.longitude}`)}
+                />
+              ) : (
+                <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{t('workerJob.youllSeeTheFull')}</Text>
+              )}
+            </>
+          );
+        })()}
       </View>
       {job.customer ? (
         <View style={{ marginTop: 20 }}>

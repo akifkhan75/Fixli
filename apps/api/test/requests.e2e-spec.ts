@@ -229,6 +229,30 @@ describe('Request a service (e2e)', () => {
       }
     });
 
+    it('accepts a current-location pin instead of a saved address (roadside), matches nearby, and never leaks coordinates', async () => {
+      const res = await http().post('/api/job-requests').set(as('cust')).send({
+        categoryId: plumbing.id, issueCodes: ['leaking_tap'], when: 'NOW', idempotencyKey: key(),
+        latitude: 24.928, longitude: 67.095, area: 'Clifton', city: 'Karachi', landmark: 'By the petrol pump',
+      }).expect(201);
+      expect(res.body).toMatchObject({ addressId: null, area: 'Clifton', city: 'Karachi', latitude: 24.928 });
+      // The nearby worker is matched and can open it, but sees only the coarse area — never the pin.
+      const feed = await http().get(`/api/job-requests/${res.body.id}`).set(as('work')).expect(200);
+      expect(feed.body).toMatchObject({ area: 'Clifton', city: 'Karachi' });
+      expect(feed.body.latitude).toBeUndefined();
+      expect(feed.body.location).toBeUndefined();
+      expect(JSON.stringify(feed.body)).not.toMatch(/petrol pump|24\.928|67\.095/);
+    });
+
+    it('rejects a request with neither an address nor a pin, both together, or half a pin', async () => {
+      const base = { categoryId: plumbing.id, issueCodes: ['leaking_tap'], when: 'TODAY' };
+      const r1 = await http().post('/api/job-requests').set(as('cust')).send({ ...base, idempotencyKey: key() }).expect(400);
+      expect(r1.body.error.code).toBe('LOCATION_REQUIRED');
+      const r2 = await http().post('/api/job-requests').set(as('cust')).send({ ...base, addressId, latitude: 24.9, longitude: 67, idempotencyKey: key() }).expect(400);
+      expect(r2.body.error.code).toBe('LOCATION_CONFLICT');
+      const r3 = await http().post('/api/job-requests').set(as('cust')).send({ ...base, latitude: 24.9, idempotencyKey: key() }).expect(400);
+      expect(r3.body.error.code).toBe('INVALID_COORDINATES');
+    });
+
     it('an open job shows workers the area and photos, but not the exact address or full name', async () => {
       const w = await http().get(`/api/job-requests/${jobId}`).set(as('work')).expect(200);
       expect(w.body).toMatchObject({ area: 'Gulshan Block 13', city: 'Karachi', title: 'Leaking tap', customer: { name: 'cust' } });
@@ -272,6 +296,98 @@ describe('Request a service (e2e)', () => {
       await http().get(`/api/job-requests/${jobId}`).set(as('other')).expect(404);
       const list = await http().get('/api/job-requests').set(as('other')).expect(200);
       expect(list.body.items.find((j: any) => j.id === jobId)).toBeUndefined();
+    });
+  });
+
+  describe('roadside, towing and live-location matching', () => {
+    let autoCat: string;
+    const ALL_WEEK = [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMinute: 0, endMinute: 1440 }));
+    const near = { lat: 24.93, lng: 67.1 };    // where the pin is dropped
+    const farBase = { lat: 24.93, lng: 67.45 }; // ~35 km east: outside a 10 km service radius
+
+    async function makeAuto(k: string, opts: { canTow?: boolean; base?: { lat: number; lng: number }; current?: { lat: number; lng: number }; freshMinAgo?: number } = {}) {
+      const base = opts.base ?? near;
+      const u = await prisma.user.create({ data: { name: `${k} Auto`, email: `${tag}-${k}@test.com`, password: await bcrypt.hash('x', 4), type: 'worker', countryCode: 'PK' } });
+      await prisma.worker.create({
+        data: {
+          id: u.id, activationStatus: 'ACTIVE', isOnline: true, serviceRadius: 10,
+          serviceLat: base.lat, serviceLng: base.lng, canTow: opts.canTow ?? false,
+          ...(opts.current ? { currentLat: opts.current.lat, currentLng: opts.current.lng, locationUpdatedAt: new Date(Date.now() - (opts.freshMinAgo ?? 0) * 60_000) } : {}),
+          services: { create: [{ categoryId: autoCat }] },
+          workingHours: { create: ALL_WEEK },
+        } as any,
+      });
+      const s = await prisma.session.create({ data: { userId: u.id, deviceId: `d-${k}`, refreshTokenHash: 'x', expiresAt: new Date(Date.now() + 3600_000) } });
+      ids[k] = u.id;
+      tokens[k] = jwt.sign({ sub: u.id, type: 'worker', sid: s.id });
+    }
+    const matched = async (id: string) => (await prisma.jobMatch.findMany({ where: { jobRequestId: id } })).map((m) => m.workerId);
+    const pinJob = (over: object = {}) => http().post('/api/job-requests').set(as('cust')).send({ categoryId: autoCat, issueCodes: ['car_wont_start'], when: 'NOW', latitude: near.lat, longitude: near.lng, area: 'Clifton', city: 'Karachi', idempotencyKey: key(), ...over });
+
+    beforeAll(async () => {
+      autoCat = (await prisma.serviceCategory.findUniqueOrThrow({ where: { name: 'AUTOMOTIVE' } })).id;
+      await makeAuto('tow', { canTow: true });
+      await makeAuto('mech');
+      await makeAuto('liveFar', { base: farBase, current: near, freshMinAgo: 1 });
+      await makeAuto('staleFar', { base: farBase, current: near, freshMinAgo: 60 });
+    });
+
+    it('a towing job reaches only workers who can tow', async () => {
+      const res = await pinJob({ issueCodes: ['car_towing'] }).expect(201);
+      const m = await matched(res.body.id);
+      expect(m).toContain(ids.tow);
+      expect(m).not.toContain(ids.mech);
+    });
+
+    it('a plain automotive job reaches both a tow worker and a plain mechanic', async () => {
+      const res = await pinJob().expect(201);
+      const m = await matched(res.body.id);
+      expect(m).toEqual(expect.arrayContaining([ids.tow, ids.mech]));
+    });
+
+    it('an immediate job matches a far worker by their fresh live position, but not a stale one', async () => {
+      const res = await pinJob().expect(201);
+      const m = await matched(res.body.id);
+      expect(m).toContain(ids.liveFar);
+      expect(m).not.toContain(ids.staleFar);
+    });
+
+    it('a scheduled job ignores live position and uses the base service area', async () => {
+      const res = await pinJob({ when: 'TOMORROW', timeSlot: 'MORNING' }).expect(201);
+      expect(await matched(res.body.id)).not.toContain(ids.liveFar);
+    });
+
+    it('the location endpoint is worker-only and validates coordinates', async () => {
+      await http().patch('/api/workers/me/location').set(as('cust')).send({ latitude: 24.9, longitude: 67 }).expect(403);
+      await http().patch('/api/workers/me/location').set(as('tow')).send({ latitude: 999, longitude: 67 }).expect(400);
+      const ok = await http().patch('/api/workers/me/location').set(as('tow')).send({ latitude: 24.93, longitude: 67.1 }).expect(200);
+      expect(ok.body).toEqual({ accepted: true });
+    });
+
+    it('never exposes a worker live position to the customer', async () => {
+      const res = await pinJob().expect(201);
+      await http().post(`/api/job-requests/${res.body.id}/request-worker`).set(as('cust')).send({ workerId: ids.tow }).expect(201);
+      await http().post(`/api/job-requests/${res.body.id}/accept`).set(as('tow')).expect(201);
+      const view = await http().get(`/api/job-requests/${res.body.id}`).set(as('cust')).expect(200);
+      expect(JSON.stringify(view.body)).not.toMatch(/currentLat|currentLng|locationUpdatedAt/);
+    });
+
+    it('a saved-address job ignores live position even when immediate (only pins use it)', async () => {
+      const res = await http().post('/api/job-requests').set(as('cust')).send({ categoryId: autoCat, issueCodes: ['car_wont_start'], when: 'NOW', addressId, idempotencyKey: key() }).expect(201);
+      const m = await matched(res.body.id);
+      expect(m).not.toContain(ids.liveFar);
+      expect(m).toEqual(expect.arrayContaining([ids.tow, ids.mech]));
+    });
+
+    it('going offline clears the live position and stops it being accepted; canTow is a settable field', async () => {
+      await http().patch('/api/workers/me/location').set(as('mech')).send({ latitude: 24.93, longitude: 67.1 }).expect(200);
+      const off = await http().patch('/api/workers/me').set(as('mech')).send({ canTow: true, isOnline: false }).expect(200);
+      expect(off.body.canTow).toBe(true);
+      const row = await prisma.worker.findUnique({ where: { id: ids.mech }, select: { currentLat: true, locationUpdatedAt: true } });
+      expect(row?.currentLat).toBeNull();
+      expect(row?.locationUpdatedAt).toBeNull();
+      const after = await http().patch('/api/workers/me/location').set(as('mech')).send({ latitude: 24.93, longitude: 67.1 }).expect(200);
+      expect(after.body).toEqual({ accepted: false });
     });
   });
 });

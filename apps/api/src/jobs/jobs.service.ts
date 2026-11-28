@@ -160,18 +160,48 @@ export class JobsService {
     });
     if (existing) return this.findById(existing.id, user);
 
+    // Location comes from either a saved address or a one-off pin (roadside / "I'm here now"),
+    // never both and never neither.
+    const hasPin = dto.latitude != null || dto.longitude != null;
+    if (dto.addressId && hasPin) {
+      throw new BadRequestException({ code: 'LOCATION_CONFLICT', message: 'Choose a saved address or a map pin, not both.' });
+    }
+    if ((dto.latitude == null) !== (dto.longitude == null)) {
+      throw new BadRequestException({ code: 'INVALID_COORDINATES', message: 'Send both latitude and longitude, or neither.' });
+    }
+
     const [customer, category, address] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: user.id }, select: { name: true, countryCode: true } }),
       this.prisma.serviceCategory.findFirst({ where: { id: dto.categoryId, isActive: true }, include: { issues: { where: { isActive: true } } } }),
-      this.prisma.address.findFirst({ where: { id: dto.addressId, userId: user.id } }),
+      dto.addressId ? this.prisma.address.findFirst({ where: { id: dto.addressId, userId: user.id } }) : Promise.resolve(null),
     ]);
     if (!category) throw new BadRequestException({ code: 'INVALID_CATEGORY', message: 'Please choose a service.' });
-    if (!address) throw new BadRequestException({ code: 'INVALID_ADDRESS', message: 'Please choose one of your saved addresses.' });
-    if (address.latitude == null || address.longitude == null) {
-      throw new BadRequestException({
-        code: 'LOCATION_REQUIRED',
-        message: 'This address has no map location. Edit it and tap “Use my current location”, then try again.',
-      });
+
+    // The resolved location snapshot. Never let raw coordinates leak into free text (title,
+    // description or `location`): workers see `location`/coords only once booked (see present()).
+    let place: { latitude: number; longitude: number; area: string | null; city: string | null; addressId: string | null; location: string | null };
+    if (dto.addressId) {
+      if (!address) throw new BadRequestException({ code: 'INVALID_ADDRESS', message: 'Please choose one of your saved addresses.' });
+      if (address.latitude == null || address.longitude == null) {
+        throw new BadRequestException({
+          code: 'LOCATION_REQUIRED',
+          message: 'This address has no map location. Edit it and tap “Use my current location”, then try again.',
+        });
+      }
+      place = {
+        latitude: address.latitude, longitude: address.longitude, area: address.area, city: address.city, addressId: address.id,
+        location: [address.buildingDetail, address.streetAddress, address.area, address.city].filter(Boolean).join(', '),
+      };
+    } else if (dto.latitude != null && dto.longitude != null) {
+      const landmark = dto.landmark?.trim();
+      place = {
+        latitude: dto.latitude, longitude: dto.longitude, area: dto.area?.trim() || null, city: dto.city?.trim() || null, addressId: null,
+        // Free text only when the person gave some; otherwise null (the pin's coordinates carry
+        // the real location). Never a hardcoded English label — clients localise an empty location.
+        location: [landmark, dto.area?.trim(), dto.city?.trim()].filter(Boolean).join(', ') || null,
+      };
+    } else {
+      throw new BadRequestException({ code: 'LOCATION_REQUIRED', message: 'Choose a saved address, or share your current location on the map.' });
     }
 
     const issueCodes = [...new Set(dto.issueCodes ?? [])];
@@ -197,7 +227,6 @@ export class JobsService {
     const englishName = ((category.translations as any)?.en?.name as string | undefined) ?? category.name;
     const title = issues.length ? issues.slice(0, 2).map((i) => i.name).join(' & ') : englishName;
     const description = [typed, transcript].filter(Boolean).join('\n\n') || issues.map((i) => i.name).join(', ');
-    const location = [address.buildingDetail, address.streetAddress, address.area, address.city].filter(Boolean).join(', ');
     const urgency = dto.isEmergency ? 'emergency' : dto.when === 'NOW' ? 'urgent' : 'standard';
 
     let jobId: string;
@@ -214,12 +243,12 @@ export class JobsService {
             issueCodes,
             title,
             description,
-            addressId: address.id,
-            location,
-            latitude: address.latitude,
-            longitude: address.longitude,
-            area: address.area,
-            city: address.city,
+            addressId: place.addressId,
+            location: place.location,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            area: place.area,
+            city: place.city,
             whenOption: dto.when,
             scheduledFrom: window.from,
             scheduledTo: window.to,

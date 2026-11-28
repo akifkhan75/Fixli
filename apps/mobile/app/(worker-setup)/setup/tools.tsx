@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, Switch } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -22,11 +22,13 @@ export default function ToolsScreen() {
   const me = useApi(api.getWorkerMe);
   const [selected, setSelected] = useState<string[]>([]);
   const [custom, setCustom] = useState('');
+  const [canTow, setCanTow] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     if (me.data?.equipment) setSelected(me.data.equipment);
+    if (me.data) setCanTow(!!me.data.canTow);
   }, [me.data]);
 
   const suggestions = useMemo(
@@ -57,7 +59,7 @@ export default function ToolsScreen() {
     setSaving(true);
     setError(undefined);
     try {
-      await api.patchWorkerMe({ equipment: normalizeEquipment(selected, MAX) });
+      await api.patchWorkerMe({ equipment: normalizeEquipment(selected, MAX), canTow });
       router.back();
     } catch (e) {
       setError(friendlyError(e));
@@ -122,6 +124,14 @@ export default function ToolsScreen() {
       <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 12 }}>
         {t('workerSetupTools.count', { n: selected.length, max: MAX })}
       </Text>
+
+      <View style={{ marginTop: 24, flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flex: 1, marginEnd: 12 }}>
+          <Text variant="body" weight="medium" color={theme.colors.textPrimary}>{t('workerSetupTools.canTow')}</Text>
+          <Text variant="caption" color={theme.colors.textTertiary} style={{ marginTop: 2 }}>{t('workerSetupTools.canTowHint')}</Text>
+        </View>
+        <Switch value={canTow} onValueChange={setCanTow} accessibilityLabel={t('workerSetupTools.canTow')} trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
+      </View>
       {error ? (
         <Text variant="bodySmall" color={theme.colors.errorText} accessibilityRole="alert" style={{ marginTop: 16 }}>
           {error}

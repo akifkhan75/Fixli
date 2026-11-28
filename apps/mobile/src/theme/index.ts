@@ -123,6 +123,13 @@ export const colors = {
     gardening: '#3F8F2E',
     moving: '#2F7DA8',
     security: '#3B6FB6',
+    pestControl: '#6D7A2E',
+    waterSupply: '#0E8FC2',
+    generator: '#8A6E22',
+    itSupport: '#3E4C8A',
+    gas: '#C2410C',
+    tutoring: '#1D6FA3',
+    healthcare: '#2F9E7A',
     other: '#1473E6',
   },
 

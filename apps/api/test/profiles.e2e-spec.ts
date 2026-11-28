@@ -191,6 +191,17 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
       await http().post('/api/addresses').set(as('cust2')).send(addr({ latitude: 124.9, longitude: 67 })).expect(400);
     });
 
+    it('updates its fields and moves the pin', async () => {
+      const a = await http().post('/api/addresses').set(as('cust')).send(addr({ label: 'Home' })).expect(201);
+      const res = await http().patch(`/api/addresses/${a.body.id}`).set(as('cust'))
+        .send({ label: 'Work', streetAddress: 'Office 9', area: 'Clifton', city: 'Karachi', country: 'pk', latitude: 24.81, longitude: 67.03, landmark: 'Blue gate' })
+        .expect(200);
+      expect(res.body).toMatchObject({ label: 'Work', streetAddress: 'Office 9', area: 'Clifton', latitude: 24.81, longitude: 67.03, landmark: 'Blue gate', country: 'PK' });
+      const list = await http().get('/api/addresses').set(as('cust')).expect(200);
+      expect(list.body.find((x: any) => x.id === a.body.id)).toMatchObject({ streetAddress: 'Office 9', latitude: 24.81 });
+      await http().delete(`/api/addresses/${a.body.id}`).set(as('cust')).expect(200);
+    });
+
     it("is private to the owner", async () => {
       await http().patch(`/api/addresses/${created[0]}`).set(as('cust')).send({ label: 'Mine' }).expect(404);
       await http().delete(`/api/addresses/${created[0]}`).set(as('cust')).expect(404);
@@ -334,7 +345,7 @@ describe('Profiles, uploads, onboarding (e2e)', () => {
       expect(profile.body.badges[0].verifiedAt).toBeTruthy();
       expect(profile.body.portfolio[0].photos[0]).toMatch(/\/files\/public\/portfolio\//);
       expect(profile.body).toMatchObject({ bio: 'Ten years of plumbing.', serviceAreaLabel: 'Gulshan, Karachi', ratingCount: 0, jobsCompleted: 0 });
-      expect(JSON.stringify(profile.body)).not.toMatch(/@test\.com|phone|serviceLat|serviceLng|documentKeys|verification\//);
+      expect(JSON.stringify(profile.body)).not.toMatch(/@test\.com|phone|serviceLat|serviceLng|currentLat|currentLng|locationUpdatedAt|documentKeys|verification\//);
 
       const list = await http().get('/api/workers').set(as('cust')).expect(200);
       expect(list.body.find((w: any) => w.id === ids.work)).toBeTruthy();

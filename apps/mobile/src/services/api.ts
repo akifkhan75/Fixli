@@ -242,7 +242,10 @@ export const notInterested = (jobId: string) => request<{ success: boolean }>(`/
 export interface CreateJobInput {
   categoryId: string; issueCodes: string[]; description?: string;
   photoUploadIds?: string[]; audioUploadId?: string; audioTranscript?: string;
-  addressId: string; when: 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED'; date?: string; timeSlot?: 'MORNING' | 'AFTERNOON' | 'EVENING';
+  /** A saved address, OR a one-off current-location pin (latitude + longitude) for roadside help. Send one. */
+  addressId?: string;
+  latitude?: number; longitude?: number; area?: string; city?: string; landmark?: string;
+  when: 'NOW' | 'TODAY' | 'TOMORROW' | 'SCHEDULED'; date?: string; timeSlot?: 'MORNING' | 'AFTERNOON' | 'EVENING';
   isEmergency?: boolean; analysisId?: string; idempotencyKey: string;
 }
 export const createJob = (input: CreateJobInput) => request<JobView>('/job-requests', { method: 'POST', body: JSON.stringify(input) });
@@ -455,7 +458,7 @@ export type OnboardingStep = 'skills' | 'area' | 'hours' | 'pricing' | 'document
 export interface WorkerMe {
   id: string; rating: number; isVerified: boolean; bio: string | null; experienceYears: number; languages: string[];
   gender: 'FEMALE' | 'MALE' | null; hidePhotoUntilBooked: boolean; isOnline: boolean;
-  equipment: string[];
+  equipment: string[]; canTow: boolean;
   serviceLat: number | null; serviceLng: number | null; serviceAreaLabel: string | null; serviceRadius: number;
   pricingModel: 'FIXED' | 'HOURLY' | 'CALLOUT_PLUS_QUOTE' | 'QUOTE' | null;
   minimumCallOutFee: number | null; hourlyRate: number | null; currency: string;
@@ -468,10 +471,12 @@ export interface WorkerMe {
   verifications: { id: string; type: VerificationType; status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'NEEDS_INFO'; reason: string | null }[];
   onboarding: { steps: Record<OnboardingStep, boolean>; missing: OnboardingStep[]; complete: boolean; percent: number };
 }
-export type WorkerPatch = Partial<Pick<WorkerMe, 'bio' | 'experienceYears' | 'languages' | 'gender' | 'hidePhotoUntilBooked' | 'pricingModel' | 'minimumCallOutFee' | 'hourlyRate' | 'serviceLat' | 'serviceLng' | 'serviceAreaLabel' | 'serviceRadius' | 'isOnline' | 'teamSize' | 'equipment'>> & { businessName?: string };
+export type WorkerPatch = Partial<Pick<WorkerMe, 'bio' | 'experienceYears' | 'languages' | 'gender' | 'hidePhotoUntilBooked' | 'pricingModel' | 'minimumCallOutFee' | 'hourlyRate' | 'serviceLat' | 'serviceLng' | 'serviceAreaLabel' | 'serviceRadius' | 'isOnline' | 'teamSize' | 'equipment' | 'canTow'>> & { businessName?: string };
 
 export const getWorkerMe = () => request<WorkerMe>('/workers/me');
 export const patchWorkerMe = (p: WorkerPatch) => request<WorkerMe>('/workers/me', { method: 'PATCH', body: JSON.stringify(p) });
+export const reportWorkerLocation = (latitude: number, longitude: number) =>
+  request<{ accepted: boolean }>('/workers/me/location', { method: 'PATCH', body: JSON.stringify({ latitude, longitude }) });
 export const setWorkerSkills = (categoryIds: string[]) => request<WorkerMe>('/workers/me/skills', { method: 'PUT', body: JSON.stringify({ categoryIds }) });
 export const setWorkerHours = (days: { weekday: number; startMinute: number; endMinute: number }[]) => request<WorkerMe>('/workers/me/hours', { method: 'PUT', body: JSON.stringify({ days }) });
 export const addPortfolioItem = (title: string, uploadIds: string[], description?: string) => request<WorkerMe>('/workers/me/portfolio', { method: 'POST', body: JSON.stringify({ title, uploadIds, description }) });

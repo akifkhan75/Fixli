@@ -23,6 +23,17 @@ const BY_CODE: Record<string, keyof Tints> = {
   SOLAR: 'solar',
   INTERIOR: 'interior',
   GARDENING: 'gardening',
+  AUTOMOTIVE: 'carServices',
+  PEST_CONTROL: 'pestControl',
+  MOVERS: 'moving',
+  WATER_SUPPLY: 'waterSupply',
+  CCTV_SECURITY: 'security',
+  GENERATOR_UPS: 'generator',
+  IT_SUPPORT: 'itSupport',
+  GAS_SERVICES: 'gas',
+  SALON_BEAUTY: 'salon',
+  TUTORING: 'tutoring',
+  HEALTHCARE_AT_HOME: 'healthcare',
 };
 
 /** A trade's colour; categories added by staff later fall back to the brand blue. */
